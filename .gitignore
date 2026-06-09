@@ -1,0 +1,13 @@
+
+# Extension build output
+picpio-vscode/out/
+picpio-vscode/node_modules/
+picpio-vscode/*.vsix
+
+# Logs
+*.log
+MPLABXLog.xml
+
+# OS
+.DS_Store
+Thumbs.db

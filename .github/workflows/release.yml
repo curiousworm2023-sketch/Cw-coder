@@ -1,0 +1,44 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'          # triggers on v1.0.0, v1.2.3, etc.
+  workflow_dispatch:   # allows manual run from GitHub Actions UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: picpio-vscode
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: picpio-vscode
+        run: npx tsc -p ./
+
+      - name: Package extension (.vsix)
+        working-directory: picpio-vscode
+        run: npx vsce package --out picpio.vsix --no-dependencies
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: picpio-vsix
+          path: picpio-vscode/picpio.vsix
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: picpio-vscode/picpio.vsix
+          generate_release_notes: true

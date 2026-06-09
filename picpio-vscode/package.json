@@ -1,0 +1,102 @@
+{
+  "name": "picpio",
+  "displayName": "PICPIO",
+  "description": "PIC Microcontroller IDE — Build, Flash, Libraries, Serial Monitor",
+  "version": "1.0.0",
+  "publisher": "picpio",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "icon": "resources/logo.png",
+  "repository": { "type": "git", "url": "https://github.com/picpio/picpio-vscode" },
+  "activationEvents": [ "workspaceContains:picpio.ini" ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "picpio.home",          "title": "Home",                  "category": "PICPIO", "icon": "$(home)" },
+      { "command": "picpio.build",         "title": "Build",                 "category": "PICPIO", "icon": "$(check)" },
+      { "command": "picpio.upload",        "title": "Upload",                "category": "PICPIO", "icon": "$(arrow-right)" },
+      { "command": "picpio.buildUpload",   "title": "Upload and Monitor",    "category": "PICPIO", "icon": "$(arrow-up)" },
+      { "command": "picpio.clean",         "title": "Clean",                 "category": "PICPIO", "icon": "$(trash)" },
+      { "command": "picpio.cleanBuild",    "title": "Clean Build",           "category": "PICPIO", "icon": "$(debug-restart)" },
+      { "command": "picpio.serialMonitor", "title": "Serial Port Monitor",   "category": "PICPIO", "icon": "$(plug)" },
+      { "command": "picpio.openCli",       "title": "PlatformIO Core (CLI)", "category": "PICPIO", "icon": "$(terminal)" },
+      { "command": "picpio.libManager",    "title": "Library Manager",       "category": "PICPIO", "icon": "$(library)" },
+      { "command": "picpio.newProject",    "title": "New Project",           "category": "PICPIO", "icon": "$(new-folder)" },
+      { "command": "picpio.openProject",   "title": "Open Project",          "category": "PICPIO", "icon": "$(folder-opened)" },
+      { "command": "picpio.libAdd",        "title": "Add Library",           "category": "PICPIO", "icon": "$(add)" },
+      { "command": "picpio.libRemove",     "title": "Remove Library",        "category": "PICPIO", "icon": "$(remove)" },
+      { "command": "picpio.refresh",       "title": "Refresh",               "category": "PICPIO", "icon": "$(refresh)" },
+      { "command": "picpio.runTask",       "title": "Run Task",              "category": "PICPIO" },
+      { "command": "picpio.taskMenu",      "title": "Run Task…",             "category": "PICPIO", "icon": "$(list-unordered)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "picpio-sidebar", "title": "PICPIO", "icon": "resources/icons/pic.svg" }
+      ]
+    },
+    "views": {
+      "picpio-sidebar": [
+        { "id": "picpioTasks",       "name": "Project Tasks" },
+        { "id": "picpioQuickAccess", "name": "Quick Access" },
+        { "id": "picpioProject",     "name": "Project Info" },
+        { "id": "picpioLibraries",   "name": "Libraries" }
+      ]
+    },
+    "menus": {
+      "editor/title/run": [
+        { "command": "picpio.build",         "when": "picpio.isActive", "group": "picpio@1" },
+        { "command": "picpio.upload",        "when": "picpio.isActive", "group": "picpio@2" },
+        { "command": "picpio.clean",         "when": "picpio.isActive", "group": "picpio@3" },
+        { "command": "picpio.cleanBuild",    "when": "picpio.isActive", "group": "picpio@4" },
+        { "command": "picpio.serialMonitor", "when": "picpio.isActive", "group": "picpio@5" }
+      ],
+      "view/title": [
+        { "command": "picpio.refresh", "when": "view == picpioTasks",    "group": "navigation" },
+        { "command": "picpio.refresh", "when": "view == picpioProject",  "group": "navigation" },
+        { "command": "picpio.libAdd",  "when": "view == picpioLibraries","group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "picpio.libRemove", "when": "viewItem == installedLib", "group": "inline" }
+      ]
+    },
+    "keybindings": [
+      { "command": "picpio.build",         "key": "ctrl+alt+b" },
+      { "command": "picpio.upload",        "key": "ctrl+alt+u" },
+      { "command": "picpio.cleanBuild",    "key": "ctrl+alt+r" },
+      { "command": "picpio.serialMonitor", "key": "ctrl+alt+s" }
+    ],
+    "configuration": {
+      "title": "PICPIO",
+      "properties": {
+        "picpio.executablePath":  { "type": "string",  "default": "picpio",  "description": "Path to picpio.exe" },
+        "picpio.serialPort":      { "type": "string",  "default": "COM3",    "description": "Default serial port" },
+        "picpio.serialBaud":      { "type": "number",  "default": 115200,    "description": "Serial baud rate" }
+      }
+    },
+    "problemMatchers": [
+      {
+        "name": "xc8",
+        "owner": "picpio",
+        "fileLocation": "absolute",
+        "pattern": { "regexp": "^(.+):(\\d+):\\s+(warning|error|note):\\s+(.+)$", "file":1,"line":2,"severity":3,"message":4 }
+      },
+      {
+        "name": "xc8-2",
+        "owner": "picpio",
+        "fileLocation": "absolute",
+        "pattern": { "regexp": "^(.+):(\\d+):(\\d+):\\s+(warning|error):\\s+(.+)$", "file":1,"line":2,"column":3,"severity":4,"message":5 }
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch":   "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node":   "^18.0.0",
+    "typescript":    "^5.0.0",
+    "@vscode/vsce":  "^2.0.0"
+  }
+}
