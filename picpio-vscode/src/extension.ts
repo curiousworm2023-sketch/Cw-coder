@@ -120,11 +120,16 @@ export function activate(context: vscode.ExtensionContext): void {
     libW.onDidCreate(refreshAll); libW.onDidDelete(refreshAll);
     context.subscriptions.push(libW);
 
-    // ── Auto-open Home on project load ────────────────────────────────────────
+    // ── Auto-open Home + ensure IntelliSense files on project load ───────────
     const fsm  = require('fs')   as typeof import('fs');
     const pm   = require('path') as typeof import('path');
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (root && fsm.existsSync(pm.join(root, 'picpio.ini'))) {
+        // Auto-generate c_cpp_properties.json if missing so Ctrl+Click works immediately
+        const cppProps = pm.join(root, '.vscode', 'c_cpp_properties.json');
+        if (!fsm.existsSync(cppProps)) {
+            picpio('vscode');
+        }
         HomePanel.createOrShow(context);
     }
 
