@@ -269,6 +269,11 @@ function cmdBuild(opts) {
     const verbose  = opts.includes('-v') || opts.includes('--verbose');
     const showSize = opts.includes('--size');
 
+    // Auto-generate .vscode/c_cpp_properties.json if missing (enables Ctrl+Click)
+    if (!fs.existsSync(path.join(process.cwd(), '.vscode', 'c_cpp_properties.json'))) {
+        cmdVscode();
+    }
+
     const cfg      = requireConfig();
     const family   = (cfg.family || 'PIC18').toUpperCase();
     const mcu      = cfg.mcu || 'PIC18F27K40';
