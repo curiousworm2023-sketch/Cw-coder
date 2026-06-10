@@ -116,6 +116,7 @@ export class HomePanel {
             case 'upload':       vscode.commands.executeCommand('picpio.upload');        break;
             case 'clean':        vscode.commands.executeCommand('picpio.clean');         break;
             case 'monitor':      vscode.commands.executeCommand('picpio.serialMonitor'); break;
+            case 'simulate':     vscode.commands.executeCommand('picpio.simulate');      break;
             case 'newProject':   vscode.commands.executeCommand('picpio.newProject');    break;
             case 'openProject':  vscode.commands.executeCommand('picpio.openProject');  break;
             case 'cli':          vscode.commands.executeCommand('picpio.openCli');       break;
@@ -201,6 +202,7 @@ export class HomePanel {
             ${peripheralControl('usart', '+ USART')}
             ${peripheralControl('i2c',   '+ I2C')}
             ${peripheralControl('pwm',   '+ PWM')}
+            <button class="pbtn orange" onclick="send('simulate')">&#9889; Simulate</button>
           </div>` : ''}
         </div>` : `
         <div class="empty-env">

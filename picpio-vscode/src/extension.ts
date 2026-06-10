@@ -10,6 +10,7 @@ import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
+import { runSimulation } from './simulator';
 
 /** Find the highest installed XC8 version under C:/Program Files/Microchip/xc8/ */
 function findXC8Version(): string {
@@ -151,6 +152,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 { label: '$(radio-tower)    + USART', description: 'Insert USART snippet', action: () => insertPeripheralWithPins('usart') },
                 { label: '$(sync)           + I2C',   description: 'Insert I2C snippet',   action: () => insertPeripheralWithPins('i2c') },
                 { label: '$(zap)            + PWM',   description: 'Insert PWM snippet',   action: () => insertPeripheralSnippet('pwm') },
+                { label: '$(pulse)          Simulate',description: 'Run live simulation',  action: () => runSimulation(context) },
             );
         }
 
@@ -166,6 +168,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reg('picpio.insertUSART',   () => insertPeripheralWithPins('usart'));
     reg('picpio.insertI2C',     () => insertPeripheralWithPins('i2c'));
     reg('picpio.insertPWM',     () => insertPeripheralSnippet('pwm'));
+    reg('picpio.simulate',      () => runSimulation(context));
     reg('picpio.refresh',       () => refreshAll());
 
     // PlatformIO Core CLI — opens a named terminal
@@ -189,6 +192,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (cmd === '_open')    { vscode.commands.executeCommand('picpio.openProject'); return; }
         if (cmd === '_libs')    { HomePanel.createOrShow(context); return; }
         if (cmd === '_cli')     { vscode.commands.executeCommand('picpio.openCli'); return; }
+        if (cmd === '_simulate'){ runSimulation(context); return; }
         picpio(cmd);
         setTimeout(refreshAll, 1500);
     });
