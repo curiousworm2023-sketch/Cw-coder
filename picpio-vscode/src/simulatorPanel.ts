@@ -130,8 +130,8 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .circuit-parts{position:absolute;top:0;left:0;right:0;bottom:34px}
 .circuit-pinrow{position:absolute;left:0;right:0;bottom:0;height:34px;display:flex;align-items:center;gap:10px;background:var(--card);border-top:1px solid var(--border);overflow-x:auto;padding:0 8px}
 .circuit-pin{display:flex;flex-direction:column;align-items:center;font-size:9px;color:var(--sub);flex:none}
-.wire-layer{position:absolute;inset:0;width:100%;height:100%}
-.wire-layer line{stroke:var(--accent);stroke-width:2;cursor:pointer}
+.wire-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.wire-layer line{stroke:var(--accent);stroke-width:2;cursor:pointer;pointer-events:stroke}
 .term{width:10px;height:10px;border-radius:50%;background:#555;border:1px solid var(--border);cursor:pointer;margin:0 auto 2px}
 .term.selected{background:var(--accent);box-shadow:0 0 6px var(--accent)}
 .term.wired{background:#4ec9b0}
@@ -180,11 +180,11 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to wire them. Click a wire to remove it.</span>
   </div>
   <div class="circuit-wrap" id="circuitWrap">
-    <svg class="wire-layer" id="wireLayer"></svg>
     <div class="circuit-parts" id="circuitParts"></div>
     <div class="circuit-pinrow" id="circuitPinRow">
       ${[...DIGITAL_PINS, ...ANALOG_PINS].map(p => `<div class="circuit-pin"><div class="term" id="term-${p}"></div>${p}</div>`).join('')}
     </div>
+    <svg class="wire-layer" id="wireLayer"></svg>
   </div>
 
   <div class="section-title">Serial Monitor</div>
