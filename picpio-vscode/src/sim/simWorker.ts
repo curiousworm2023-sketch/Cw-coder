@@ -160,6 +160,83 @@ const SPI = {
     },
 };
 
+// SSD1306-style OLED emulation: a 21-col x 8-row character grid, mirroring
+// the common arduino_compat ssd1306_* helper API. Each call re-emits the
+// full grid as `{t:'oled', lines: string[]}` so the panel can redraw it.
+const OLED_COLS = 21;
+const OLED_ROWS = 8;
+let oledBuf: string[] = Array.from({ length: OLED_ROWS }, () => ' '.repeat(OLED_COLS));
+let oledCol = 0;
+let oledRow = 0;
+
+function emitOled(): void {
+    emit({ t: 'oled', lines: oledBuf.slice() });
+}
+
+function ssd1306_init(): void {
+    oledBuf = Array.from({ length: OLED_ROWS }, () => ' '.repeat(OLED_COLS));
+    oledCol = 0;
+    oledRow = 0;
+    emitOled();
+}
+
+function ssd1306_clear(): void {
+    oledBuf = Array.from({ length: OLED_ROWS }, () => ' '.repeat(OLED_COLS));
+    oledCol = 0;
+    oledRow = 0;
+    emitOled();
+}
+
+function ssd1306_set_cursor(col: number, row: number): void {
+    oledCol = Math.max(0, Math.min(OLED_COLS, Math.trunc(Number(col)) || 0));
+    oledRow = Math.max(0, Math.min(OLED_ROWS - 1, Math.trunc(Number(row)) || 0));
+}
+
+function oledPutChar(ch: string): void {
+    if (ch === '\n') {
+        oledCol = 0;
+        oledRow = (oledRow + 1) % OLED_ROWS;
+        return;
+    }
+    if (oledCol >= OLED_COLS) {
+        oledCol = 0;
+        oledRow = (oledRow + 1) % OLED_ROWS;
+    }
+    const line = oledBuf[oledRow];
+    oledBuf[oledRow] = line.slice(0, oledCol) + ch + line.slice(oledCol + 1);
+    oledCol++;
+}
+
+// Mirrors C-string semantics for char arrays: numbers are treated as char
+// codes (the digit-to-ASCII idiom), stopping at a 0/'\0' terminator.
+function oledStringify(x: unknown): string {
+    if (Array.isArray(x)) {
+        let out = '';
+        for (const v of x) {
+            const code = typeof v === 'number' ? v : (typeof v === 'string' ? v.charCodeAt(0) : NaN);
+            if (!code) break;
+            out += String.fromCharCode(code);
+        }
+        return out;
+    }
+    return String(x);
+}
+
+function ssd1306_print(x: unknown): void {
+    for (const ch of oledStringify(x)) oledPutChar(ch);
+    emitOled();
+}
+
+function ssd1306_println(x?: unknown): void {
+    if (x !== undefined) for (const ch of oledStringify(x)) oledPutChar(ch);
+    oledPutChar('\n');
+    emitOled();
+}
+
+function ssd1306_display(): void {
+    emitOled();
+}
+
 function map(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
     return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
@@ -180,6 +257,8 @@ const baseGlobals: Record<string, unknown> = {
     pinMode, digitalWrite, digitalRead, analogWrite, analogRead,
     delay, delayMicroseconds, millis, micros,
     Serial, Wire, SPI, Serial_print, Serial_println,
+    ssd1306_init, ssd1306_clear, ssd1306_set_cursor, ssd1306_setCursor: ssd1306_set_cursor,
+    ssd1306_print, ssd1306_println, ssd1306_display,
     map, constrain, random,
     min: Math.min, max: Math.max, abs: Math.abs, pow: Math.pow, sqrt: Math.sqrt,
 };

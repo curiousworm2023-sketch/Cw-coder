@@ -4,10 +4,19 @@ import * as path from 'path';
 import { Worker } from 'worker_threads';
 import { readConfig } from './iniParser';
 import { transpileSketch } from './sim/transpile';
-import { SimulatorPanel } from './simulatorPanel';
+import { SimulatorPanel, renderSimulatorHtml } from './simulatorPanel';
+import { SimulatorServer } from './sim/simulatorServer';
 
 let activeWorker: Worker | undefined;
 let activeDisposables: vscode.Disposable[] = [];
+let server: SimulatorServer | undefined;
+
+/** Stops the simulation worker and the "Open in Browser" server, if running. */
+export function disposeSimulator(): void {
+    stopWorker();
+    server?.stop();
+    server = undefined;
+}
 
 function stopWorker(): void {
     if (activeWorker) {
@@ -42,6 +51,8 @@ export function runSimulation(context: vscode.ExtensionContext): void {
     while (activeDisposables.length) activeDisposables.pop()?.dispose();
 
     const panel = SimulatorPanel.createOrShow();
+    if (!server) server = new SimulatorServer(renderSimulatorHtml);
+    panel.setServer(server);
 
     const start = (): void => {
         panel.reset();
@@ -87,6 +98,13 @@ export function runSimulation(context: vscode.ExtensionContext): void {
     }));
     activeDisposables.push(panel.onAnalogInput(({ pin, value }) => {
         activeWorker?.postMessage({ cmd: 'setAnalog', pin, value });
+    }));
+    activeDisposables.push(panel.onOpenBrowser(() => {
+        server?.start().then(port => {
+            vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${port}/`));
+        }).catch(e => {
+            vscode.window.showErrorMessage(`Could not start browser server: ${e instanceof Error ? e.message : String(e)}`);
+        });
     }));
 
     start();

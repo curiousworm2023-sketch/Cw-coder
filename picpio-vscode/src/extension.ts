@@ -10,7 +10,7 @@ import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
-import { runSimulation } from './simulator';
+import { runSimulation, disposeSimulator } from './simulator';
 
 /** Find the highest installed XC8 version under C:/Program Files/Microchip/xc8/ */
 function findXC8Version(): string {
@@ -240,4 +240,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.setStatusBarMessage('$(chip) PICPIO ready', 3000);
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+    disposeSimulator();
+}

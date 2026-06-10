@@ -75,6 +75,27 @@ export function transpileSketch(src: string): TranspileResult {
         'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
     s = s.replace(new RegExp(`\\(\\s*${CAST_TYPE}\\s*\\*?\\s*\\)(?=\\s*[\\w(])`, 'g'), '');
 
+    // Char-literal arithmetic, e.g. (char)('0' + (value % 10)) -- the common
+    // digit-to-ASCII idiom. Convert 'X' to its numeric char code, but only
+    // when adjacent to + or -, so JS does numeric math instead of string
+    // concatenation. Other char literals (e.g. Serial.println('A')) are
+    // left untouched.
+    const charCode = (raw: string): number => {
+        if (raw.length === 1) return raw.charCodeAt(0);
+        switch (raw) {
+            case '\\n': return 10;
+            case '\\t': return 9;
+            case '\\r': return 13;
+            case '\\0': return 0;
+            case '\\\\': return 92;
+            case "\\'": return 39;
+            case '\\"': return 34;
+            default: return raw.charCodeAt(raw.length - 1);
+        }
+    };
+    s = s.replace(/'(\\.|[^'\\])'(\s*[+-])/g, (_full: string, ch: string, op: string) => `${charCode(ch)}${op}`);
+    s = s.replace(/([+-]\s*)'(\\.|[^'\\])'/g, (_full: string, op: string, ch: string) => `${op}${charCode(ch)}`);
+
     // Hoist `static <type> name = init;` locals to module scope (declared
     // once, before setup()/loop() are first called) so their value persists
     // across the repeated, independent vm.runInContext() calls used to run

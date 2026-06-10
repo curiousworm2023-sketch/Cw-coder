@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { SimulatorServer } from './sim/simulatorServer';
 
 const DIGITAL_PINS = Array.from({ length: 14 }, (_, i) => `D${i}`);
 const ANALOG_PINS  = Array.from({ length: 6 },  (_, i) => `A${i}`);
@@ -32,10 +33,13 @@ export class SimulatorPanel {
     private _onRestart = new vscode.EventEmitter<void>();
     private _onPinInput = new vscode.EventEmitter<{ pin: string; value: number }>();
     private _onAnalogInput = new vscode.EventEmitter<{ pin: string; value: number }>();
+    private _onOpenBrowser = new vscode.EventEmitter<void>();
     readonly onStop        = this._onStop.event;
     readonly onRestart     = this._onRestart.event;
     readonly onPinInput    = this._onPinInput.event;
     readonly onAnalogInput = this._onAnalogInput.event;
+    readonly onOpenBrowser = this._onOpenBrowser.event;
+    private _server: SimulatorServer | undefined;
 
     static createOrShow(): SimulatorPanel {
         const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
@@ -53,31 +57,44 @@ export class SimulatorPanel {
 
     private constructor(panel: vscode.WebviewPanel) {
         this._panel = panel;
-        this._panel.webview.html = this._html();
+        this._panel.webview.html = renderSimulatorHtml();
         this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
-        this._panel.webview.onDidReceiveMessage(m => {
-            if (m.command === 'stop')      this._onStop.fire();
-            if (m.command === 'restart')   this._onRestart.fire();
-            if (m.command === 'setPin')    this._onPinInput.fire({ pin: m.pin, value: m.value });
-            if (m.command === 'setAnalog') this._onAnalogInput.fire({ pin: m.pin, value: m.value });
-        }, null, this._disposables);
+        this._panel.webview.onDidReceiveMessage(m => this._handleMessage(m), null, this._disposables);
+    }
+
+    /** Wire up the local "Open in Browser" server: forwards its commands the
+     * same way as webview messages, and receives broadcast events. */
+    setServer(server: SimulatorServer): void {
+        this._server = server;
+        this._disposables.push(server.onCommand(m => this._handleMessage(m)));
+    }
+
+    private _handleMessage(m: { command?: string; pin?: string; value?: number }): void {
+        if (m.command === 'stop')        this._onStop.fire();
+        if (m.command === 'restart')     this._onRestart.fire();
+        if (m.command === 'setPin')      this._onPinInput.fire({ pin: m.pin!, value: m.value! });
+        if (m.command === 'setAnalog')   this._onAnalogInput.fire({ pin: m.pin!, value: m.value! });
+        if (m.command === 'openBrowser') this._onOpenBrowser.fire();
     }
 
     /** Reset the UI for a fresh run (e.g. on restart). */
     reset(): void {
         if (this._disposed) return;
         this._panel.webview.postMessage({ t: '_reset' });
+        this._server?.broadcast({ t: '_reset' });
     }
 
     /** Forward a JSON event emitted by the simulation worker to the webview. */
     post(ev: Record<string, unknown>): void {
         if (this._disposed) return;
         this._panel.webview.postMessage(ev);
+        this._server?.broadcast(ev);
     }
 
     setStatus(status: 'running' | 'stopped' | 'error', message?: string): void {
         if (this._disposed) return;
         this._panel.webview.postMessage({ t: '_status', status, message });
+        this._server?.broadcast({ t: '_status', status, message });
     }
 
     private _dispose(): void {
@@ -87,9 +104,10 @@ export class SimulatorPanel {
         while (this._disposables.length) this._disposables.pop()?.dispose();
         this._panel.dispose();
     }
+}
 
-    private _html(): string {
-        return `<!DOCTYPE html>
+export function renderSimulatorHtml(): string {
+    return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -144,6 +162,16 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .part-btn{width:32px;height:32px;border-radius:6px;background:#444;border:2px solid var(--border);margin:0 auto;cursor:pointer}
 .part-btn.pressed{background:#3794ff;border-color:#5dabff}
 .circuit-part .part-pot{width:64px}
+.circuit-toolbar select{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 8px;font-size:12px}
+.circuit-toolbar select:hover{border-color:var(--accent)}
+.part-lcd{background:#0a3d0a;border:1px solid #1a5c1a;border-radius:2px;color:#9eff9e;font-family:'Cascadia Code',Consolas,monospace;line-height:1.4;padding:3px;white-space:pre;text-align:left;margin:4px auto 0}
+.part-lcd1602{width:120px;height:34px;font-size:9px}
+.part-lcd2004{width:150px;height:50px;font-size:9px}
+.part-oled{background:#000;border:1px solid #333;border-radius:2px;color:#fff;font-family:'Cascadia Code',Consolas,monospace;font-size:8px;line-height:1.3;padding:3px;white-space:pre;text-align:left;margin:4px auto 0;width:130px;height:64px}
+.part-terms{display:flex;justify-content:center;gap:7px;margin-top:5px;flex-wrap:wrap}
+.part-term{display:flex;flex-direction:column;align-items:center}
+.part-term .term{margin:0}
+.term-label{font-size:8px;color:var(--sub);margin-top:2px;line-height:1}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -160,6 +188,7 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     <div class="title">&#9889; PICPIO Simulator</div>
     <div class="status stopped" id="status">stopped</div>
     <div class="spacer"></div>
+    <button id="openBrowserBtn">&#8599; Open in Browser</button>
     <button class="primary" id="restartBtn">&#8635; Restart</button>
     <button id="stopBtn">&#9632; Stop</button>
   </div>
@@ -174,9 +203,16 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 
   <div class="section-title">Circuit (beta)</div>
   <div class="circuit-toolbar">
-    <button id="addLed">+ LED</button>
-    <button id="addButton">+ Button</button>
-    <button id="addPot">+ Potentiometer</button>
+    <select id="partType">
+      <option value="led">LED</option>
+      <option value="button">Push Button</option>
+      <option value="pot">Potentiometer</option>
+      <option value="lcd1602">LCD 16x2</option>
+      <option value="lcd2004">LCD 20x4</option>
+      <option value="oled">OLED Display</option>
+      <option value="spi_display">SPI Display</option>
+    </select>
+    <button id="addPartBtn">+ Add</button>
     <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to wire them. Click a wire to remove it.</span>
   </div>
   <div class="circuit-wrap" id="circuitWrap">
@@ -194,9 +230,28 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
   <div class="log-box" id="protocol"><span class="empty">Waiting for activity…</span></div>
 
 <script>
-const vscode = acquireVsCodeApi();
-document.getElementById('stopBtn').addEventListener('click', () => vscode.postMessage({ command: 'stop' }));
-document.getElementById('restartBtn').addEventListener('click', () => vscode.postMessage({ command: 'restart' }));
+// Runs both inside the VS Code webview (acquireVsCodeApi available) and as a
+// plain page served by SimulatorServer for "Open in Browser" (no VS Code
+// API; commands go via POST /cmd and events arrive over Server-Sent Events).
+const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;
+
+function sendMessage(msg) {
+  if (vscode) {
+    vscode.postMessage(msg);
+  } else {
+    fetch('/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
+  }
+}
+
+document.getElementById('stopBtn').addEventListener('click', () => sendMessage({ command: 'stop' }));
+document.getElementById('restartBtn').addEventListener('click', () => sendMessage({ command: 'restart' }));
+
+const openBrowserBtn = document.getElementById('openBrowserBtn');
+if (vscode) {
+  openBrowserBtn.addEventListener('click', () => sendMessage({ command: 'openBrowser' }));
+} else {
+  openBrowserBtn.style.display = 'none';
+}
 
 let serialBuf = '';
 let serialEl  = document.getElementById('serial');
@@ -244,7 +299,7 @@ function setInputClickable(pin, clickable) {
       const led = document.getElementById('led-' + pin);
       const newVal = led && led.classList.contains('input-on') ? 0 : 1;
       setLed(pin, !!newVal, false);
-      vscode.postMessage({ command: 'setPin', pin, value: newVal });
+      sendMessage({ command: 'setPin', pin, value: newVal });
     };
   } else {
     cell.title = '';
@@ -280,6 +335,7 @@ function reset() {
   Object.keys(lastDigital).forEach(p => delete lastDigital[p]);
   Object.keys(lastPwm).forEach(p => delete lastPwm[p]);
   Object.values(parts).forEach(part => updatePartLed(part.id, false, false));
+  document.querySelectorAll('.part-oled').forEach(el => { el.textContent = ''; });
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -292,7 +348,7 @@ ANALOG_PINS_JS.forEach(p => {
   if (!slider) return;
   slider.addEventListener('input', () => {
     setMode(p, slider.value);
-    vscode.postMessage({ command: 'setAnalog', pin: p, value: Number(slider.value) });
+    sendMessage({ command: 'setAnalog', pin: p, value: Number(slider.value) });
   });
 });
 
@@ -304,9 +360,20 @@ const circuitParts = document.getElementById('circuitParts');
 const circuitWrap  = document.getElementById('circuitWrap');
 const wireLayer    = document.getElementById('wireLayer');
 
+// Terminal names per part type. A single '' entry means "one unnamed
+// terminal" (rendered as the original plain dot, no label).
+const TERMINALS = {
+  led: [''], button: [''], pot: [''],
+  lcd1602: ['SDA', 'SCL'], lcd2004: ['SDA', 'SCL'],
+  oled: ['SDA', 'SCL'],
+  spi_display: ['CS', 'DC', 'SDA', 'SCK', 'RST'],
+};
+
+function termKey(partId, term) { return partId + '|' + term; }
+
 const parts = {};       // partId -> { id, type, el }
-const pinToPart = {};   // mcuPin -> partId
-const partToPin = {};   // partId -> mcuPin
+const pinToPart = {};   // mcuPin -> { partId, term }
+const partToPin = {};   // 'partId|term' -> mcuPin
 const lastDigital = {}; // mcuPin -> 0/1 (most recent digital event)
 const lastPwm = {};     // mcuPin -> duty (most recent pwm event)
 let wires = [];
@@ -339,7 +406,7 @@ function removeWire(w) {
   w.mcuEl.classList.remove('wired');
   w.partEl.classList.remove('wired');
   delete pinToPart[w.mcuPin];
-  delete partToPin[w.partId];
+  delete partToPin[termKey(w.partId, w.term)];
 }
 
 function updatePartLed(partId, on, pwm, duty) {
@@ -365,21 +432,21 @@ function syncPartFromPinState(partId, pin) {
   else updatePartLed(partId, !!lastDigital[pin], false);
 }
 
-function connect(mcuPin, mcuEl, partId, partEl) {
+function connect(mcuPin, mcuEl, partId, term, partEl) {
   const existingMcu = wires.find(x => x.mcuPin === mcuPin);
   if (existingMcu) removeWire(existingMcu);
-  const existingPart = wires.find(x => x.partId === partId);
+  const existingPart = wires.find(x => x.partId === partId && x.term === term);
   if (existingPart) removeWire(existingPart);
 
   const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   wireLayer.appendChild(line);
-  const w = { id: 'w' + (++wireCounter), mcuPin, partId, mcuEl, partEl, lineEl: line };
+  const w = { id: 'w' + (++wireCounter), mcuPin, partId, term, mcuEl, partEl, lineEl: line };
   line.addEventListener('click', () => removeWire(w));
   wires.push(w);
   mcuEl.classList.add('wired');
   partEl.classList.add('wired');
-  pinToPart[mcuPin] = partId;
-  partToPin[partId] = mcuPin;
+  pinToPart[mcuPin] = { partId, term };
+  partToPin[termKey(partId, term)] = mcuPin;
   redrawWire(w);
   syncPartFromPinState(partId, mcuPin);
 }
@@ -400,7 +467,7 @@ function onTerminalClick(kind, el, data) {
   const mcuSide  = selectedTerminal.kind === 'mcu'  ? selectedTerminal : { el, data };
   const partSide = selectedTerminal.kind === 'part' ? selectedTerminal : { el, data };
   clearSelection();
-  connect(mcuSide.data, mcuSide.el, partSide.data, partSide.el);
+  connect(mcuSide.data, mcuSide.el, partSide.data.partId, partSide.data.term, partSide.el);
 }
 
 [...DIGITAL_PINS_JS, ...ANALOG_PINS_JS].forEach(p => {
@@ -418,22 +485,35 @@ function addPart(type) {
   let inner = '';
   let label = '';
   if (type === 'led')    { inner = '<div class="part-led" id="' + id + '-led"></div>'; label = 'LED'; }
-  if (type === 'button') { inner = '<div class="part-btn" id="' + id + '-btn"></div>'; label = 'Button'; }
+  if (type === 'button') { inner = '<div class="part-btn" id="' + id + '-btn"></div>'; label = 'Push Button'; }
   if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
+  if (type === 'lcd1602') { inner = '<div class="part-lcd part-lcd1602" id="' + id + '-lcd">' + '&nbsp;'.repeat(16) + '\\n' + '&nbsp;'.repeat(16) + '</div>'; label = 'LCD 16x2'; }
+  if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd">' + Array(4).fill('&nbsp;'.repeat(20)).join('\\n') + '</div>'; label = 'LCD 20x4'; }
+  if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'OLED Display'; }
+  if (type === 'spi_display') { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SPI Display'; }
+
+  const terms = TERMINALS[type] || [''];
+  const termsHtml = (terms.length === 1 && terms[0] === '')
+    ? '<div class="term" id="' + id + '-term"></div>'
+    : '<div class="part-terms">' + terms.map(t =>
+        '<div class="part-term"><div class="term" id="' + id + '-term-' + t + '"></div><div class="term-label">' + t + '</div></div>'
+      ).join('') + '</div>';
 
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
-    '<div class="part-label">' + label + '</div><div class="term" id="' + id + '-term"></div>';
+    '<div class="part-label">' + label + '</div>' + termsHtml;
   circuitParts.appendChild(el);
   parts[id] = { id, type, el };
 
-  const termEl = el.querySelector('#' + id + '-term');
-  termEl.addEventListener('click', e => { e.stopPropagation(); onTerminalClick('part', termEl, id); });
+  terms.forEach(t => {
+    const termId = id + '-term' + (t ? '-' + t : '');
+    const termEl = el.querySelector('#' + termId);
+    termEl.addEventListener('click', e => { e.stopPropagation(); onTerminalClick('part', termEl, { partId: id, term: t }); });
+  });
 
   el.querySelector('.remove').addEventListener('click', e => {
     e.stopPropagation();
-    if (selectedTerminal && selectedTerminal.el === termEl) clearSelection();
-    const w = wires.find(x => x.partId === id);
-    if (w) removeWire(w);
+    if (selectedTerminal && selectedTerminal.kind === 'part' && selectedTerminal.data.partId === id) clearSelection();
+    wires.filter(x => x.partId === id).forEach(w => removeWire(w));
     delete parts[id];
     el.remove();
   });
@@ -462,14 +542,14 @@ function addPart(type) {
     const btnEl = el.querySelector('#' + id + '-btn');
     const press = () => {
       btnEl.classList.add('pressed');
-      const pin = partToPin[id];
-      if (pin) vscode.postMessage({ command: 'setPin', pin, value: 0 });
+      const pin = partToPin[termKey(id, '')];
+      if (pin) sendMessage({ command: 'setPin', pin, value: 0 });
     };
     const release = () => {
       if (!btnEl.classList.contains('pressed')) return;
       btnEl.classList.remove('pressed');
-      const pin = partToPin[id];
-      if (pin) vscode.postMessage({ command: 'setPin', pin, value: 1 });
+      const pin = partToPin[termKey(id, '')];
+      if (pin) sendMessage({ command: 'setPin', pin, value: 1 });
     };
     btnEl.addEventListener('mousedown', e => { e.stopPropagation(); press(); });
     btnEl.addEventListener('mouseup',   e => { e.stopPropagation(); release(); });
@@ -480,19 +560,19 @@ function addPart(type) {
     const rangeEl = el.querySelector('#' + id + '-range');
     rangeEl.addEventListener('mousedown', e => e.stopPropagation());
     rangeEl.addEventListener('input', () => {
-      const pin = partToPin[id];
-      if (pin) vscode.postMessage({ command: 'setAnalog', pin, value: Number(rangeEl.value) });
+      const pin = partToPin[termKey(id, '')];
+      if (pin) sendMessage({ command: 'setAnalog', pin, value: Number(rangeEl.value) });
     });
   }
 }
 
-document.getElementById('addLed').addEventListener('click', () => addPart('led'));
-document.getElementById('addButton').addEventListener('click', () => addPart('button'));
-document.getElementById('addPot').addEventListener('click', () => addPart('pot'));
+document.getElementById('addPartBtn').addEventListener('click', () => {
+  const sel = document.getElementById('partType');
+  addPart(sel.value);
+});
 window.addEventListener('resize', redrawAllWires);
 
-window.addEventListener('message', e => {
-  const m = e.data;
+function handleSimMessage(m) {
   switch (m.t) {
     case '_reset':
       reset();
@@ -517,14 +597,14 @@ window.addEventListener('message', e => {
       appendProto(m.pin + '  -> ' + (m.value ? 'HIGH' : 'LOW'), 'log-info');
       lastDigital[m.pin] = m.value;
       delete lastPwm[m.pin];
-      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin], !!m.value, false);
+      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin].partId, !!m.value, false);
       break;
     case 'pwm':
       setMode(m.pin, 'PWM ' + Math.round(m.duty / 255 * 100) + '%');
       setLed(m.pin, m.duty > 0, true, m.duty);
       appendProto('PWM  ' + m.pin + '  duty=' + m.duty + ' (' + Math.round(m.duty/255*100) + '%)', 'log-pwm');
       lastPwm[m.pin] = m.duty;
-      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin], m.duty > 0, true, m.duty);
+      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin].partId, m.duty > 0, true, m.duty);
       break;
     case 'serial':
       if (serialBuf === '') serialEl.innerHTML = '';
@@ -551,6 +631,9 @@ window.addEventListener('message', e => {
     case 'spi':
       appendProto('SPI  transfer  tx=0x' + m.tx.toString(16).padStart(2,'0') + '  rx=0x' + m.rx.toString(16).padStart(2,'0'), 'log-spi');
       break;
+    case 'oled':
+      document.querySelectorAll('.part-oled').forEach(el => { el.textContent = m.lines.join('\\n'); });
+      break;
     case 'error':
       appendProto('ERROR (' + m.phase + '): ' + m.message, 'log-err');
       setStatus('error', m.phase);
@@ -559,9 +642,15 @@ window.addEventListener('message', e => {
       setStatus('stopped');
       break;
   }
-});
+}
+
+if (vscode) {
+  window.addEventListener('message', e => handleSimMessage(e.data));
+} else {
+  const evtSource = new EventSource('/events');
+  evtSource.onmessage = e => handleSimMessage(JSON.parse(e.data));
+}
 </script>
 </body>
 </html>`;
-    }
 }
