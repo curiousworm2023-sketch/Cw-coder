@@ -124,6 +124,26 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-led.pwm{background:var(--accent)}
 .pin-name{font-weight:600;font-size:12px}
 .pin-mode{color:var(--sub);font-size:9px;margin-top:2px;line-height:1.2;word-break:break-all;overflow-wrap:anywhere}
+.circuit-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.circuit-toolbar .hint{color:var(--sub);font-size:11px}
+.circuit-wrap{position:relative;border:1px solid var(--border);border-radius:var(--radius);background:#161616;height:280px;overflow:hidden}
+.circuit-parts{position:absolute;top:0;left:0;right:0;bottom:34px}
+.circuit-pinrow{position:absolute;left:0;right:0;bottom:0;height:34px;display:flex;align-items:center;gap:10px;background:var(--card);border-top:1px solid var(--border);overflow-x:auto;padding:0 8px}
+.circuit-pin{display:flex;flex-direction:column;align-items:center;font-size:9px;color:var(--sub);flex:none}
+.wire-layer{position:absolute;inset:0;width:100%;height:100%}
+.wire-layer line{stroke:var(--accent);stroke-width:2;cursor:pointer}
+.term{width:10px;height:10px;border-radius:50%;background:#555;border:1px solid var(--border);cursor:pointer;margin:0 auto 2px}
+.term.selected{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.term.wired{background:#4ec9b0}
+.circuit-part{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:6px;text-align:center;cursor:move;-webkit-user-select:none;user-select:none;min-width:56px}
+.circuit-part .term{margin-top:6px}
+.circuit-part .remove{position:absolute;top:1px;right:4px;color:var(--sub);cursor:pointer;font-size:12px;line-height:1}
+.circuit-part .remove:hover{color:#f48771}
+.circuit-part .part-label{font-size:10px;margin-top:4px;color:var(--sub)}
+.part-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto;transition:opacity .15s,box-shadow .15s,background .1s}
+.part-btn{width:32px;height:32px;border-radius:6px;background:#444;border:2px solid var(--border);margin:0 auto;cursor:pointer}
+.part-btn.pressed{background:#3794ff;border-color:#5dabff}
+.circuit-part .part-pot{width:64px}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -150,6 +170,21 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
   </div>
   <div class="pin-grid" style="margin-top:8px">
     ${ANALOG_PINS.map(analogPinCell).join('')}
+  </div>
+
+  <div class="section-title">Circuit (beta)</div>
+  <div class="circuit-toolbar">
+    <button id="addLed">+ LED</button>
+    <button id="addButton">+ Button</button>
+    <button id="addPot">+ Potentiometer</button>
+    <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to wire them. Click a wire to remove it.</span>
+  </div>
+  <div class="circuit-wrap" id="circuitWrap">
+    <svg class="wire-layer" id="wireLayer"></svg>
+    <div class="circuit-parts" id="circuitParts"></div>
+    <div class="circuit-pinrow" id="circuitPinRow">
+      ${[...DIGITAL_PINS, ...ANALOG_PINS].map(p => `<div class="circuit-pin"><div class="term" id="term-${p}"></div>${p}</div>`).join('')}
+    </div>
   </div>
 
   <div class="section-title">Serial Monitor</div>
@@ -242,6 +277,9 @@ function reset() {
     const slider = document.getElementById('slider-' + p);
     if (slider) slider.value = 512;
   });
+  Object.keys(lastDigital).forEach(p => delete lastDigital[p]);
+  Object.keys(lastPwm).forEach(p => delete lastPwm[p]);
+  Object.values(parts).forEach(part => updatePartLed(part.id, false, false));
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -257,6 +295,201 @@ ANALOG_PINS_JS.forEach(p => {
     vscode.postMessage({ command: 'setAnalog', pin: p, value: Number(slider.value) });
   });
 });
+
+// ---- Circuit canvas: drag out LED/Button/Potentiometer parts and wire
+// each one to an MCU pin terminal. Each part has a single terminal; the
+// wire links it 1:1 to a pin and the part mirrors/drives that pin using
+// the same digital/pwm/setPin/setAnalog events as the Pins grid above.
+const circuitParts = document.getElementById('circuitParts');
+const circuitWrap  = document.getElementById('circuitWrap');
+const wireLayer    = document.getElementById('wireLayer');
+
+const parts = {};       // partId -> { id, type, el }
+const pinToPart = {};   // mcuPin -> partId
+const partToPin = {};   // partId -> mcuPin
+const lastDigital = {}; // mcuPin -> 0/1 (most recent digital event)
+const lastPwm = {};     // mcuPin -> duty (most recent pwm event)
+let wires = [];
+let wireCounter = 0;
+let partCounter = 0;
+let selectedTerminal = null;
+
+function termCenter(el) {
+  const wrapRect = circuitWrap.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - wrapRect.left, y: r.top + r.height / 2 - wrapRect.top };
+}
+
+function redrawWire(w) {
+  const a = termCenter(w.mcuEl);
+  const b = termCenter(w.partEl);
+  w.lineEl.setAttribute('x1', a.x);
+  w.lineEl.setAttribute('y1', a.y);
+  w.lineEl.setAttribute('x2', b.x);
+  w.lineEl.setAttribute('y2', b.y);
+}
+
+function redrawAllWires() {
+  wires.forEach(redrawWire);
+}
+
+function removeWire(w) {
+  wires = wires.filter(x => x !== w);
+  w.lineEl.remove();
+  w.mcuEl.classList.remove('wired');
+  w.partEl.classList.remove('wired');
+  delete pinToPart[w.mcuPin];
+  delete partToPin[w.partId];
+}
+
+function updatePartLed(partId, on, pwm, duty) {
+  const ledEl = document.getElementById(partId + '-led');
+  if (!ledEl) return;
+  ledEl.style.opacity = '';
+  ledEl.style.boxShadow = '';
+  if (pwm) {
+    const frac = Math.max(0, Math.min(1, (typeof duty === 'number' ? duty : 255) / 255));
+    ledEl.style.background = 'var(--accent)';
+    ledEl.style.opacity = (0.12 + 0.88 * frac).toFixed(2);
+    ledEl.style.boxShadow = frac > 0 ? '0 0 ' + Math.round(2 + 10 * frac) + 'px var(--accent)' : 'none';
+  } else if (on) {
+    ledEl.style.background = '#4ec9b0';
+    ledEl.style.boxShadow = '0 0 8px #4ec9b0';
+  } else {
+    ledEl.style.background = '#333';
+  }
+}
+
+function syncPartFromPinState(partId, pin) {
+  if (pin in lastPwm) updatePartLed(partId, lastPwm[pin] > 0, true, lastPwm[pin]);
+  else updatePartLed(partId, !!lastDigital[pin], false);
+}
+
+function connect(mcuPin, mcuEl, partId, partEl) {
+  const existingMcu = wires.find(x => x.mcuPin === mcuPin);
+  if (existingMcu) removeWire(existingMcu);
+  const existingPart = wires.find(x => x.partId === partId);
+  if (existingPart) removeWire(existingPart);
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  wireLayer.appendChild(line);
+  const w = { id: 'w' + (++wireCounter), mcuPin, partId, mcuEl, partEl, lineEl: line };
+  line.addEventListener('click', () => removeWire(w));
+  wires.push(w);
+  mcuEl.classList.add('wired');
+  partEl.classList.add('wired');
+  pinToPart[mcuPin] = partId;
+  partToPin[partId] = mcuPin;
+  redrawWire(w);
+  syncPartFromPinState(partId, mcuPin);
+}
+
+function clearSelection() {
+  if (selectedTerminal) selectedTerminal.el.classList.remove('selected');
+  selectedTerminal = null;
+}
+
+function onTerminalClick(kind, el, data) {
+  if (selectedTerminal && selectedTerminal.el === el) { clearSelection(); return; }
+  if (!selectedTerminal || selectedTerminal.kind === kind) {
+    clearSelection();
+    selectedTerminal = { kind, el, data };
+    el.classList.add('selected');
+    return;
+  }
+  const mcuSide  = selectedTerminal.kind === 'mcu'  ? selectedTerminal : { el, data };
+  const partSide = selectedTerminal.kind === 'part' ? selectedTerminal : { el, data };
+  clearSelection();
+  connect(mcuSide.data, mcuSide.el, partSide.data, partSide.el);
+}
+
+[...DIGITAL_PINS_JS, ...ANALOG_PINS_JS].forEach(p => {
+  const el = document.getElementById('term-' + p);
+  if (el) el.addEventListener('click', () => onTerminalClick('mcu', el, p));
+});
+
+function addPart(type) {
+  const id = 'part' + (++partCounter);
+  const el = document.createElement('div');
+  el.className = 'circuit-part';
+  el.style.left = (8 + (partCounter % 4) * 80) + 'px';
+  el.style.top  = (8 + Math.floor(partCounter / 4) * 80) + 'px';
+
+  let inner = '';
+  let label = '';
+  if (type === 'led')    { inner = '<div class="part-led" id="' + id + '-led"></div>'; label = 'LED'; }
+  if (type === 'button') { inner = '<div class="part-btn" id="' + id + '-btn"></div>'; label = 'Button'; }
+  if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
+
+  el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
+    '<div class="part-label">' + label + '</div><div class="term" id="' + id + '-term"></div>';
+  circuitParts.appendChild(el);
+  parts[id] = { id, type, el };
+
+  const termEl = el.querySelector('#' + id + '-term');
+  termEl.addEventListener('click', e => { e.stopPropagation(); onTerminalClick('part', termEl, id); });
+
+  el.querySelector('.remove').addEventListener('click', e => {
+    e.stopPropagation();
+    if (selectedTerminal && selectedTerminal.el === termEl) clearSelection();
+    const w = wires.find(x => x.partId === id);
+    if (w) removeWire(w);
+    delete parts[id];
+    el.remove();
+  });
+
+  // Drag the part body to reposition it; connected wires follow.
+  let dragging = false, offX = 0, offY = 0;
+  el.addEventListener('mousedown', e => {
+    if (e.target.closest('.term') || e.target.closest('.remove') || e.target.tagName === 'INPUT') return;
+    dragging = true;
+    offX = e.clientX - el.offsetLeft;
+    offY = e.clientY - el.offsetTop;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const bounds = circuitParts.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - offX, bounds.width - el.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - offY, bounds.height - el.offsetHeight));
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    redrawAllWires();
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  if (type === 'button') {
+    const btnEl = el.querySelector('#' + id + '-btn');
+    const press = () => {
+      btnEl.classList.add('pressed');
+      const pin = partToPin[id];
+      if (pin) vscode.postMessage({ command: 'setPin', pin, value: 0 });
+    };
+    const release = () => {
+      if (!btnEl.classList.contains('pressed')) return;
+      btnEl.classList.remove('pressed');
+      const pin = partToPin[id];
+      if (pin) vscode.postMessage({ command: 'setPin', pin, value: 1 });
+    };
+    btnEl.addEventListener('mousedown', e => { e.stopPropagation(); press(); });
+    btnEl.addEventListener('mouseup',   e => { e.stopPropagation(); release(); });
+    btnEl.addEventListener('mouseleave', release);
+  }
+
+  if (type === 'pot') {
+    const rangeEl = el.querySelector('#' + id + '-range');
+    rangeEl.addEventListener('mousedown', e => e.stopPropagation());
+    rangeEl.addEventListener('input', () => {
+      const pin = partToPin[id];
+      if (pin) vscode.postMessage({ command: 'setAnalog', pin, value: Number(rangeEl.value) });
+    });
+  }
+}
+
+document.getElementById('addLed').addEventListener('click', () => addPart('led'));
+document.getElementById('addButton').addEventListener('click', () => addPart('button'));
+document.getElementById('addPot').addEventListener('click', () => addPart('pot'));
+window.addEventListener('resize', redrawAllWires);
 
 window.addEventListener('message', e => {
   const m = e.data;
@@ -282,11 +515,16 @@ window.addEventListener('message', e => {
     case 'digital':
       setLed(m.pin, !!m.value, false);
       appendProto(m.pin + '  -> ' + (m.value ? 'HIGH' : 'LOW'), 'log-info');
+      lastDigital[m.pin] = m.value;
+      delete lastPwm[m.pin];
+      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin], !!m.value, false);
       break;
     case 'pwm':
       setMode(m.pin, 'PWM ' + Math.round(m.duty / 255 * 100) + '%');
       setLed(m.pin, m.duty > 0, true, m.duty);
       appendProto('PWM  ' + m.pin + '  duty=' + m.duty + ' (' + Math.round(m.duty/255*100) + '%)', 'log-pwm');
+      lastPwm[m.pin] = m.duty;
+      if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin], m.duty > 0, true, m.duty);
       break;
     case 'serial':
       if (serialBuf === '') serialEl.innerHTML = '';
