@@ -113,7 +113,7 @@ export class ProjectWizardPanel {
 <title>PICPIO: New Project</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{ --radius:4px; }
+:root{ --radius:4px; --accent:#f27f0c; --accent-hover:#ff9933; }
 html,body{height:100%}
 body{
   background:var(--vscode-editor-background);
@@ -126,13 +126,14 @@ body{
   width:560px;max-width:94vw;
   background:var(--vscode-editorWidget-background);
   border:1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, transparent));
+  border-top:3px solid var(--accent);
   border-radius:6px;box-shadow:0 8px 32px rgba(0,0,0,.4);
 }
 .card-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:18px 22px;border-bottom:1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, transparent));
 }
-.card-header h2{font-size:18px;font-weight:600}
+.card-header h2{font-size:18px;font-weight:600;color:var(--accent)}
 .close-btn{
   background:none;border:none;color:var(--vscode-foreground);opacity:.7;font-size:18px;cursor:pointer;
   width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;
@@ -157,9 +158,9 @@ select{
   border-radius:var(--radius);color:var(--vscode-dropdown-foreground);font-size:13px;font-family:inherit;
   cursor:pointer;
 }
-input[type=text]:focus, select:focus{outline:1px solid var(--vscode-focusBorder)}
+input[type=text]:focus, select:focus{outline:1px solid var(--accent)}
 .loc-row{display:flex;align-items:center;gap:8px}
-.loc-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--vscode-button-background)}
+.loc-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
 .loc-row label{width:auto;text-align:left;cursor:pointer}
 .loc-path-row{display:flex;gap:8px;margin-top:10px}
 .loc-path-row input{flex:1}
@@ -189,8 +190,8 @@ input[type=text]:focus, select:focus{outline:1px solid var(--vscode-focusBorder)
   cursor:pointer;font-size:13px;font-weight:500;
 }
 .btn:hover{background:var(--vscode-button-secondaryHoverBackground)}
-.btn.primary{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
-.btn.primary:hover{background:var(--vscode-button-hoverBackground)}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-hover)}
 </style>
 </head>
 <body>
