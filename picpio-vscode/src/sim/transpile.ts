@@ -12,10 +12,16 @@
 // Trailing \b ensures e.g. "byte" doesn't match as a prefix of an
 // identifier like "bytes" (which would otherwise be parsed as type
 // "byte" + name "s").
-const TYPES =
-    '(?:unsigned\\s+|signed\\s+|static\\s+|volatile\\s+|const\\s+)*' +
-    '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-    'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
+const BUILTIN_TYPE_NAMES =
+    'void|int|long|short|char|float|double|bool|byte|String|' +
+    'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t';
+
+// Builds a type-keyword alternation, optionally including extra type names
+// discovered from `typedef enum {...} Name;` declarations in the sketch.
+function typesPattern(prefixGroup: string, extra: string[]): string {
+    const names = extra.length ? `${BUILTIN_TYPE_NAMES}|${extra.join('|')}` : BUILTIN_TYPE_NAMES;
+    return `${prefixGroup}(?:${names})\\b`;
+}
 
 export interface TranspileResult {
     code: string;
@@ -34,6 +40,32 @@ export function transpileSketch(src: string): TranspileResult {
     // valid JS number syntax -- strip the trailing f/F.
     s = s.replace(/\b(\d+\.\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+)[fF]\b/g, '$1');
 
+    // typedef enum {...} Name; -- "enum" is a reserved word in JS, so this
+    // can't be left as-is. Turn each member into a const, with auto-
+    // increment for members without an explicit value, and remember "Name"
+    // as a type alias so later steps strip it like int/uint8_t/etc. The
+    // consts are hoisted to the very top of the file (ahead of hoisted
+    // `static` locals, which may reference them in their initializers --
+    // e.g. "static Protocol p = PROTO_NONE;" -- and would otherwise hit a
+    // const TDZ error since the typedef may appear later in the source).
+    const extraTypes: string[] = [];
+    const enumConsts: string[] = [];
+    s = s.replace(/typedef\s+enum\s*\{([\s\S]*?)\}\s*(\w+)\s*;/g,
+        (_full: string, body: string, name: string) => {
+            extraTypes.push(name);
+            let prevName: string | null = null;
+            for (const rawEntry of body.split(',')) {
+                const entry = rawEntry.trim();
+                if (!entry) continue;
+                const m = entry.match(/^(\w+)\s*(?:=\s*(.+))?$/);
+                if (!m) continue;
+                const [, memberName, value] = m;
+                enumConsts.push(`const ${memberName} = (${value !== undefined ? value : `${prevName ?? '-1'} + 1`});`);
+                prevName = memberName;
+            }
+            return '';
+        });
+
     // Preprocessor directives, line by line
     const outLines: string[] = [];
     for (const raw of s.split('\n')) {
@@ -49,6 +81,8 @@ export function transpileSketch(src: string): TranspileResult {
         outLines.push(raw);
     }
     s = outLines.join('\n');
+
+    const TYPES = typesPattern('(?:unsigned\\s+|signed\\s+|static\\s+|volatile\\s+|const\\s+)*', extraTypes);
 
     // Function signatures: "<type> name(params) {" -> "function name(params) {"
     s = s.replace(new RegExp(`\\b${TYPES}\\s*\\*?\\s*(\\w+)\\s*\\(([^;{]*)\\)\\s*\\{`, 'g'),
@@ -76,11 +110,13 @@ export function transpileSketch(src: string): TranspileResult {
     // C-style casts: "(uint8_t)x" / "(unsigned long)(a + b)" -> "x" / "(a + b)".
     // Left in place these read as an invalid call expression in JS
     // ("missing ) after argument list").
-    const CAST_TYPE =
-        '(?:unsigned\\s+|signed\\s+|const\\s+|volatile\\s+)*' +
-        '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
+    const CAST_TYPE = typesPattern('(?:unsigned\\s+|signed\\s+|const\\s+|volatile\\s+)*', extraTypes);
     s = s.replace(new RegExp(`\\(\\s*${CAST_TYPE}\\s*\\*?\\s*\\)(?=\\s*[\\w(])`, 'g'), '');
+
+    // Address-of an array element, e.g. "applyOffsetBytes(&buf[1])" -- "&" is
+    // not a JS unary operator. Pass a slice starting at that index instead,
+    // which behaves like the equivalent C pointer for index-based access.
+    s = s.replace(/([(,]\s*)&(\w+)\[([^\]]+)\]/g, '$1$2.slice($3)');
 
     // Char-literal arithmetic, e.g. (char)('0' + (value % 10)) -- the common
     // digit-to-ASCII idiom. Convert 'X' to its numeric char code, but only
@@ -108,10 +144,7 @@ export function transpileSketch(src: string): TranspileResult {
     // across the repeated, independent vm.runInContext() calls used to run
     // loop() — a plain `let` re-declared inside the function would reset to
     // its initial value on every iteration.
-    const SCALAR_TYPE =
-        '(?:unsigned\\s+|signed\\s+|volatile\\s+|const\\s+)*' +
-        '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
+    const SCALAR_TYPE = typesPattern('(?:unsigned\\s+|signed\\s+|volatile\\s+|const\\s+)*', extraTypes);
     const hoisted: string[] = [];
     const seenStatics = new Set<string>();
     s = s.replace(new RegExp(`^[ \\t]*static\\s+${SCALAR_TYPE}\\s*\\*?\\s*(\\w+)\\s*(=\\s*[^;]+)?;[ \\t]*$`, 'gm'),
@@ -131,6 +164,7 @@ export function transpileSketch(src: string): TranspileResult {
         (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/,(\s*)\*/g, ',$1')};`);
 
     if (hoisted.length) s = hoisted.join('\n') + '\n' + s;
+    if (enumConsts.length) s = enumConsts.join('\n') + '\n' + s;
 
     return { code: s, warnings };
 }
