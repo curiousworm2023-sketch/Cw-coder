@@ -36,9 +36,12 @@ const pinState: Record<string, { mode: string; value: number }> = {};
 function pinMode(pin: number, mode: number): void {
     const label = pinLabel(pin);
     const m = mode === 1 ? 'OUTPUT' : mode === 2 ? 'INPUT_PULLUP' : 'INPUT';
-    pinState[label] = pinState[label] ?? { mode: m, value: 0 };
+    // INPUT_PULLUP idles HIGH (pulled up) until something drives it LOW —
+    // e.g. a button wired to GND that hasn't been "pressed" in the panel yet.
+    const def = m === 'INPUT_PULLUP' ? 1 : 0;
+    pinState[label] = pinState[label] ?? { mode: m, value: def };
     pinState[label].mode = m;
-    emit({ t: 'pinMode', pin: label, mode: m });
+    emit({ t: 'pinMode', pin: label, mode: m, value: pinState[label].value });
 }
 
 function digitalWrite(pin: number, val: number): void {
@@ -272,5 +275,15 @@ parentPort?.on('message', (msg) => {
     if (msg === 'stop' || (msg && typeof msg === 'object' && (msg as { cmd?: string }).cmd === 'stop')) {
         stopped = true;
         finish();
+        return;
+    }
+    // User clicked an INPUT/INPUT_PULLUP pin in the panel to simulate a
+    // button press/release: update what digitalRead()/digitalWrite() see.
+    if (msg && typeof msg === 'object' && (msg as { cmd?: string }).cmd === 'setPin') {
+        const { pin, value } = msg as { pin: string; value: number };
+        const v = value ? 1 : 0;
+        pinState[pin] = pinState[pin] ?? { mode: 'INPUT', value: v };
+        pinState[pin].value = v;
+        emit({ t: 'digital', pin, value: v });
     }
 });

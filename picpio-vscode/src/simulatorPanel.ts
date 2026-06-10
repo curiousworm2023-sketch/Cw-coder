@@ -19,8 +19,10 @@ export class SimulatorPanel {
     private _disposed = false;
     private _onStop = new vscode.EventEmitter<void>();
     private _onRestart = new vscode.EventEmitter<void>();
-    readonly onStop    = this._onStop.event;
-    readonly onRestart = this._onRestart.event;
+    private _onPinInput = new vscode.EventEmitter<{ pin: string; value: number }>();
+    readonly onStop     = this._onStop.event;
+    readonly onRestart  = this._onRestart.event;
+    readonly onPinInput = this._onPinInput.event;
 
     static createOrShow(): SimulatorPanel {
         const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
@@ -43,6 +45,7 @@ export class SimulatorPanel {
         this._panel.webview.onDidReceiveMessage(m => {
             if (m.command === 'stop')    this._onStop.fire();
             if (m.command === 'restart') this._onRestart.fire();
+            if (m.command === 'setPin')  this._onPinInput.fire({ pin: m.pin, value: m.value });
         }, null, this._disposables);
     }
 
@@ -97,8 +100,11 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--sub);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px}
 .pin-grid{display:flex;flex-wrap:wrap;gap:8px}
 .pin-cell{width:64px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 4px;text-align:center}
+.pin-cell.input{cursor:pointer;border-color:#3794ff}
+.pin-cell.input:hover{border-color:#5dabff}
 .pin-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto 6px;transition:background .1s,box-shadow .1s}
 .pin-led.on{background:#4ec9b0;box-shadow:0 0 8px #4ec9b0}
+.pin-led.input-on{background:#3794ff;box-shadow:0 0 8px #3794ff}
 .pin-led.pwm{background:var(--accent);box-shadow:0 0 8px var(--accent)}
 .pin-name{font-weight:600;font-size:12px}
 .pin-mode{color:var(--sub);font-size:10px;margin-top:2px}
@@ -152,16 +158,37 @@ function setStatus(status, message) {
   el.textContent = message ? (status + ': ' + message) : status;
 }
 
+const pinIsInput = new Set();
+
 function setLed(pin, on, pwm) {
   const led = document.getElementById('led-' + pin);
   if (!led) return;
-  led.classList.toggle('on', !!on && !pwm);
-  led.classList.toggle('pwm', !!pwm);
+  led.classList.remove('on', 'input-on', 'pwm');
+  if (pwm) led.classList.add('pwm');
+  else if (on) led.classList.add(pinIsInput.has(pin) ? 'input-on' : 'on');
 }
 
 function setMode(pin, text) {
   const el = document.getElementById('mode-' + pin);
   if (el) el.textContent = text;
+}
+
+function setInputClickable(pin, clickable) {
+  const cell = document.getElementById('pin-' + pin);
+  if (!cell) return;
+  cell.classList.toggle('input', clickable);
+  if (clickable) {
+    cell.title = 'Click to toggle input level (simulate button/sensor)';
+    cell.onclick = () => {
+      const led = document.getElementById('led-' + pin);
+      const newVal = led && led.classList.contains('input-on') ? 0 : 1;
+      setLed(pin, !!newVal, false);
+      vscode.postMessage({ command: 'setPin', pin, value: newVal });
+    };
+  } else {
+    cell.title = '';
+    cell.onclick = null;
+  }
 }
 
 function appendProto(line, cls) {
@@ -178,7 +205,12 @@ function reset() {
   serialEl.innerHTML = '<span class="empty">Waiting for output…</span>';
   protoEl.innerHTML  = '<span class="empty">Waiting for activity…</span>';
   protoEmpty = true;
-  [...DIGITAL_PINS_JS, ...ANALOG_PINS_JS].forEach(p => { setLed(p, false, false); setMode(p, '--'); });
+  pinIsInput.clear();
+  [...DIGITAL_PINS_JS, ...ANALOG_PINS_JS].forEach(p => {
+    setLed(p, false, false);
+    setMode(p, '--');
+    setInputClickable(p, false);
+  });
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -195,7 +227,15 @@ window.addEventListener('message', e => {
       break;
     case 'pinMode':
       setMode(m.pin, m.mode);
-      if (m.mode === 'OUTPUT') setLed(m.pin, false, false);
+      if (m.mode === 'OUTPUT') {
+        pinIsInput.delete(m.pin);
+        setInputClickable(m.pin, false);
+        setLed(m.pin, false, false);
+      } else {
+        pinIsInput.add(m.pin);
+        setInputClickable(m.pin, true);
+        setLed(m.pin, !!m.value, false);
+      }
       break;
     case 'digital':
       setLed(m.pin, !!m.value, false);

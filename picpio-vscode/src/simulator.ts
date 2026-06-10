@@ -82,6 +82,9 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         stopWorker();
         start();
     }));
+    activeDisposables.push(panel.onPinInput(({ pin, value }) => {
+        activeWorker?.postMessage({ cmd: 'setPin', pin, value });
+    }));
 
     start();
 }
