@@ -9,10 +9,13 @@
 // error in the simulator (reported back to the user), rather than crashing
 // the extension.
 
+// Trailing \b ensures e.g. "byte" doesn't match as a prefix of an
+// identifier like "bytes" (which would otherwise be parsed as type
+// "byte" + name "s").
 const TYPES =
     '(?:unsigned\\s+|signed\\s+|static\\s+|volatile\\s+|const\\s+)*' +
     '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-    'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
+    'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
 
 export interface TranspileResult {
     code: string;
@@ -26,6 +29,10 @@ export function transpileSketch(src: string): TranspileResult {
     // Strip comments
     s = s.replace(/\/\*[\s\S]*?\*\//g, '');
     s = s.replace(/\/\/[^\n]*/g, '');
+
+    // C floating-point literal suffixes (e.g. 0.0f, 8388608.0f, 1e-3F) aren't
+    // valid JS number syntax -- strip the trailing f/F.
+    s = s.replace(/\b(\d+\.\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+)[fF]\b/g, '$1');
 
     // Preprocessor directives, line by line
     const outLines: string[] = [];
@@ -72,7 +79,7 @@ export function transpileSketch(src: string): TranspileResult {
     const CAST_TYPE =
         '(?:unsigned\\s+|signed\\s+|const\\s+|volatile\\s+)*' +
         '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
+        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
     s = s.replace(new RegExp(`\\(\\s*${CAST_TYPE}\\s*\\*?\\s*\\)(?=\\s*[\\w(])`, 'g'), '');
 
     // Char-literal arithmetic, e.g. (char)('0' + (value % 10)) -- the common
@@ -104,7 +111,7 @@ export function transpileSketch(src: string): TranspileResult {
     const SCALAR_TYPE =
         '(?:unsigned\\s+|signed\\s+|volatile\\s+|const\\s+)*' +
         '(?:void|int|long|short|char|float|double|bool|byte|String|' +
-        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
+        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)\\b';
     const hoisted: string[] = [];
     const seenStatics = new Set<string>();
     s = s.replace(new RegExp(`^[ \\t]*static\\s+${SCALAR_TYPE}\\s*\\*?\\s*(\\w+)\\s*(=\\s*[^;]+)?;[ \\t]*$`, 'gm'),
@@ -116,9 +123,12 @@ export function transpileSketch(src: string): TranspileResult {
             return '';
         });
 
-    // Generic variable declarations (incl. comma-separated declarators)
+    // Generic variable declarations (incl. comma-separated declarators).
+    // Strip pointer '*' markers before subsequent declarators (e.g.
+    // "int a, *b;" -> "let a, b;") without touching '*' used as
+    // multiplication inside an initializer expression.
     s = s.replace(new RegExp(`^(\\s*)${TYPES}\\s*\\*?\\s*(\\w+\\s*(?:=\\s*[^,;]+)?(?:\\s*,\\s*\\*?\\w+(?:\\s*=\\s*[^,;]+)?)*)\\s*;`, 'gm'),
-        (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/\*/g, '')};`);
+        (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/,(\s*)\*/g, ',$1')};`);
 
     if (hoisted.length) s = hoisted.join('\n') + '\n' + s;
 
