@@ -66,6 +66,15 @@ export function transpileSketch(src: string): TranspileResult {
     // for-loop init declarations: "for (type i = 0; ..." -> "for (let i = 0; ..."
     s = s.replace(new RegExp(`\\bfor\\s*\\(\\s*${TYPES}\\s+(\\w+)`, 'g'), 'for (let $1');
 
+    // C-style casts: "(uint8_t)x" / "(unsigned long)(a + b)" -> "x" / "(a + b)".
+    // Left in place these read as an invalid call expression in JS
+    // ("missing ) after argument list").
+    const CAST_TYPE =
+        '(?:unsigned\\s+|signed\\s+|const\\s+|volatile\\s+)*' +
+        '(?:void|int|long|short|char|float|double|bool|byte|String|' +
+        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
+    s = s.replace(new RegExp(`\\(\\s*${CAST_TYPE}\\s*\\*?\\s*\\)(?=\\s*[\\w(])`, 'g'), '');
+
     // Hoist `static <type> name = init;` locals to module scope (declared
     // once, before setup()/loop() are first called) so their value persists
     // across the repeated, independent vm.runInContext() calls used to run
