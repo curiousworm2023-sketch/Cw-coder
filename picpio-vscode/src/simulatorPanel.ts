@@ -118,10 +118,10 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-cell.input:hover{border-color:#5dabff}
 .pin-cell.analog{width:110px}
 .pin-slider{width:100%;margin:8px 0 4px;accent-color:#3794ff}
-.pin-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto 6px;transition:background .1s,box-shadow .1s}
+.pin-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto 6px;transition:background .1s,box-shadow .15s,opacity .15s}
 .pin-led.on{background:#4ec9b0;box-shadow:0 0 8px #4ec9b0}
 .pin-led.input-on{background:#3794ff;box-shadow:0 0 8px #3794ff}
-.pin-led.pwm{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.pin-led.pwm{background:var(--accent)}
 .pin-name{font-weight:600;font-size:12px}
 .pin-mode{color:var(--sub);font-size:9px;margin-top:2px;line-height:1.2;word-break:break-all;overflow-wrap:anywhere}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
@@ -176,12 +176,22 @@ function setStatus(status, message) {
 
 const pinIsInput = new Set();
 
-function setLed(pin, on, pwm) {
+function setLed(pin, on, pwm, duty) {
   const led = document.getElementById('led-' + pin);
   if (!led) return;
   led.classList.remove('on', 'input-on', 'pwm');
-  if (pwm) led.classList.add('pwm');
-  else if (on) led.classList.add(pinIsInput.has(pin) ? 'input-on' : 'on');
+  led.style.opacity = '';
+  led.style.boxShadow = '';
+  if (pwm) {
+    led.classList.add('pwm');
+    // Scale brightness/glow with duty cycle so a fade is visibly a fade,
+    // not just an on/off flicker at the same intensity.
+    const frac = Math.max(0, Math.min(1, (typeof duty === 'number' ? duty : 255) / 255));
+    led.style.opacity = (0.12 + 0.88 * frac).toFixed(2);
+    led.style.boxShadow = frac > 0 ? '0 0 ' + Math.round(2 + 10 * frac) + 'px var(--accent)' : 'none';
+  } else if (on) {
+    led.classList.add(pinIsInput.has(pin) ? 'input-on' : 'on');
+  }
 }
 
 function setMode(pin, text) {
@@ -275,7 +285,7 @@ window.addEventListener('message', e => {
       break;
     case 'pwm':
       setMode(m.pin, 'PWM ' + Math.round(m.duty / 255 * 100) + '%');
-      setLed(m.pin, m.duty > 0, m.duty > 0);
+      setLed(m.pin, m.duty > 0, true, m.duty);
       appendProto('PWM  ' + m.pin + '  duty=' + m.duty + ' (' + Math.round(m.duty/255*100) + '%)', 'log-pwm');
       break;
     case 'serial':
