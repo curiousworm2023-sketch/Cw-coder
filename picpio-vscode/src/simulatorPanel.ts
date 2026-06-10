@@ -40,10 +40,6 @@ export class SimulatorPanel {
     static createOrShow(): SimulatorPanel {
         const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
         if (SimulatorPanel.current) {
-            // Reload the HTML/JS each time the simulator is (re)started, so an
-            // already-open panel picks up extension updates instead of running
-            // whatever UI code was loaded when the panel was first created.
-            SimulatorPanel.current._panel.webview.html = SimulatorPanel.current._html();
             SimulatorPanel.current._panel.reveal(col);
             return SimulatorPanel.current;
         }
@@ -150,8 +146,7 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .circuit-part .part-pot{width:64px}
 .part-passive{width:36px;height:18px;background:#2d2d2d;border:1px solid var(--sub);border-radius:2px;margin:0 auto;font-size:8px;line-height:18px;color:var(--sub);overflow:hidden}
 .part-toggle{font-size:9px;color:var(--text);display:flex;align-items:center;justify-content:center}
-.circuit-part.part-wide{min-width:150px}
-.part-oled{background:#000;border:1px solid #333;border-radius:3px;padding:4px;font-family:'Cascadia Code',Consolas,monospace;font-size:7px;line-height:1.35;color:#7fffd4;white-space:pre;overflow:hidden;text-shadow:0 0 2px rgba(127,255,212,.6)}
+.oled-screen{background:#000;border:2px solid #333;border-radius:6px;padding:10px;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;line-height:1.5;color:#7fffd4;white-space:pre;overflow:hidden;text-shadow:0 0 4px rgba(127,255,212,.6);letter-spacing:1px}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -180,12 +175,12 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     ${ANALOG_PINS.map(analogPinCell).join('')}
   </div>
 
+  <div class="section-title">OLED Display (SSD1306)</div>
+  <div class="oled-screen" id="oledScreen">${Array.from({ length: 8 }, () => ' '.repeat(21)).join('\n')}</div>
+
   <div class="section-title">Circuit (beta)</div>
   <div class="circuit-toolbar">
     <select id="partType">
-      <optgroup label="Displays">
-        <option value="oled">OLED Display (SSD1306)</option>
-      </optgroup>
       <optgroup label="LEDs &amp; Indicators">
         <option value="led_red">LED (Red)</option>
         <option value="led_green">LED (Green)</option>
@@ -320,7 +315,7 @@ function reset() {
   Object.keys(lastDigital).forEach(p => delete lastDigital[p]);
   Object.keys(lastPwm).forEach(p => delete lastPwm[p]);
   Object.values(parts).forEach(part => updatePartLed(part.id, false, false));
-  document.querySelectorAll('.part-oled').forEach(el => { el.textContent = OLED_BLANK; });
+  document.getElementById('oledScreen').textContent = Array.from({ length: 8 }, () => ' '.repeat(21)).join('\n');
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -456,10 +451,7 @@ function onTerminalClick(kind, el, data) {
 // digital/pwm output, 'momentary' and 'toggle' drive a digital input,
 // 'analog' drives an analog input via a slider, and 'passive' is a
 // visual-only placeholder (resistor/capacitor) for drawing a fuller circuit.
-const OLED_BLANK = Array.from({ length: 8 }, () => ' '.repeat(21)).join('\n');
-
 const PART_DEFS = {
-  oled:       { label: 'OLED Display',       kind: 'oled' },
   led_red:    { label: 'LED (Red)',          kind: 'led', color: '#ff5555' },
   led_green:  { label: 'LED (Green)',        kind: 'led', color: '#4ec9b0' },
   led_yellow: { label: 'LED (Yellow)',       kind: 'led', color: '#ffd23f' },
@@ -498,7 +490,6 @@ function addPart(type) {
   if (def.kind === 'toggle')    inner = '<div class="part-btn part-toggle" id="' + id + '-btn">OFF</div>';
   if (def.kind === 'analog')    inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">';
   if (def.kind === 'passive')   inner = '<div class="part-passive" id="' + id + '-box">' + def.label + '</div>';
-  if (def.kind === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled">' + OLED_BLANK + '</div>'; el.classList.add('part-wide'); }
 
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
     '<div class="part-label">' + def.label + '</div><div class="term" id="' + id + '-term"></div>';
@@ -645,7 +636,7 @@ window.addEventListener('message', e => {
       appendProto('SPI  transfer  tx=0x' + m.tx.toString(16).padStart(2,'0') + '  rx=0x' + m.rx.toString(16).padStart(2,'0'), 'log-spi');
       break;
     case 'oled':
-      document.querySelectorAll('.part-oled').forEach(el => { el.textContent = m.lines.join('\n'); });
+      document.getElementById('oledScreen').textContent = m.lines.join('\n');
       break;
     case 'error':
       appendProto('ERROR (' + m.phase + '): ' + m.message, 'log-err');
