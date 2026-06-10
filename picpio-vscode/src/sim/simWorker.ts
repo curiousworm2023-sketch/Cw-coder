@@ -62,8 +62,14 @@ function analogWrite(pin: number, val: number): void {
     emit({ t: 'pwm', pin: label, duty: v });
 }
 
+// User-set analog input values (e.g. dragging a potentiometer slider in the
+// panel) override the simulated sine-wave reading for that pin.
+const analogOverride: Record<string, number> = {};
+
 function analogRead(pin: number): number {
-    const seed = pinLabel(pin).charCodeAt(pinLabel(pin).length - 1);
+    const label = pinLabel(pin);
+    if (label in analogOverride) return analogOverride[label];
+    const seed = label.charCodeAt(label.length - 1);
     const v = Math.floor(512 + 511 * Math.sin(millis() / 400 + seed));
     return Math.max(0, Math.min(1023, v));
 }
@@ -285,5 +291,11 @@ parentPort?.on('message', (msg) => {
         pinState[pin] = pinState[pin] ?? { mode: 'INPUT', value: v };
         pinState[pin].value = v;
         emit({ t: 'digital', pin, value: v });
+    }
+    // User dragged an analog pin's slider in the panel to simulate a
+    // potentiometer/sensor: override what analogRead() returns for that pin.
+    if (msg && typeof msg === 'object' && (msg as { cmd?: string }).cmd === 'setAnalog') {
+        const { pin, value } = msg as { pin: string; value: number };
+        analogOverride[pin] = Math.max(0, Math.min(1023, Math.round(Number(value))));
     }
 });

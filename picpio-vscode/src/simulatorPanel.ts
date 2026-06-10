@@ -12,6 +12,17 @@ function pinCell(label: string): string {
       </div>`;
 }
 
+// Analog input pins get a slider so the user can simulate a potentiometer
+// or sensor: dragging it overrides analogRead() for that pin.
+function analogPinCell(label: string): string {
+    return `
+      <div class="pin-cell analog" id="pin-${label}">
+        <div class="pin-name">${label}</div>
+        <input type="range" class="pin-slider" id="slider-${label}" min="0" max="1023" value="512">
+        <div class="pin-mode" id="mode-${label}">auto</div>
+      </div>`;
+}
+
 export class SimulatorPanel {
     static current: SimulatorPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
@@ -20,9 +31,11 @@ export class SimulatorPanel {
     private _onStop = new vscode.EventEmitter<void>();
     private _onRestart = new vscode.EventEmitter<void>();
     private _onPinInput = new vscode.EventEmitter<{ pin: string; value: number }>();
-    readonly onStop     = this._onStop.event;
-    readonly onRestart  = this._onRestart.event;
-    readonly onPinInput = this._onPinInput.event;
+    private _onAnalogInput = new vscode.EventEmitter<{ pin: string; value: number }>();
+    readonly onStop        = this._onStop.event;
+    readonly onRestart     = this._onRestart.event;
+    readonly onPinInput    = this._onPinInput.event;
+    readonly onAnalogInput = this._onAnalogInput.event;
 
     static createOrShow(): SimulatorPanel {
         const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
@@ -43,9 +56,10 @@ export class SimulatorPanel {
         this._panel.webview.html = this._html();
         this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
         this._panel.webview.onDidReceiveMessage(m => {
-            if (m.command === 'stop')    this._onStop.fire();
-            if (m.command === 'restart') this._onRestart.fire();
-            if (m.command === 'setPin')  this._onPinInput.fire({ pin: m.pin, value: m.value });
+            if (m.command === 'stop')      this._onStop.fire();
+            if (m.command === 'restart')   this._onRestart.fire();
+            if (m.command === 'setPin')    this._onPinInput.fire({ pin: m.pin, value: m.value });
+            if (m.command === 'setAnalog') this._onAnalogInput.fire({ pin: m.pin, value: m.value });
         }, null, this._disposables);
     }
 
@@ -102,6 +116,8 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-cell{width:64px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 4px;text-align:center}
 .pin-cell.input{cursor:pointer;border-color:#3794ff}
 .pin-cell.input:hover{border-color:#5dabff}
+.pin-cell.analog{width:110px}
+.pin-slider{width:100%;margin:8px 0 4px;accent-color:#3794ff}
 .pin-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto 6px;transition:background .1s,box-shadow .1s}
 .pin-led.on{background:#4ec9b0;box-shadow:0 0 8px #4ec9b0}
 .pin-led.input-on{background:#3794ff;box-shadow:0 0 8px #3794ff}
@@ -133,7 +149,7 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     ${DIGITAL_PINS.map(pinCell).join('')}
   </div>
   <div class="pin-grid" style="margin-top:8px">
-    ${ANALOG_PINS.map(pinCell).join('')}
+    ${ANALOG_PINS.map(analogPinCell).join('')}
   </div>
 
   <div class="section-title">Serial Monitor</div>
@@ -206,15 +222,31 @@ function reset() {
   protoEl.innerHTML  = '<span class="empty">Waiting for activity…</span>';
   protoEmpty = true;
   pinIsInput.clear();
-  [...DIGITAL_PINS_JS, ...ANALOG_PINS_JS].forEach(p => {
+  DIGITAL_PINS_JS.forEach(p => {
     setLed(p, false, false);
     setMode(p, '--');
     setInputClickable(p, false);
+  });
+  ANALOG_PINS_JS.forEach(p => {
+    setMode(p, 'auto');
+    const slider = document.getElementById('slider-' + p);
+    if (slider) slider.value = 512;
   });
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
 const ANALOG_PINS_JS  = ${JSON.stringify(ANALOG_PINS)};
+
+// Dragging an analog pin's slider simulates a potentiometer/sensor: it
+// overrides analogRead() for that pin until the simulation is restarted.
+ANALOG_PINS_JS.forEach(p => {
+  const slider = document.getElementById('slider-' + p);
+  if (!slider) return;
+  slider.addEventListener('input', () => {
+    setMode(p, slider.value);
+    vscode.postMessage({ command: 'setAnalog', pin: p, value: Number(slider.value) });
+  });
+});
 
 window.addEventListener('message', e => {
   const m = e.data;

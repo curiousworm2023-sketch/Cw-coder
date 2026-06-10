@@ -85,6 +85,9 @@ export function runSimulation(context: vscode.ExtensionContext): void {
     activeDisposables.push(panel.onPinInput(({ pin, value }) => {
         activeWorker?.postMessage({ cmd: 'setPin', pin, value });
     }));
+    activeDisposables.push(panel.onAnalogInput(({ pin, value }) => {
+        activeWorker?.postMessage({ cmd: 'setAnalog', pin, value });
+    }));
 
     start();
 }
