@@ -13,7 +13,7 @@ export class EnvNode extends vscode.TreeItem {
 }
 
 export class GroupNode extends vscode.TreeItem {
-    constructor(label: string, public children: TaskNode[]) {
+    constructor(label: string, public children: (TaskNode | PeripheralNode)[]) {
         super(label, vscode.TreeItemCollapsibleState.Collapsed);
         this.contextValue = 'group';
         this.iconPath     = new vscode.ThemeIcon('folder');
@@ -35,7 +35,17 @@ export class TaskNode extends vscode.TreeItem {
     }
 }
 
-type Node = EnvNode | GroupNode | TaskNode;
+export class PeripheralNode extends vscode.TreeItem {
+    constructor(label: string, kind: string, icon: string, desc?: string) {
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.contextValue = 'peripheral';
+        this.iconPath     = new vscode.ThemeIcon(icon);
+        if (desc) this.description = desc;
+        this.command = { command: 'picpio.insertPeripheral', title: label, arguments: [kind, 0] };
+    }
+}
+
+type Node = EnvNode | GroupNode | TaskNode | PeripheralNode;
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
@@ -69,15 +79,25 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
                 new TaskNode('Generate VSCode Config', 'vscode', 'gear'),
             ]);
 
-            return [
+            const children: Node[] = [
                 new TaskNode('Build',              'build',    'check',       'Ctrl+Alt+B'),
                 new TaskNode('Upload',             'upload',   'arrow-right', 'Ctrl+Alt+U'),
                 new TaskNode('Upload and Monitor', 'build -u', 'arrow-up'),
                 new TaskNode('Monitor',            'monitor',  'plug',        'Ctrl+Alt+S'),
                 new TaskNode('Clean',              'clean',    'trash'),
-                advanced,
-                misc,
             ];
+
+            if (fw === 'arduino') {
+                children.push(new GroupNode('Peripherals', [
+                    new PeripheralNode('+ SPI',   'spi',   'circuit-board'),
+                    new PeripheralNode('+ USART', 'usart', 'radio-tower'),
+                    new PeripheralNode('+ I2C',   'i2c',   'sync'),
+                    new PeripheralNode('+ PWM',   'pwm',   'zap'),
+                ]));
+            }
+
+            children.push(advanced, misc);
+            return children;
         }
 
         // Inside a group → its children
@@ -88,10 +108,10 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
 }
 
 // ── Quick Access provider (separate panel, like PlatformIO) ───────────────────
-export class QuickAccessProvider implements vscode.TreeDataProvider<TaskNode | GroupNode> {
-    getTreeItem(el: TaskNode | GroupNode) { return el; }
+export class QuickAccessProvider implements vscode.TreeDataProvider<TaskNode | PeripheralNode | GroupNode> {
+    getTreeItem(el: TaskNode | PeripheralNode | GroupNode) { return el; }
 
-    getChildren(el?: TaskNode | GroupNode): (TaskNode | GroupNode)[] {
+    getChildren(el?: TaskNode | PeripheralNode | GroupNode): (TaskNode | PeripheralNode | GroupNode)[] {
         if (el instanceof GroupNode) return el.children;
         if (el) return [];
 
