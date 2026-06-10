@@ -100,7 +100,7 @@ export class ProjectWizardPanel {
         ).join('');
 
         const fwOptions = FRAMEWORK_LIST.map(f =>
-            `<option value="${f.label}">${f.label} — ${f.description}</option>`
+            `<option value="${f.label}">${f.label}</option>`
         ).join('');
 
         const progOptions = PROGRAMMER_LIST.map(p => `<option value="${p}">${p}</option>`).join('');
