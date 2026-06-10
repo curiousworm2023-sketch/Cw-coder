@@ -8,7 +8,8 @@ import { ProjectProvider, LibrariesProvider }    from './projectTree';
 import { picpio, getTerminal }  from './terminal';
 import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
-import { insertPeripheralSnippet } from './peripheralInsert';
+import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
+import { readConfig } from './iniParser';
 
 /** Find the highest installed XC8 version under C:/Program Files/Microchip/xc8/ */
 function findXC8Version(): string {
@@ -80,6 +81,20 @@ function ensureCppProperties(projectDir: string): void {
     } catch { /* non-fatal */ }
 }
 
+/** Show a pin-pair QuickPick (if the peripheral has alternates) then insert the snippet */
+async function insertPeripheralWithPins(kind: string): Promise<void> {
+    const snip = SNIPPETS[kind];
+    if (!snip.pinOptions || snip.pinOptions.length <= 1) {
+        await insertPeripheralSnippet(kind, 0);
+        return;
+    }
+    const pick = await vscode.window.showQuickPick(
+        snip.pinOptions.map((p, i) => ({ label: p.label, idx: i })),
+        { title: `${snip.label} — Select pins`, placeHolder: 'Choose pin assignment' }
+    );
+    if (pick) await insertPeripheralSnippet(kind, pick.idx);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
 
     // ── Tree providers ────────────────────────────────────────────────────────
@@ -128,6 +143,16 @@ export function activate(context: vscode.ExtensionContext): void {
             { label: '$(plug)           Serial Monitor', description: 'Ctrl+Alt+S', action: () => openSerialMonitor() },
             { label: '$(terminal)       Open CLI',       description: '',           action: () => getTerminal().show(false) },
         ];
+
+        if (readConfig()?.framework === 'arduino') {
+            tasks.push(
+                { label: '$(circuit-board)  + SPI',   description: 'Insert SPI snippet',   action: () => insertPeripheralWithPins('spi') },
+                { label: '$(radio-tower)    + USART', description: 'Insert USART snippet', action: () => insertPeripheralWithPins('usart') },
+                { label: '$(sync)           + I2C',   description: 'Insert I2C snippet',   action: () => insertPeripheralWithPins('i2c') },
+                { label: '$(zap)            + PWM',   description: 'Insert PWM snippet',   action: () => insertPeripheralSnippet('pwm') },
+            );
+        }
+
         const pick = await vscode.window.showQuickPick(tasks, {
             title:       'PICPIO — Run Task',
             placeHolder: 'Select a task to run…',
