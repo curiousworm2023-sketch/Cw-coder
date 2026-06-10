@@ -199,6 +199,7 @@ window.addEventListener('message', e => {
       break;
     case 'digital':
       setLed(m.pin, !!m.value, false);
+      appendProto(m.pin + '  -> ' + (m.value ? 'HIGH' : 'LOW'), 'log-info');
       break;
     case 'pwm':
       setMode(m.pin, 'PWM ' + Math.round(m.duty / 255 * 100) + '%');
