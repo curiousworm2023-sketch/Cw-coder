@@ -144,9 +144,6 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .part-btn{width:32px;height:32px;border-radius:6px;background:#444;border:2px solid var(--border);margin:0 auto;cursor:pointer}
 .part-btn.pressed{background:#3794ff;border-color:#5dabff}
 .circuit-part .part-pot{width:64px}
-.part-passive{width:36px;height:18px;background:#2d2d2d;border:1px solid var(--sub);border-radius:2px;margin:0 auto;font-size:8px;line-height:18px;color:var(--sub);overflow:hidden}
-.part-toggle{font-size:9px;color:var(--text);display:flex;align-items:center;justify-content:center}
-.oled-screen{background:#000;border:2px solid #333;border-radius:6px;padding:10px;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;line-height:1.5;color:#7fffd4;white-space:pre;overflow:hidden;text-shadow:0 0 4px rgba(127,255,212,.6);letter-spacing:1px}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -175,43 +172,11 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     ${ANALOG_PINS.map(analogPinCell).join('')}
   </div>
 
-  <div class="section-title">OLED Display (SSD1306)</div>
-  <div class="oled-screen" id="oledScreen">${Array.from({ length: 8 }, () => ' '.repeat(21)).join('\n')}</div>
-
   <div class="section-title">Circuit (beta)</div>
   <div class="circuit-toolbar">
-    <select id="partType">
-      <optgroup label="LEDs &amp; Indicators">
-        <option value="led_red">LED (Red)</option>
-        <option value="led_green">LED (Green)</option>
-        <option value="led_yellow">LED (Yellow)</option>
-        <option value="led_blue">LED (Blue)</option>
-        <option value="buzzer">Buzzer</option>
-        <option value="relay">Relay Module</option>
-        <option value="vibration">Vibration Motor</option>
-      </optgroup>
-      <optgroup label="Buttons &amp; Switches">
-        <option value="button">Push Button</option>
-        <option value="toggle">Toggle Switch</option>
-        <option value="reed">Reed Switch</option>
-        <option value="tilt">Tilt Switch</option>
-        <option value="pir">PIR Motion Sensor</option>
-        <option value="ir">IR Receiver</option>
-      </optgroup>
-      <optgroup label="Analog Sensors">
-        <option value="pot">Potentiometer</option>
-        <option value="ldr">Photoresistor (LDR)</option>
-        <option value="thermistor">Thermistor</option>
-        <option value="soil">Soil Moisture Sensor</option>
-        <option value="flex">Flex Sensor</option>
-        <option value="photodiode">Photodiode</option>
-      </optgroup>
-      <optgroup label="Passive (visual only)">
-        <option value="resistor">Resistor</option>
-        <option value="capacitor">Capacitor</option>
-      </optgroup>
-    </select>
-    <button id="addPartBtn">+ Add</button>
+    <button id="addLed">+ LED</button>
+    <button id="addButton">+ Button</button>
+    <button id="addPot">+ Potentiometer</button>
     <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to wire them. Click a wire to remove it.</span>
   </div>
   <div class="circuit-wrap" id="circuitWrap">
@@ -315,7 +280,6 @@ function reset() {
   Object.keys(lastDigital).forEach(p => delete lastDigital[p]);
   Object.keys(lastPwm).forEach(p => delete lastPwm[p]);
   Object.values(parts).forEach(part => updatePartLed(part.id, false, false));
-  document.getElementById('oledScreen').textContent = Array.from({ length: 8 }, () => ' '.repeat(21)).join('\n');
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -381,20 +345,18 @@ function removeWire(w) {
 function updatePartLed(partId, on, pwm, duty) {
   const ledEl = document.getElementById(partId + '-led');
   if (!ledEl) return;
-  const color = (parts[partId] && parts[partId].color) || '#4ec9b0';
   ledEl.style.opacity = '';
   ledEl.style.boxShadow = '';
   if (pwm) {
     const frac = Math.max(0, Math.min(1, (typeof duty === 'number' ? duty : 255) / 255));
-    ledEl.style.background = color;
+    ledEl.style.background = 'var(--accent)';
     ledEl.style.opacity = (0.12 + 0.88 * frac).toFixed(2);
-    ledEl.style.boxShadow = frac > 0 ? '0 0 ' + Math.round(2 + 10 * frac) + 'px ' + color : 'none';
+    ledEl.style.boxShadow = frac > 0 ? '0 0 ' + Math.round(2 + 10 * frac) + 'px var(--accent)' : 'none';
   } else if (on) {
-    ledEl.style.background = color;
-    ledEl.style.boxShadow = '0 0 8px ' + color;
+    ledEl.style.background = '#4ec9b0';
+    ledEl.style.boxShadow = '0 0 8px #4ec9b0';
   } else {
     ledEl.style.background = '#333';
-    ledEl.style.boxShadow = 'none';
   }
 }
 
@@ -446,38 +408,7 @@ function onTerminalClick(kind, el, data) {
   if (el) el.addEventListener('click', () => onTerminalClick('mcu', el, p));
 });
 
-// Each part type maps onto one of a handful of behaviours, all driven
-// through the same single-terminal wiring mechanism: 'led' lights up from
-// digital/pwm output, 'momentary' and 'toggle' drive a digital input,
-// 'analog' drives an analog input via a slider, and 'passive' is a
-// visual-only placeholder (resistor/capacitor) for drawing a fuller circuit.
-const PART_DEFS = {
-  led_red:    { label: 'LED (Red)',          kind: 'led', color: '#ff5555' },
-  led_green:  { label: 'LED (Green)',        kind: 'led', color: '#4ec9b0' },
-  led_yellow: { label: 'LED (Yellow)',       kind: 'led', color: '#ffd23f' },
-  led_blue:   { label: 'LED (Blue)',         kind: 'led', color: '#3794ff' },
-  buzzer:     { label: 'Buzzer',             kind: 'led', color: '#dcdcaa' },
-  relay:      { label: 'Relay Module',       kind: 'led', color: '#f27f0c' },
-  vibration:  { label: 'Vibration Motor',    kind: 'led', color: '#9cdcfe' },
-  button:     { label: 'Push Button',        kind: 'momentary' },
-  pir:        { label: 'PIR Motion Sensor',  kind: 'momentary' },
-  ir:         { label: 'IR Receiver',        kind: 'momentary' },
-  toggle:     { label: 'Toggle Switch',      kind: 'toggle' },
-  reed:       { label: 'Reed Switch',        kind: 'toggle' },
-  tilt:       { label: 'Tilt Switch',        kind: 'toggle' },
-  pot:        { label: 'Potentiometer',      kind: 'analog' },
-  ldr:        { label: 'Photoresistor (LDR)', kind: 'analog' },
-  thermistor: { label: 'Thermistor',         kind: 'analog' },
-  soil:       { label: 'Soil Moisture',      kind: 'analog' },
-  flex:       { label: 'Flex Sensor',        kind: 'analog' },
-  photodiode: { label: 'Photodiode',         kind: 'analog' },
-  resistor:   { label: 'Resistor',           kind: 'passive' },
-  capacitor:  { label: 'Capacitor',          kind: 'passive' },
-};
-
 function addPart(type) {
-  const def = PART_DEFS[type];
-  if (!def) return;
   const id = 'part' + (++partCounter);
   const el = document.createElement('div');
   el.className = 'circuit-part';
@@ -485,16 +416,15 @@ function addPart(type) {
   el.style.top  = (8 + Math.floor(partCounter / 4) * 80) + 'px';
 
   let inner = '';
-  if (def.kind === 'led')       inner = '<div class="part-led" id="' + id + '-led"></div>';
-  if (def.kind === 'momentary') inner = '<div class="part-btn" id="' + id + '-btn"></div>';
-  if (def.kind === 'toggle')    inner = '<div class="part-btn part-toggle" id="' + id + '-btn">OFF</div>';
-  if (def.kind === 'analog')    inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">';
-  if (def.kind === 'passive')   inner = '<div class="part-passive" id="' + id + '-box">' + def.label + '</div>';
+  let label = '';
+  if (type === 'led')    { inner = '<div class="part-led" id="' + id + '-led"></div>'; label = 'LED'; }
+  if (type === 'button') { inner = '<div class="part-btn" id="' + id + '-btn"></div>'; label = 'Button'; }
+  if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
 
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
-    '<div class="part-label">' + def.label + '</div><div class="term" id="' + id + '-term"></div>';
+    '<div class="part-label">' + label + '</div><div class="term" id="' + id + '-term"></div>';
   circuitParts.appendChild(el);
-  parts[id] = { id, type, kind: def.kind, color: def.color, el };
+  parts[id] = { id, type, el };
 
   const termEl = el.querySelector('#' + id + '-term');
   termEl.addEventListener('click', e => { e.stopPropagation(); onTerminalClick('part', termEl, id); });
@@ -528,7 +458,7 @@ function addPart(type) {
   });
   window.addEventListener('mouseup', () => { dragging = false; });
 
-  if (def.kind === 'momentary') {
+  if (type === 'button') {
     const btnEl = el.querySelector('#' + id + '-btn');
     const press = () => {
       btnEl.classList.add('pressed');
@@ -546,20 +476,7 @@ function addPart(type) {
     btnEl.addEventListener('mouseleave', release);
   }
 
-  if (def.kind === 'toggle') {
-    const btnEl = el.querySelector('#' + id + '-btn');
-    let on = false;
-    btnEl.addEventListener('click', e => {
-      e.stopPropagation();
-      on = !on;
-      btnEl.classList.toggle('pressed', on);
-      btnEl.textContent = on ? 'ON' : 'OFF';
-      const pin = partToPin[id];
-      if (pin) vscode.postMessage({ command: 'setPin', pin, value: on ? 0 : 1 });
-    });
-  }
-
-  if (def.kind === 'analog') {
+  if (type === 'pot') {
     const rangeEl = el.querySelector('#' + id + '-range');
     rangeEl.addEventListener('mousedown', e => e.stopPropagation());
     rangeEl.addEventListener('input', () => {
@@ -569,10 +486,9 @@ function addPart(type) {
   }
 }
 
-document.getElementById('addPartBtn').addEventListener('click', () => {
-  const sel = document.getElementById('partType');
-  addPart(sel.value);
-});
+document.getElementById('addLed').addEventListener('click', () => addPart('led'));
+document.getElementById('addButton').addEventListener('click', () => addPart('button'));
+document.getElementById('addPot').addEventListener('click', () => addPart('pot'));
 window.addEventListener('resize', redrawAllWires);
 
 window.addEventListener('message', e => {
@@ -634,9 +550,6 @@ window.addEventListener('message', e => {
       break;
     case 'spi':
       appendProto('SPI  transfer  tx=0x' + m.tx.toString(16).padStart(2,'0') + '  rx=0x' + m.rx.toString(16).padStart(2,'0'), 'log-spi');
-      break;
-    case 'oled':
-      document.getElementById('oledScreen').textContent = m.lines.join('\n');
       break;
     case 'error':
       appendProto('ERROR (' + m.phase + '): ' + m.message, 'log-err');
