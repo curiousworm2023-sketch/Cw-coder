@@ -27,7 +27,11 @@
       { "command": "picpio.libRemove",     "title": "Remove Library",        "category": "PICPIO", "icon": "$(remove)" },
       { "command": "picpio.refresh",       "title": "Refresh",               "category": "PICPIO", "icon": "$(refresh)" },
       { "command": "picpio.runTask",       "title": "Run Task",              "category": "PICPIO" },
-      { "command": "picpio.taskMenu",      "title": "Run Task…",             "category": "PICPIO", "icon": "$(list-unordered)" }
+      { "command": "picpio.taskMenu",      "title": "Run Task…",             "category": "PICPIO", "icon": "$(list-unordered)" },
+      { "command": "picpio.insertSPI",     "title": "+ SPI",                 "category": "PICPIO", "icon": "$(circuit-board)" },
+      { "command": "picpio.insertUSART",   "title": "+ USART",               "category": "PICPIO", "icon": "$(radio-tower)" },
+      { "command": "picpio.insertI2C",     "title": "+ I2C",                 "category": "PICPIO", "icon": "$(sync)" },
+      { "command": "picpio.insertPWM",     "title": "+ PWM",                 "category": "PICPIO", "icon": "$(zap)" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -48,7 +52,11 @@
         { "command": "picpio.upload",        "when": "picpio.isActive", "group": "picpio@2" },
         { "command": "picpio.clean",         "when": "picpio.isActive", "group": "picpio@3" },
         { "command": "picpio.cleanBuild",    "when": "picpio.isActive", "group": "picpio@4" },
-        { "command": "picpio.serialMonitor", "when": "picpio.isActive", "group": "picpio@5" }
+        { "command": "picpio.serialMonitor", "when": "picpio.isActive", "group": "picpio@5" },
+        { "command": "picpio.insertSPI",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@6" },
+        { "command": "picpio.insertUSART",   "when": "picpio.isActive && picpio.isArduino", "group": "picpio@7" },
+        { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@8" },
+        { "command": "picpio.insertPWM",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@9" }
       ],
       "view/title": [
         { "command": "picpio.refresh", "when": "view == picpioTasks",    "group": "navigation" },

@@ -120,6 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
         projectProv.refresh();
         libsProv.refresh();
         if (HomePanel.current) HomePanel.createOrShow(context);
+        vscode.commands.executeCommand('setContext', 'picpio.isArduino', readConfig()?.framework === 'arduino');
     };
 
     // ── Commands ──────────────────────────────────────────────────────────────
@@ -161,6 +162,10 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     reg('picpio.newProject',    () => ProjectWizardPanel.createOrShow());
     reg('picpio.insertPeripheral', (kind: string, pinIndex?: number) => insertPeripheralSnippet(kind, pinIndex));
+    reg('picpio.insertSPI',     () => insertPeripheralWithPins('spi'));
+    reg('picpio.insertUSART',   () => insertPeripheralWithPins('usart'));
+    reg('picpio.insertI2C',     () => insertPeripheralWithPins('i2c'));
+    reg('picpio.insertPWM',     () => insertPeripheralSnippet('pwm'));
     reg('picpio.refresh',       () => refreshAll());
 
     // PlatformIO Core CLI — opens a named terminal
@@ -227,6 +232,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     vscode.commands.executeCommand('setContext', 'picpio.isActive', true);
+    vscode.commands.executeCommand('setContext', 'picpio.isArduino', readConfig()?.framework === 'arduino');
     vscode.window.setStatusBarMessage('$(chip) PICPIO ready', 3000);
 }
 
