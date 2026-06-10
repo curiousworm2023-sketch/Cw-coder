@@ -67,7 +67,6 @@ function ensureCppProperties(projectDir: string): void {
             name:             'PIC',
             includePath,
             defines:          [`__${mcu}__`, `_XTAL_FREQ=${clock}`],
-            compilerPath:     `${xc8base}/bin/xc8-cc.exe`,
             cStandard:        'c99',
             intelliSenseMode: 'gcc-x86',
         }],

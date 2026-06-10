@@ -857,7 +857,6 @@ function cmdVscode() {
                 ...extraInclude
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${cfg.clock_hz || '64000000'}`],
-            compilerPath: (findXC8() || 'xc8-cc').replace(/\\/g, '/'),
             cStandard: 'c99',
             intelliSenseMode: 'gcc-x86'
         }],

@@ -179,7 +179,6 @@ function scaffoldProject(opts: {
                 'C:/picpio/arduino_compat'
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${clock}`],
-            compilerPath: 'C:/Program Files/Microchip/xc8/v3.10/bin/xc8-cc.exe',
             cStandard:   'c99',
             intelliSenseMode: 'gcc-x86'
         }],
