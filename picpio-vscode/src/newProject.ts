@@ -25,7 +25,7 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC32MZ2048EFH144',description:'2MB / 200MHz / MIPS M-Class + FPU',        family:'PIC32', clock:'200000000' },
 ];
 
-export const PROGRAMMER_LIST = ['PICKit4', 'PICKit5', 'PICKit3', 'ICD4', 'ICD5', 'Snap', 'PKoB'];
+export const PROGRAMMER_LIST = ['PICKit3', 'PICKit4', 'PICKit5', 'ICD4', 'ICD5', 'Snap', 'PKoB'];
 export const FRAMEWORK_LIST  = [
     { label:'arduino',    description:'Arduino-style API — setup()/loop(), digitalWrite(), Wire, Serial' },
     { label:'bare-metal', description:'Direct XC8/XC16/XC32 register access' },
