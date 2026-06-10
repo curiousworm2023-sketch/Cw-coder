@@ -263,6 +263,7 @@ export async function newProjectWizard(): Promise<void> {
     }
 
     vscode.window.showInformationMessage(`Project '${name}' created at ${projectDir}`);
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(projectDir), false);
 }
 
 function waitForFolder(dir: string, timeoutMs: number): Promise<void> {
