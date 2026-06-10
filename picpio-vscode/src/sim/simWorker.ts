@@ -16,7 +16,7 @@ const RUN_TIMEOUT_MS = 5000;
 const DELAY_SCALE = 0.1;
 
 let stopped = false;
-let virtualMillis = 0;
+const realStart = Date.now();
 
 function emit(ev: Record<string, unknown>): void {
     parentPort?.postMessage(ev);
@@ -59,7 +59,7 @@ function analogWrite(pin: number, val: number): void {
 
 function analogRead(pin: number): number {
     const seed = pinLabel(pin).charCodeAt(pinLabel(pin).length - 1);
-    const v = Math.floor(512 + 511 * Math.sin(virtualMillis / 400 + seed));
+    const v = Math.floor(512 + 511 * Math.sin(millis() / 400 + seed));
     return Math.max(0, Math.min(1023, v));
 }
 
@@ -71,21 +71,21 @@ function sleepReal(ms: number): void {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, real);
 }
 
+// millis()/micros() track real elapsed wall-clock time scaled by 1/DELAY_SCALE
+// (10x), so sketches that poll millis() for non-blocking timing (instead of
+// calling delay()) still see the clock advance between loop() iterations.
+function millis(): number { return Math.floor((Date.now() - realStart) / DELAY_SCALE); }
+function micros(): number { return millis() * 1000; }
+
 function delay(ms: number): void {
     const m = Number(ms) || 0;
-    virtualMillis += m;
-    emit({ t: 'delay', ms: m, millis: Math.floor(virtualMillis) });
+    emit({ t: 'delay', ms: m, millis: millis() + m });
     sleepReal(m * DELAY_SCALE);
 }
 
 function delayMicroseconds(us: number): void {
-    const u = Number(us) || 0;
-    virtualMillis += u / 1000;
-    sleepReal((u / 1000) * DELAY_SCALE);
+    sleepReal(((Number(us) || 0) / 1000) * DELAY_SCALE);
 }
-
-function millis(): number { return Math.floor(virtualMillis); }
-function micros(): number { return Math.floor(virtualMillis * 1000); }
 
 const Serial = {
     begin(baud: number) { emit({ t: 'serialBegin', baud: Number(baud) }); },

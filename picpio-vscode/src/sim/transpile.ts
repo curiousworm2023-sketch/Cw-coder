@@ -66,9 +66,31 @@ export function transpileSketch(src: string): TranspileResult {
     // for-loop init declarations: "for (type i = 0; ..." -> "for (let i = 0; ..."
     s = s.replace(new RegExp(`\\bfor\\s*\\(\\s*${TYPES}\\s+(\\w+)`, 'g'), 'for (let $1');
 
+    // Hoist `static <type> name = init;` locals to module scope (declared
+    // once, before setup()/loop() are first called) so their value persists
+    // across the repeated, independent vm.runInContext() calls used to run
+    // loop() — a plain `let` re-declared inside the function would reset to
+    // its initial value on every iteration.
+    const SCALAR_TYPE =
+        '(?:unsigned\\s+|signed\\s+|volatile\\s+|const\\s+)*' +
+        '(?:void|int|long|short|char|float|double|bool|byte|String|' +
+        'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t)';
+    const hoisted: string[] = [];
+    const seenStatics = new Set<string>();
+    s = s.replace(new RegExp(`^[ \\t]*static\\s+${SCALAR_TYPE}\\s*\\*?\\s*(\\w+)\\s*(=\\s*[^;]+)?;[ \\t]*$`, 'gm'),
+        (_full: string, name: string, init?: string) => {
+            if (!seenStatics.has(name)) {
+                seenStatics.add(name);
+                hoisted.push(`let ${name}${init ?? ' = 0'};`);
+            }
+            return '';
+        });
+
     // Generic variable declarations (incl. comma-separated declarators)
     s = s.replace(new RegExp(`^(\\s*)${TYPES}\\s*\\*?\\s*(\\w+\\s*(?:=\\s*[^,;]+)?(?:\\s*,\\s*\\*?\\w+(?:\\s*=\\s*[^,;]+)?)*)\\s*;`, 'gm'),
         (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/\*/g, '')};`);
+
+    if (hoisted.length) s = hoisted.join('\n') + '\n' + s;
 
     return { code: s, warnings };
 }
