@@ -57,7 +57,7 @@ function getRegistryPath(): string {
 }
 
 function spawnEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '1' };
+    const env: NodeJS.ProcessEnv = { ...process.env };
     const current = new Set((env.PATH ?? '').split(';').map(p => p.toLowerCase()));
     const extra = getRegistryPath().split(';').map(p => p.trim()).filter(p => p && !current.has(p.toLowerCase()));
     if (extra.length) env.PATH = [env.PATH, ...extra].filter(Boolean).join(';');
@@ -72,7 +72,7 @@ export function runTracked(args: string, title: string): Promise<number> {
     const cwd = workspaceRoot();
     const channel = getOutputChannel();
     channel.show(true);
-    channel.appendLine(`\x1b[38;2;242;127;12m> ${exe} ${args}\x1b[0m`);
+    channel.appendLine(`> ${exe} ${args}`);
 
     return Promise.resolve(vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
