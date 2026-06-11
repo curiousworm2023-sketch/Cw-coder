@@ -1,5 +1,5 @@
-import { SerialMonitorPanel } from './serialMonitorPanel';
+import { openSerialMonitor as openSerialMonitorPage } from './serialMonitorServer';
 
 export async function openSerialMonitor(): Promise<void> {
-    SerialMonitorPanel.createOrShow();
+    await openSerialMonitorPage();
 }

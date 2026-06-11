@@ -8,6 +8,7 @@ import { ProjectProvider, LibrariesProvider }    from './projectTree';
 import { picpio, getTerminal }  from './terminal';
 import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
+import { disposeSerialMonitorServer } from './serialMonitorServer';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
@@ -246,4 +247,5 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
     disposeSimulator();
+    disposeSerialMonitorServer();
 }

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp     from 'child_process';
 import * as fs     from 'fs';
 import * as os     from 'os';
+import * as http   from 'http';
 import * as path   from 'path';
 import { readConfig } from './iniParser';
 
@@ -19,7 +20,7 @@ function getAvailablePorts(): string[] {
     }
 }
 
-// Bridges the webview to a real serial port. Runs as a long-lived
+// Bridges the browser page to a real serial port. Runs as a long-lived
 // PowerShell process: it opens the port, streams incoming bytes back to
 // stdout (base64-framed so binary/encoding never gets mangled), and accepts
 // "PICPIO_SEND:<base64>" lines on stdin to write bytes to the port.
@@ -92,171 +93,240 @@ try { \$sp.Close() } catch {}
 try { \$reader.Stop(); \$reader.Dispose() } catch {}
 `;
 
-export class SerialMonitorPanel {
-    static current: SerialMonitorPanel | undefined;
-    private readonly _panel: vscode.WebviewPanel;
-    private _disposables: vscode.Disposable[] = [];
-    private _proc: cp.ChildProcess | undefined;
-    private _scriptPath: string;
+let server: http.Server | undefined;
+let serverPort = 0;
+let scriptPath: string | undefined;
+let proc: cp.ChildProcess | undefined;
+const sseClients: http.ServerResponse[] = [];
 
-    static createOrShow(): void {
-        const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
-        if (SerialMonitorPanel.current) {
-            SerialMonitorPanel.current._panel.reveal(col);
-            return;
+function broadcast(msg: any): void {
+    const data = `data: ${JSON.stringify(msg)}\n\n`;
+    for (const res of sseClients) {
+        try { res.write(data); } catch { /* ignore */ }
+    }
+}
+
+function ensureScript(): string {
+    if (scriptPath && fs.existsSync(scriptPath)) return scriptPath;
+    scriptPath = path.join(os.tmpdir(), `picpio-serial-monitor-${process.pid}.ps1`);
+    fs.writeFileSync(scriptPath, MONITOR_SCRIPT, 'utf8');
+    return scriptPath;
+}
+
+function connect(port: string, baud: string): void {
+    if (proc) disconnect();
+
+    let p: cp.ChildProcess;
+    try {
+        p = cp.spawn('powershell', [
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ensureScript(),
+            '-Port', port, '-Baud', String(baud),
+        ], { windowsHide: true });
+    } catch (e: any) {
+        broadcast({ command: 'status', connected: false, error: e.message });
+        return;
+    }
+    proc = p;
+
+    let buf = '';
+    p.stdout?.on('data', (chunk: Buffer) => {
+        buf += chunk.toString('utf8');
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, idx).replace(/\r$/, '');
+            buf = buf.slice(idx + 1);
+            handleLine(line, port, baud);
         }
-        const panel = vscode.window.createWebviewPanel(
-            'picpioSerialMonitor', 'PICPIO Serial Monitor', col,
-            { enableScripts: true, retainContextWhenHidden: true }
-        );
-        SerialMonitorPanel.current = new SerialMonitorPanel(panel);
+    });
+
+    p.stderr?.on('data', (chunk: Buffer) => {
+        broadcast({ command: 'data', text: chunk.toString('utf8') });
+    });
+
+    p.on('exit', () => {
+        if (proc === p) proc = undefined;
+        broadcast({ command: 'status', connected: false });
+    });
+
+    broadcast({ command: 'status', connecting: true, port, baud });
+}
+
+function handleLine(line: string, port: string, baud: string): void {
+    if (line.startsWith('PICPIO_CONNECTED:')) {
+        broadcast({ command: 'status', connected: true, port, baud });
+    } else if (line.startsWith('PICPIO_ERROR:')) {
+        broadcast({ command: 'status', connected: false, error: line.substring('PICPIO_ERROR:'.length) });
+        proc = undefined;
+    } else if (line.startsWith('PICPIO_DATA:')) {
+        const b64 = line.substring('PICPIO_DATA:'.length);
+        try {
+            const text = Buffer.from(b64, 'base64').toString('utf8');
+            broadcast({ command: 'data', text });
+        } catch { /* ignore malformed frame */ }
+    }
+}
+
+function disconnect(): void {
+    const p = proc;
+    if (!p) return;
+    proc = undefined;
+    try { p.stdin?.write('PICPIO_EXIT\n'); } catch { /* ignore */ }
+    setTimeout(() => { try { p.kill(); } catch { /* ignore */ } }, 500);
+    broadcast({ command: 'status', connected: false });
+}
+
+function send(text: string, lineEnding: string): void {
+    if (!proc?.stdin) return;
+    const ending = lineEnding === 'crlf' ? '\r\n'
+                 : lineEnding === 'lf'   ? '\n'
+                 : lineEnding === 'cr'   ? '\r'
+                 : '';
+    const b64 = Buffer.from(text + ending, 'utf8').toString('base64');
+    try { proc.stdin.write(`PICPIO_SEND:${b64}\n`); } catch { /* ignore */ }
+}
+
+function reset(): void {
+    if (!proc?.stdin) return;
+    try { proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
+    broadcast({ command: 'data', text: '\n--- Reset (DTR pulse) ---\n' });
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+    return new Promise(resolve => {
+        let data = '';
+        req.on('data', (c) => { data += c; });
+        req.on('end', () => resolve(data));
+    });
+}
+
+function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const url = req.url || '/';
+
+    if (url === '/' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(htmlPage());
+        return;
     }
 
-    private constructor(panel: vscode.WebviewPanel) {
-        this._panel = panel;
-        this._scriptPath = path.join(os.tmpdir(), `picpio-serial-monitor-${process.pid}.ps1`);
-        try { fs.writeFileSync(this._scriptPath, MONITOR_SCRIPT, 'utf8'); } catch { /* best effort */ }
-
-        this._panel.webview.html = this._html();
-        this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
-        this._panel.webview.onDidReceiveMessage(m => this._handle(m), null, this._disposables);
+    if (url === '/events' && req.method === 'GET') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+        res.write('\n');
+        sseClients.push(res);
+        req.on('close', () => {
+            const i = sseClients.indexOf(res);
+            if (i >= 0) sseClients.splice(i, 1);
+        });
+        return;
     }
 
-    private _post(msg: any): void {
-        this._panel.webview.postMessage(msg);
-    }
-
-    private _handle(msg: any): void {
-        switch (msg.command) {
-            case 'ready':
-            case 'refreshPorts':
-                this._sendPorts();
-                break;
-            case 'connect':
-                this._connect(msg.port, msg.baud);
-                break;
-            case 'disconnect':
-                this._disconnect();
-                break;
-            case 'send':
-                this._send(msg.text, msg.lineEnding);
-                break;
-            case 'reset':
-                this._reset();
-                break;
-        }
-    }
-
-    private _sendPorts(): void {
+    if (url === '/api/ports' && req.method === 'GET') {
         const cfg = readConfig();
-        this._post({
-            command:     'ports',
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
             ports:       getAvailablePorts(),
             defaultPort: cfg?.monitor_port ?? 'COM3',
             defaultBaud: cfg?.monitor_baud ?? '9600',
-        });
+        }));
+        return;
     }
 
-    private _connect(port: string, baud: string): void {
-        if (this._proc) this._disconnect();
-
-        let proc: cp.ChildProcess;
-        try {
-            proc = cp.spawn('powershell', [
-                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', this._scriptPath,
-                '-Port', port, '-Baud', String(baud),
-            ], { windowsHide: true });
-        } catch (e: any) {
-            this._post({ command: 'status', connected: false, error: e.message });
-            return;
-        }
-        this._proc = proc;
-
-        let buf = '';
-        proc.stdout?.on('data', (chunk: Buffer) => {
-            buf += chunk.toString('utf8');
-            let idx: number;
-            while ((idx = buf.indexOf('\n')) >= 0) {
-                const line = buf.slice(0, idx).replace(/\r$/, '');
-                buf = buf.slice(idx + 1);
-                this._handleLine(line, port, baud);
-            }
-        });
-
-        proc.stderr?.on('data', (chunk: Buffer) => {
-            this._post({ command: 'data', text: chunk.toString('utf8') });
-        });
-
-        proc.on('exit', () => {
-            if (this._proc === proc) this._proc = undefined;
-            this._post({ command: 'status', connected: false });
-        });
-
-        this._post({ command: 'status', connecting: true, port, baud });
-    }
-
-    private _handleLine(line: string, port: string, baud: string): void {
-        if (line.startsWith('PICPIO_CONNECTED:')) {
-            this._post({ command: 'status', connected: true, port, baud });
-        } else if (line.startsWith('PICPIO_ERROR:')) {
-            this._post({ command: 'status', connected: false, error: line.substring('PICPIO_ERROR:'.length) });
-            this._proc = undefined;
-        } else if (line.startsWith('PICPIO_DATA:')) {
-            const b64 = line.substring('PICPIO_DATA:'.length);
+    if (url === '/api/connect' && req.method === 'POST') {
+        readBody(req).then(body => {
             try {
-                const text = Buffer.from(b64, 'base64').toString('utf8');
-                this._post({ command: 'data', text });
-            } catch { /* ignore malformed frame */ }
-        }
+                const { port, baud } = JSON.parse(body);
+                connect(port, String(baud));
+            } catch { /* ignore */ }
+            res.writeHead(204);
+            res.end();
+        });
+        return;
     }
 
-    private _disconnect(): void {
-        const proc = this._proc;
-        if (!proc) return;
-        this._proc = undefined;
-        try { proc.stdin?.write('PICPIO_EXIT\n'); } catch { /* ignore */ }
-        setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } }, 500);
-        this._post({ command: 'status', connected: false });
+    if (url === '/api/disconnect' && req.method === 'POST') {
+        disconnect();
+        res.writeHead(204);
+        res.end();
+        return;
     }
 
-    private _send(text: string, lineEnding: string): void {
-        if (!this._proc?.stdin) return;
-        const ending = lineEnding === 'crlf' ? '\r\n'
-                     : lineEnding === 'lf'   ? '\n'
-                     : lineEnding === 'cr'   ? '\r'
-                     : '';
-        const b64 = Buffer.from(text + ending, 'utf8').toString('base64');
-        try { this._proc.stdin.write(`PICPIO_SEND:${b64}\n`); } catch { /* ignore */ }
+    if (url === '/api/send' && req.method === 'POST') {
+        readBody(req).then(body => {
+            try {
+                const { text, lineEnding } = JSON.parse(body);
+                send(text, lineEnding);
+            } catch { /* ignore */ }
+            res.writeHead(204);
+            res.end();
+        });
+        return;
     }
 
-    private _reset(): void {
-        if (!this._proc?.stdin) return;
-        try { this._proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
-        this._post({ command: 'data', text: '\n--- Reset (DTR pulse) ---\n' });
+    if (url === '/api/reset' && req.method === 'POST') {
+        reset();
+        res.writeHead(204);
+        res.end();
+        return;
     }
 
-    private _dispose(): void {
-        SerialMonitorPanel.current = undefined;
-        this._disconnect();
-        this._panel.dispose();
-        for (const d of this._disposables) d.dispose();
-        try { fs.unlinkSync(this._scriptPath); } catch { /* ignore */ }
+    res.writeHead(404);
+    res.end();
+}
+
+function ensureServer(): Promise<number> {
+    if (server && serverPort) return Promise.resolve(serverPort);
+    return new Promise((resolve, reject) => {
+        server = http.createServer(handleRequest);
+        server.on('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+            const addr = server!.address();
+            serverPort = typeof addr === 'object' && addr ? addr.port : 0;
+            resolve(serverPort);
+        });
+    });
+}
+
+export async function openSerialMonitor(): Promise<void> {
+    const port = await ensureServer();
+    vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${port}/`));
+}
+
+export function disposeSerialMonitorServer(): void {
+    disconnect();
+    for (const res of sseClients.splice(0)) {
+        try { res.end(); } catch { /* ignore */ }
     }
+    if (server) {
+        try { server.close(); } catch { /* ignore */ }
+        server = undefined;
+        serverPort = 0;
+    }
+    if (scriptPath) {
+        try { fs.unlinkSync(scriptPath); } catch { /* ignore */ }
+        scriptPath = undefined;
+    }
+}
 
-    private _html(): string {
-        const baudOptions = BAUD_RATES.map(b => `<option value="${b}">${b}</option>`).join('');
+function htmlPage(): string {
+    const baudOptions = BAUD_RATES.map(b => `<option value="${b}">${b}</option>`).join('');
 
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICPIO Serial Monitor</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1e1e1e;--card:#2d2d2d;--border:#3e3e42;--text:#ccc;--sub:#888;--accent:#f27f0c;
   --green:#4ec9b0;--blue:#569cd6;--red:#f44747;
 }
-body{background:var(--bg);color:var(--text);font:13px/1.5 'Segoe UI',-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:13px/1.5 'Segoe UI',-apple-system,sans-serif;display:flex;flex-direction:column;overflow:hidden}
 .toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#252526;border-bottom:1px solid var(--border);flex-wrap:wrap}
 select,button,input{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:5px 10px;font-size:12px}
 select:focus,input:focus{outline:none;border-color:var(--accent)}
@@ -306,8 +376,6 @@ label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;wh
   </div>
 
 <script>
-const vscode = acquireVsCodeApi();
-
 const portSelect   = document.getElementById('portSelect');
 const baudSelect   = document.getElementById('baudSelect');
 const refreshBtn   = document.getElementById('refreshBtn');
@@ -353,56 +421,67 @@ function appendEcho(text) {
     if (autoscroll.checked || atBottom) output.scrollTop = output.scrollHeight;
 }
 
-refreshBtn.addEventListener('click', () => vscode.postMessage({ command: 'refreshPorts' }));
+function api(path, body) {
+    return fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+    });
+}
+
+function loadPorts() {
+    fetch('/api/ports').then(r => r.json()).then(msg => {
+        const current = portSelect.value;
+        portSelect.innerHTML = '';
+        const ports = msg.ports.length ? msg.ports.slice() : [];
+        if (!ports.includes(msg.defaultPort)) ports.unshift(msg.defaultPort);
+        for (const p of ports) {
+            const opt = document.createElement('option');
+            opt.value = p; opt.textContent = p;
+            portSelect.appendChild(opt);
+        }
+        portSelect.value = ports.includes(current) ? current : msg.defaultPort;
+        if (![...baudSelect.options].some(o => o.value === String(msg.defaultBaud))) {
+            const opt = document.createElement('option');
+            opt.value = String(msg.defaultBaud); opt.textContent = String(msg.defaultBaud);
+            baudSelect.appendChild(opt);
+        }
+        baudSelect.value = String(msg.defaultBaud);
+    });
+}
+
+refreshBtn.addEventListener('click', loadPorts);
 
 connectBtn.addEventListener('click', () => {
     if (connected) {
-        vscode.postMessage({ command: 'disconnect' });
+        api('/api/disconnect');
     } else {
         const port = portSelect.value;
         const baud = baudSelect.value;
         if (!port) return;
         statusBadge.className = 'status connecting';
         statusBadge.textContent = 'Connecting...';
-        vscode.postMessage({ command: 'connect', port, baud });
+        api('/api/connect', { port, baud });
     }
 });
 
 clearBtn.addEventListener('click', () => { output.textContent = ''; });
-resetBtn.addEventListener('click', () => vscode.postMessage({ command: 'reset' }));
+resetBtn.addEventListener('click', () => api('/api/reset'));
 
 function send() {
     const text = inputText.value;
     if (!connected || text === '') return;
-    vscode.postMessage({ command: 'send', text, lineEnding: lineEnding.value });
+    api('/api/send', { text, lineEnding: lineEnding.value });
     if (localEcho.checked) appendEcho('> ' + text);
     inputText.value = '';
 }
 sendBtn.addEventListener('click', send);
 inputText.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
-window.addEventListener('message', e => {
-    const msg = e.data;
+const es = new EventSource('/events');
+es.onmessage = e => {
+    const msg = JSON.parse(e.data);
     switch (msg.command) {
-        case 'ports': {
-            const current = portSelect.value;
-            portSelect.innerHTML = '';
-            const ports = msg.ports.length ? msg.ports : [];
-            if (!ports.includes(msg.defaultPort)) ports.unshift(msg.defaultPort);
-            for (const p of ports) {
-                const opt = document.createElement('option');
-                opt.value = p; opt.textContent = p;
-                portSelect.appendChild(opt);
-            }
-            portSelect.value = ports.includes(current) ? current : msg.defaultPort;
-            if (![...baudSelect.options].some(o => o.value === String(msg.defaultBaud))) {
-                const opt = document.createElement('option');
-                opt.value = String(msg.defaultBaud); opt.textContent = String(msg.defaultBaud);
-                baudSelect.appendChild(opt);
-            }
-            baudSelect.value = String(msg.defaultBaud);
-            break;
-        }
         case 'status':
             if (msg.connecting) {
                 statusBadge.className = 'status connecting';
@@ -420,11 +499,10 @@ window.addEventListener('message', e => {
             appendOutput(msg.text);
             break;
     }
-});
+};
 
-vscode.postMessage({ command: 'ready' });
+loadPorts();
 </script>
 </body>
 </html>`;
-    }
 }
