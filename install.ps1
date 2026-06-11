@@ -9,7 +9,11 @@ $INSTALL_DIR = 'C:\picpio'
 $REPO_RAW    = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main'
 
 $XC8_URL    = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v3.10-full-install-windows-x64-installer.exe'
+# Pinned to v6.00 -- newer MPLAB X IPE releases (6.20+) dropped PICkit3 support,
+# and picpio.ini defaults `programmer = PICKit3`. Do not bump this without
+# checking PICkit3 (-TPPK3) still works in ipecmd.
 $MPLABX_URL = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/MPLABX-v6.00-windows-installer.exe'
+$NODE_MSI_URL = 'https://nodejs.org/dist/v22.13.0/node-v22.13.0-x64.msi'
 
 function Write-Step($n, $msg) { Write-Host "[$n] $msg" -ForegroundColor Green }
 function Write-Info($msg)      { Write-Host "    $msg"  -ForegroundColor White }
@@ -66,8 +70,43 @@ if (Test-Path "C:\Program Files\Microchip\MPLABX") {
     }
 }
 
-# STEP 3 - PICPIO tool
-Write-Step 3 "PICPIO tool"
+# STEP 3 - Node.js (required to run the picpio CLI)
+Write-Step 3 "Node.js runtime"
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if ($nodeCmd -or (Test-Path "C:\Program Files\nodejs\node.exe")) {
+    $nodeVer = if ($nodeCmd) { & $nodeCmd.Source -v } else { "(installed)" }
+    Write-Skip "Already installed: node $nodeVer -- skipping"
+} else {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Installing Node.js LTS via winget..."
+        try {
+            & winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent | Out-Null
+        } catch {
+            Write-Warn "winget install failed: $($_.Exception.Message)"
+        }
+    }
+    if (-not (Test-Path "C:\Program Files\nodejs\node.exe")) {
+        Write-Info "Downloading Node.js LTS installer..."
+        $nodeMsi = "$env:TEMP\node-lts.msi"
+        try {
+            Invoke-WebRequest $NODE_MSI_URL -OutFile $nodeMsi -UseBasicParsing
+            Write-Info "Installing Node.js silently (one UAC prompt may appear)..."
+            Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn /norestart" -Verb RunAs -Wait
+            Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warn "Node.js download/install failed: $($_.Exception.Message)"
+        }
+    }
+    if (Test-Path "C:\Program Files\nodejs\node.exe") {
+        Write-Info "Node.js installed."
+    } else {
+        Write-Warn "Node.js install did not complete. picpio requires Node.js: https://nodejs.org"
+    }
+}
+
+# STEP 4 - PICPIO tool
+Write-Step 4 "PICPIO tool"
 New-Item -ItemType Directory -Force $INSTALL_DIR | Out-Null
 Invoke-WebRequest "$REPO_RAW/picpio_tool/picpio.js"  -OutFile "$INSTALL_DIR\picpio.js"  -UseBasicParsing
 Invoke-WebRequest "$REPO_RAW/picpio_tool/picpio.cmd" -OutFile "$INSTALL_DIR\picpio.cmd" -UseBasicParsing
@@ -84,8 +123,8 @@ foreach ($f in @('Arduino.h','wiring.c','main_entry.c')) {
     }
 }
 
-# STEP 4 - PATH
-Write-Step 4 "System PATH"
+# STEP 5 - PATH
+Write-Step 5 "System PATH"
 $machine = [System.Environment]::GetEnvironmentVariable('PATH','Machine')
 if ($machine -notlike "*$INSTALL_DIR*") {
     try {
@@ -118,8 +157,26 @@ if ((-not (Test-Path $PROFILE)) -or -not (Select-String -Path $PROFILE -Pattern 
     Write-Info "PowerShell profile updated -- new terminals will see picpio/node immediately"
 }
 
-# STEP 5 - VS Code extension
-Write-Step 5 "VS Code extension"
+# Make sure the profile script above can actually run. Windows defaults to
+# "Restricted", which silently blocks $PROFILE and prints a scary error in
+# every new terminal. "RemoteSigned" for the current user fixes this without
+# requiring admin rights.
+try {
+    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
+        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+        Write-Info "PowerShell execution policy set to RemoteSigned (current user)"
+    } else {
+        Write-Skip "Execution policy already allows local scripts ($currentPolicy)"
+    }
+} catch {
+    Write-Warn "Could not update execution policy: $($_.Exception.Message)"
+    Write-Warn "If new terminals show a profile script error, run:"
+    Write-Warn "  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned"
+}
+
+# STEP 6 - VS Code extension
+Write-Step 6 "VS Code extension"
 $_gc = Get-Command code -ErrorAction SilentlyContinue
 $codeCmd = if ($_gc) { $_gc.Source } else { $null }
 if (-not $codeCmd) {
