@@ -15,6 +15,11 @@ $XC8_URL    = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/Pr
 $MPLABX_URL = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/MPLABX-v6.00-windows-installer.exe'
 $NODE_MSI_URL = 'https://nodejs.org/dist/v22.13.0/node-v22.13.0-x64.msi'
 
+# ww1.microchip.com hotlink-protects these installers (returns 401/403
+# without a Referer from microchip.com), even though browsers download
+# them fine.
+$MICROCHIP_HEADERS = @{ 'Referer' = 'https://www.microchip.com/' }
+
 function Write-Step($n, $msg) { Write-Host "[$n] $msg" -ForegroundColor Green }
 function Write-Info($msg)      { Write-Host "    $msg"  -ForegroundColor White }
 function Write-Skip($msg)      { Write-Host "    $msg"  -ForegroundColor DarkGray }
@@ -42,7 +47,7 @@ if (Test-XC8Installed) {
     Write-Info "Downloading XC8 compiler (~107 MB)..."
     $xc8Installer = "$env:TEMP\xc8-installer.exe"
     try {
-        Invoke-WebRequest $XC8_URL -OutFile $xc8Installer -UseBasicParsing
+        Invoke-WebRequest $XC8_URL -OutFile $xc8Installer -Headers $MICROCHIP_HEADERS -UseBasicParsing
         Unblock-File $xc8Installer -ErrorAction SilentlyContinue
         Write-Info "Installing XC8 silently (accepts free license; one UAC prompt may appear)..."
         Start-Process $xc8Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
@@ -58,7 +63,8 @@ if (Test-XC8Installed) {
             Write-Warn "XC8 install did not complete. Get it at: https://www.microchip.com/xc8"
         }
     } catch {
-        Write-Warn "Download failed. Install manually: https://www.microchip.com/xc8"
+        Write-Warn "Download/install failed: $($_.Exception.Message)"
+        Write-Warn "Install manually: https://www.microchip.com/xc8"
     }
 }
 
@@ -71,7 +77,7 @@ if (Test-MPLABXInstalled) {
     Write-Info "Downloading MPLAB X installer (~640 MB, this may take a while)..."
     $mplabxInstaller = "$env:TEMP\mplabx-installer.exe"
     try {
-        Invoke-WebRequest $MPLABX_URL -OutFile $mplabxInstaller -UseBasicParsing
+        Invoke-WebRequest $MPLABX_URL -OutFile $mplabxInstaller -Headers $MICROCHIP_HEADERS -UseBasicParsing
         Unblock-File $mplabxInstaller -ErrorAction SilentlyContinue
         Write-Info "Installing MPLAB X silently (one UAC prompt may appear)..."
         Start-Process $mplabxInstaller -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
@@ -87,7 +93,8 @@ if (Test-MPLABXInstalled) {
             Write-Warn "MPLAB X install did not complete. Get it at: https://www.microchip.com/mplabx"
         }
     } catch {
-        Write-Warn "Download failed. Install manually: https://www.microchip.com/mplabx"
+        Write-Warn "Download/install failed: $($_.Exception.Message)"
+        Write-Warn "Install manually: https://www.microchip.com/mplabx"
     }
 }
 
