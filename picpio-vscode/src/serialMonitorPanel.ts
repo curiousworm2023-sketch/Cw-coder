@@ -77,6 +77,15 @@ while (\$true) {
             \$sp.Write(\$bytes, 0, \$bytes.Length)
         } catch {}
     }
+    if (\$line -eq 'PICPIO_RESET') {
+        # Pulse DTR -- many USB-serial adapters wire DTR to MCLR/RESET so a
+        # transition restarts the MCU and re-triggers its boot-time output.
+        try {
+            \$sp.DtrEnable = \$true
+            Start-Sleep -Milliseconds 100
+            \$sp.DtrEnable = \$false
+        } catch {}
+    }
 }
 
 try { \$sp.Close() } catch {}
@@ -131,6 +140,9 @@ export class SerialMonitorPanel {
                 break;
             case 'send':
                 this._send(msg.text, msg.lineEnding);
+                break;
+            case 'reset':
+                this._reset();
                 break;
         }
     }
@@ -217,6 +229,12 @@ export class SerialMonitorPanel {
         try { this._proc.stdin.write(`PICPIO_SEND:${b64}\n`); } catch { /* ignore */ }
     }
 
+    private _reset(): void {
+        if (!this._proc?.stdin) return;
+        try { this._proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
+        this._post({ command: 'data', text: '\n--- Reset (DTR pulse) ---\n' });
+    }
+
     private _dispose(): void {
         SerialMonitorPanel.current = undefined;
         this._disconnect();
@@ -269,6 +287,7 @@ label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;wh
       <select id="baudSelect">${baudOptions}</select>
     </label>
     <button id="connectBtn" class="primary">&#9654; Start</button>
+    <button id="resetBtn" title="Pulse DTR to reset the device" disabled>&#8635; Reset Device</button>
     <button id="clearBtn">Clear</button>
     <label><input type="checkbox" id="autoscroll" checked> Autoscroll</label>
     <label><input type="checkbox" id="localEcho" checked> Local echo</label>
@@ -293,6 +312,7 @@ const portSelect   = document.getElementById('portSelect');
 const baudSelect   = document.getElementById('baudSelect');
 const refreshBtn   = document.getElementById('refreshBtn');
 const connectBtn   = document.getElementById('connectBtn');
+const resetBtn     = document.getElementById('resetBtn');
 const clearBtn     = document.getElementById('clearBtn');
 const autoscroll   = document.getElementById('autoscroll');
 const localEcho    = document.getElementById('localEcho');
@@ -314,6 +334,7 @@ function setConnected(state, label) {
     baudSelect.disabled = state;
     inputText.disabled = !state;
     sendBtn.disabled = !state;
+    resetBtn.disabled = !state;
 }
 
 function appendOutput(text) {
@@ -348,6 +369,7 @@ connectBtn.addEventListener('click', () => {
 });
 
 clearBtn.addEventListener('click', () => { output.textContent = ''; });
+resetBtn.addEventListener('click', () => vscode.postMessage({ command: 'reset' }));
 
 function send() {
     const text = inputText.value;
