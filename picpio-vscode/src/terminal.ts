@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as cp     from 'child_process';
 
 let _terminal: vscode.Terminal | undefined;
-let _channel: vscode.OutputChannel | undefined;
 let _spinner: vscode.WebviewPanel | undefined;
 
 export function getTerminal(): vscode.Terminal {
@@ -30,11 +29,6 @@ export function runRaw(cmd: string): void {
 
 export function workspaceRoot(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
-function getOutputChannel(): vscode.OutputChannel {
-    if (!_channel) _channel = vscode.window.createOutputChannel('PICPIO');
-    return _channel;
 }
 
 // The extension host's process.env.PATH is a snapshot taken when VS Code
@@ -92,31 +86,47 @@ function hideSpinner(): void {
 
 // Runs a picpio command directly (not via the interactive terminal) so the
 // extension knows when it starts/finishes -- shows an orange spinner while it
-// runs, with live output in the PICPIO output channel.
+// runs, with live output in a terminal (via a Pseudoterminal) so ANSI colors
+// render the same as a normal shell.
 export function runTracked(args: string, title: string): Promise<number> {
     const exe = vscode.workspace.getConfiguration('picpio').get<string>('executablePath', 'picpio');
     const cwd = workspaceRoot();
-    const channel = getOutputChannel();
-    channel.show(true);
-    channel.appendLine(`> ${exe} ${args}`);
     showSpinner(title);
 
     return new Promise<number>(resolve => {
-        const proc = cp.spawn(`${exe} ${args}`, {
-            cwd, shell: true, windowsHide: true,
-            env: spawnEnv(),
+        const writeEmitter = new vscode.EventEmitter<string>();
+        const closeEmitter = new vscode.EventEmitter<number>();
+        const pty: vscode.Pseudoterminal = {
+            onDidWrite: writeEmitter.event,
+            onDidClose: closeEmitter.event,
+            open: () => {
+                writeEmitter.fire(`> ${exe} ${args}\r\n`);
+                const proc = cp.spawn(`${exe} ${args}`, {
+                    cwd, shell: true, windowsHide: true,
+                    env: spawnEnv(),
+                });
+                const onData = (d: Buffer) => writeEmitter.fire(d.toString().replace(/\r?\n/g, '\r\n'));
+                proc.stdout?.on('data', onData);
+                proc.stderr?.on('data', onData);
+                proc.on('close', (code: number | null) => {
+                    hideSpinner();
+                    closeEmitter.fire(code ?? -1);
+                    resolve(code ?? -1);
+                });
+                proc.on('error', (err: Error) => {
+                    writeEmitter.fire(`\r\n[PICPIO] Failed to run: ${err.message}\r\n`);
+                    hideSpinner();
+                    closeEmitter.fire(-1);
+                    resolve(-1);
+                });
+            },
+            close: () => { /* process is detached from the pty lifecycle */ },
+        };
+        const t = vscode.window.createTerminal({
+            name: 'PICPIO',
+            iconPath: new vscode.ThemeIcon('circuit-board'),
+            pty,
         });
-        proc.stdout?.on('data', (d: Buffer) => channel.append(d.toString()));
-        proc.stderr?.on('data', (d: Buffer) => channel.append(d.toString()));
-        proc.on('close', (code: number | null) => {
-            channel.appendLine('');
-            hideSpinner();
-            resolve(code ?? -1);
-        });
-        proc.on('error', (err: Error) => {
-            channel.appendLine(`\n[PICPIO] Failed to run: ${err.message}`);
-            hideSpinner();
-            resolve(-1);
-        });
+        t.show(true);
     });
 }
