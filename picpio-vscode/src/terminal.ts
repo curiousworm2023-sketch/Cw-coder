@@ -57,7 +57,7 @@ function getRegistryPath(): string {
 }
 
 function spawnEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '1' };
     const current = new Set((env.PATH ?? '').split(';').map(p => p.toLowerCase()));
     const extra = getRegistryPath().split(';').map(p => p.trim()).filter(p => p && !current.has(p.toLowerCase()));
     if (extra.length) env.PATH = [env.PATH, ...extra].filter(Boolean).join(';');
