@@ -7,8 +7,9 @@ const cp   = require('child_process');
 const os   = require('os');
 
 // Highlight the [PICPIO] tag in console output using the brand orange
-// (matches the VS Code extension's accent color), when writing to a TTY.
-if (process.stdout.isTTY) {
+// (matches the VS Code extension's accent color), when writing to a TTY
+// (or when the caller forces it, e.g. the VS Code extension's output channel).
+if (process.stdout.isTTY || process.env.FORCE_COLOR) {
     const ORANGE = '\x1b[38;2;242;127;12m';
     const RESET  = '\x1b[0m';
     const colorize = s => typeof s === 'string'
