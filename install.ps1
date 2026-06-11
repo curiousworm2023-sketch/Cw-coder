@@ -20,13 +20,22 @@ function Write-Info($msg)      { Write-Host "    $msg"  -ForegroundColor White }
 function Write-Skip($msg)      { Write-Host "    $msg"  -ForegroundColor DarkGray }
 function Write-Warn($msg)      { Write-Host "    $msg"  -ForegroundColor Yellow }
 
+# Check for the actual compiler/programmer binaries picpio looks for, not just
+# the parent install folder -- a partial/aborted install can leave the folder
+# behind without the tools picpio needs.
+function Test-XC8Installed    { Test-Path "C:\Program Files\Microchip\xc8\v*\bin\xc8-cc.exe" }
+function Test-MPLABXInstalled {
+    (Test-Path "C:\Program Files\Microchip\MPLABX\v*\mplab_platform\mplab_ipe\ipecmd.exe") -or
+    (Test-Path "C:\Program Files\Microchip\MPLABX\v*\mplab_ipe\ipecmd.exe")
+}
+
 Write-Host ""
 Write-Host "  PICPIO - PIC Microcontroller IDE for VS Code" -ForegroundColor Cyan
 Write-Host ""
 
 # STEP 1 - XC8 Compiler
 Write-Step 1 "XC8 Compiler (Microchip)"
-if (Test-Path "C:\Program Files\Microchip\xc8") {
+if (Test-XC8Installed) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\xc8" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: XC8 $ver -- skipping"
 } else {
@@ -34,10 +43,16 @@ if (Test-Path "C:\Program Files\Microchip\xc8") {
     $xc8Installer = "$env:TEMP\xc8-installer.exe"
     try {
         Invoke-WebRequest $XC8_URL -OutFile $xc8Installer -UseBasicParsing
+        Unblock-File $xc8Installer -ErrorAction SilentlyContinue
         Write-Info "Installing XC8 silently (accepts free license; one UAC prompt may appear)..."
         Start-Process $xc8Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
+        if (-not (Test-XC8Installed)) {
+            Write-Warn "Silent install didn't produce a compiler -- opening the XC8 setup wizard."
+            Write-Warn "Click through with the default options (Next > Next > I Accept > Next > Install > Finish)."
+            Start-Process $xc8Installer -Verb RunAs -Wait
+        }
         Remove-Item $xc8Installer -Force -ErrorAction SilentlyContinue
-        if (Test-Path "C:\Program Files\Microchip\xc8") {
+        if (Test-XC8Installed) {
             Write-Info "XC8 installed."
         } else {
             Write-Warn "XC8 install did not complete. Get it at: https://www.microchip.com/xc8"
@@ -49,7 +64,7 @@ if (Test-Path "C:\Program Files\Microchip\xc8") {
 
 # STEP 2 - MPLAB X IPE
 Write-Step 2 "MPLAB X IPE (programmer software)"
-if (Test-Path "C:\Program Files\Microchip\MPLABX") {
+if (Test-MPLABXInstalled) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\MPLABX" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: MPLAB X $ver -- skipping"
 } else {
@@ -57,10 +72,16 @@ if (Test-Path "C:\Program Files\Microchip\MPLABX") {
     $mplabxInstaller = "$env:TEMP\mplabx-installer.exe"
     try {
         Invoke-WebRequest $MPLABX_URL -OutFile $mplabxInstaller -UseBasicParsing
+        Unblock-File $mplabxInstaller -ErrorAction SilentlyContinue
         Write-Info "Installing MPLAB X silently (one UAC prompt may appear)..."
         Start-Process $mplabxInstaller -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
+        if (-not (Test-MPLABXInstalled)) {
+            Write-Warn "Silent install didn't produce IPE -- opening the MPLAB X setup wizard."
+            Write-Warn "Click through with the default options; the IPE component is enough (you can deselect MPLAB X IDE/compilers)."
+            Start-Process $mplabxInstaller -Verb RunAs -Wait
+        }
         Remove-Item $mplabxInstaller -Force -ErrorAction SilentlyContinue
-        if (Test-Path "C:\Program Files\Microchip\MPLABX") {
+        if (Test-MPLABXInstalled) {
             Write-Info "MPLAB X installed."
         } else {
             Write-Warn "MPLAB X install did not complete. Get it at: https://www.microchip.com/mplabx"
@@ -91,6 +112,7 @@ if ($nodeCmd -or (Test-Path "C:\Program Files\nodejs\node.exe")) {
         $nodeMsi = "$env:TEMP\node-lts.msi"
         try {
             Invoke-WebRequest $NODE_MSI_URL -OutFile $nodeMsi -UseBasicParsing
+            Unblock-File $nodeMsi -ErrorAction SilentlyContinue
             Write-Info "Installing Node.js silently (one UAC prompt may appear)..."
             Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn /norestart" -Verb RunAs -Wait
             Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
@@ -110,6 +132,8 @@ Write-Step 4 "PICPIO tool"
 New-Item -ItemType Directory -Force $INSTALL_DIR | Out-Null
 Invoke-WebRequest "$REPO_RAW/picpio_tool/picpio.js"  -OutFile "$INSTALL_DIR\picpio.js"  -UseBasicParsing
 Invoke-WebRequest "$REPO_RAW/picpio_tool/picpio.cmd" -OutFile "$INSTALL_DIR\picpio.cmd" -UseBasicParsing
+Unblock-File "$INSTALL_DIR\picpio.js"  -ErrorAction SilentlyContinue
+Unblock-File "$INSTALL_DIR\picpio.cmd" -ErrorAction SilentlyContinue
 Write-Info "picpio.js -> $INSTALL_DIR"
 
 $acDir = "$INSTALL_DIR\arduino_compat"
@@ -203,9 +227,34 @@ if ($codeCmd) {
     Write-Warn "Then install extension from: https://github.com/curiousworm2023-sketch/Cw-coder"
 }
 
+# Final check -- make sure everything picpio needs is actually in place,
+# so problems surface here instead of as a confusing "build" error later.
 Write-Host ""
-Write-Host "  PICPIO installation complete!" -ForegroundColor Cyan
-Write-Host "  1. Restart VS Code" -ForegroundColor White
+Write-Host "  Checking installation..." -ForegroundColor Cyan
+$checks = [ordered]@{
+    'XC8 compiler'   = Test-XC8Installed
+    'MPLAB X IPE'    = Test-MPLABXInstalled
+    'Node.js'        = Test-Path "C:\Program Files\nodejs\node.exe"
+    'picpio CLI'     = Test-Path "$INSTALL_DIR\picpio.cmd"
+}
+$allOk = $true
+foreach ($name in $checks.Keys) {
+    if ($checks[$name]) {
+        Write-Host "    [OK]   $name" -ForegroundColor Green
+    } else {
+        Write-Host "    [MISS] $name" -ForegroundColor Red
+        $allOk = $false
+    }
+}
+
+Write-Host ""
+if ($allOk) {
+    Write-Host "  PICPIO installation complete!" -ForegroundColor Cyan
+} else {
+    Write-Host "  PICPIO installation finished with warnings (see [MISS] above)." -ForegroundColor Yellow
+    Write-Host "  Re-run this same command to retry the missing piece(s)." -ForegroundColor Yellow
+}
+Write-Host "  1. Close and reopen VS Code / the terminal" -ForegroundColor White
 Write-Host "  2. PICPIO icon in sidebar > New Project" -ForegroundColor White
 Write-Host "  Docs: https://github.com/curiousworm2023-sketch/Cw-coder" -ForegroundColor DarkCyan
 Write-Host ""
