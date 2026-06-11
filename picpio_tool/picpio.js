@@ -6,6 +6,20 @@ const path = require('path');
 const cp   = require('child_process');
 const os   = require('os');
 
+// Highlight the [PICPIO] tag in console output using the brand orange
+// (matches the VS Code extension's accent color), when writing to a TTY.
+if (process.stdout.isTTY) {
+    const ORANGE = '\x1b[38;2;242;127;12m';
+    const RESET  = '\x1b[0m';
+    const colorize = s => typeof s === 'string'
+        ? s.replace(/\[PICPIO\]/g, `${ORANGE}[PICPIO]${RESET}`)
+        : s;
+    for (const fn of ['log', 'warn', 'error']) {
+        const orig = console[fn].bind(console);
+        console[fn] = (...a) => orig(...a.map(colorize));
+    }
+}
+
 // DFP pack storage (used by resolvePack/findDFP/cmdInstallDFP below)
 const PACKS_DIR             = 'C:\\picpio\\packs';
 const PACK_INDEX_PATH       = path.join(PACKS_DIR, 'index.idx');

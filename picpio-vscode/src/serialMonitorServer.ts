@@ -190,7 +190,7 @@ function send(text: string, lineEnding: string): void {
 function reset(): void {
     if (!proc?.stdin) return;
     try { proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
-    broadcast({ command: 'data', text: '\n--- Reset (DTR pulse) ---\n' });
+    broadcast({ command: 'system', text: '\n--- Reset (DTR pulse) ---\n' });
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -345,6 +345,7 @@ button.danger{background:var(--red);color:#000;border-color:var(--red);font-weig
 .status.connecting{background:#2a2a1a;color:#dcdcaa;border:1px solid #dcdcaa}
 #output{flex:1;overflow-y:auto;padding:10px 12px;font-family:Consolas,'Courier New',monospace;font-size:13px;white-space:pre-wrap;word-break:break-all}
 .echo{color:var(--blue)}
+.sysmsg{color:var(--accent)}
 .inputbar{display:flex;gap:8px;padding:8px 12px;background:#252526;border-top:1px solid var(--border)}
 #inputText{flex:1;font-family:Consolas,'Courier New',monospace}
 label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;white-space:nowrap}
@@ -411,6 +412,15 @@ function setConnected(state, label) {
 function appendOutput(text) {
     const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 10;
     output.appendChild(document.createTextNode(text));
+    if (autoscroll.checked || atBottom) output.scrollTop = output.scrollHeight;
+}
+
+function appendSystem(text) {
+    const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 10;
+    const span = document.createElement('span');
+    span.className = 'sysmsg';
+    span.textContent = text;
+    output.appendChild(span);
     if (autoscroll.checked || atBottom) output.scrollTop = output.scrollHeight;
 }
 
@@ -499,15 +509,18 @@ es.onmessage = e => {
                 statusBadge.textContent = 'Connecting...';
             } else if (msg.connected) {
                 setConnected(true, 'Connected: ' + msg.port + ' @ ' + msg.baud);
-                appendOutput('--- Connected to ' + msg.port + ' @ ' + msg.baud + ' baud ---\\n');
+                appendSystem('--- Connected to ' + msg.port + ' @ ' + msg.baud + ' baud ---\\n');
             } else {
                 setConnected(false, msg.error ? ('Error: ' + msg.error) : 'Disconnected');
-                if (msg.error) appendOutput('--- Error: ' + msg.error + ' ---\\n');
-                else if (msg.port) appendOutput('--- Disconnected ---\\n');
+                if (msg.error) appendSystem('--- Error: ' + msg.error + ' ---\\n');
+                else if (msg.port) appendSystem('--- Disconnected ---\\n');
             }
             break;
         case 'data':
             appendOutput(msg.text);
+            break;
+        case 'system':
+            appendSystem(msg.text);
             break;
     }
 };
