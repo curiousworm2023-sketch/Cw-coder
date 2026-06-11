@@ -40,11 +40,16 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         return;
     }
 
-    const srcDir   = cfg?.src_dir ?? 'src';
-    const mainPath = path.join(root, srcDir, 'main.cpp');
+    const srcDir = cfg?.src_dir ?? 'src';
+    let mainPath = path.join(root, srcDir, 'main.cpp');
     if (!fs.existsSync(mainPath)) {
-        vscode.window.showErrorMessage(`${path.join(srcDir, 'main.cpp')} not found.`);
-        return;
+        const altPath = path.join(root, srcDir, 'main.c');
+        if (fs.existsSync(altPath)) {
+            mainPath = altPath;
+        } else {
+            vscode.window.showErrorMessage(`${path.join(srcDir, 'main.cpp')} not found.`);
+            return;
+        }
     }
 
     // Tear down any previous simulation session before starting a new one.
