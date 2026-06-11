@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
 import { readConfig } from './iniParser';
+import { detectProgrammers } from './deviceDetect';
 
 // Exact PlatformIO status bar layout:
 // 🏠  ✓ Build  → Upload  🗑 Clean  🔌 Monitor  >_ CLI  |  env:PIC18F27K40
@@ -65,26 +65,20 @@ export function createStatusBar(context: vscode.ExtensionContext): void {
     deviceBtn.show();
     context.subscriptions.push(deviceBtn);
 
-    function updateDevices() {
-        const exe = vscode.workspace.getConfiguration('picpio').get<string>('executablePath', 'picpio');
-        exec(`${exe} devices --json`, { timeout: 5000 }, (err, stdout) => {
-            let devices: { name: string }[] = [];
-            if (!err && stdout) {
-                try { devices = JSON.parse(stdout.trim()); } catch { devices = []; }
-            }
-            if (devices.length > 0) {
-                const label = devices.length === 1
-                    ? devices[0].name
-                    : `${devices[0].name} (+${devices.length - 1})`;
-                deviceBtn.text    = `$(plug) ${label}`;
-                deviceBtn.tooltip = `Connected: ${devices.map(d => d.name).join(', ')}\nClick to run "picpio devices"`;
-                deviceBtn.color   = '#4EC9B0';
-            } else {
-                deviceBtn.text    = '$(debug-disconnect) No programmer';
-                deviceBtn.tooltip = 'No PICkit/ICD/Snap detected on USB\nClick to run "picpio devices"';
-                deviceBtn.color   = '#666666';
-            }
-        });
+    async function updateDevices() {
+        const devices = await detectProgrammers();
+        if (devices.length > 0) {
+            const label = devices.length === 1
+                ? devices[0].name
+                : `${devices[0].name} (+${devices.length - 1})`;
+            deviceBtn.text    = `$(plug) ${label}`;
+            deviceBtn.tooltip = `Connected: ${devices.map(d => d.name).join(', ')}\nClick to run "picpio devices"`;
+            deviceBtn.color   = '#4EC9B0';
+        } else {
+            deviceBtn.text    = '$(debug-disconnect) No programmer';
+            deviceBtn.tooltip = 'No PICkit/ICD/Snap detected on USB\nClick to run "picpio devices"';
+            deviceBtn.color   = '#666666';
+        }
     }
 
     updateDevices();
