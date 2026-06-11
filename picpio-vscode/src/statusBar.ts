@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { exec } from 'child_process';
 import { readConfig } from './iniParser';
 
 // Exact PlatformIO status bar layout:
@@ -55,4 +56,38 @@ export function createStatusBar(context: vscode.ExtensionContext): void {
     w.onDidChange(updateEnv);
     w.onDidCreate(updateEnv);
     context.subscriptions.push(w);
+
+    // Connected programmer indicator — shows the detected PICkit/ICD/Snap
+    // (or "Not connected") and refreshes every few seconds, like
+    // PlatformIO's port indicator.
+    const deviceBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 103);
+    deviceBtn.command = { command: 'picpio.runTask', title: 'Check Programmer', arguments: ['devices'] };
+    deviceBtn.show();
+    context.subscriptions.push(deviceBtn);
+
+    function updateDevices() {
+        const exe = vscode.workspace.getConfiguration('picpio').get<string>('executablePath', 'picpio');
+        exec(`${exe} devices --json`, { timeout: 5000 }, (err, stdout) => {
+            let devices: { name: string }[] = [];
+            if (!err && stdout) {
+                try { devices = JSON.parse(stdout.trim()); } catch { devices = []; }
+            }
+            if (devices.length > 0) {
+                const label = devices.length === 1
+                    ? devices[0].name
+                    : `${devices[0].name} (+${devices.length - 1})`;
+                deviceBtn.text    = `$(plug) ${label}`;
+                deviceBtn.tooltip = `Connected: ${devices.map(d => d.name).join(', ')}\nClick to run "picpio devices"`;
+                deviceBtn.color   = '#4EC9B0';
+            } else {
+                deviceBtn.text    = '$(debug-disconnect) No programmer';
+                deviceBtn.tooltip = 'No PICkit/ICD/Snap detected on USB\nClick to run "picpio devices"';
+                deviceBtn.color   = '#666666';
+            }
+        });
+    }
+
+    updateDevices();
+    const devicePoll = setInterval(updateDevices, 5000);
+    context.subscriptions.push({ dispose: () => clearInterval(devicePoll) });
 }

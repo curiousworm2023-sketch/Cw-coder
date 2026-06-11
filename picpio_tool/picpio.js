@@ -30,7 +30,7 @@ switch (cmd) {
     case 'vscode':       cmdVscode();              break;
     case 'erase':        cmdErase();               break;
     case 'install-dfp':  cmdInstallDFP(args[1]);   break;
-    case 'devices':      cmdDevices();             break;
+    case 'devices':      cmdDevices(args.slice(1)); break;
     default:
         console.error(`[PICPIO] Unknown command: ${cmd}`);
         printHelp();
@@ -325,8 +325,14 @@ function detectProgrammers() {
     });
 }
 
-function cmdDevices() {
+function cmdDevices(args = []) {
     const devices = detectProgrammers();
+
+    if (args.includes('--json')) {
+        console.log(JSON.stringify(devices));
+        return;
+    }
+
     if (devices.length === 0) {
         console.log('[PICPIO] No PICkit / ICD / Snap programmer detected.');
         console.log('         Plug in your programmer via USB and try again');
