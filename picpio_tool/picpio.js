@@ -560,13 +560,6 @@ function getDFPName(mcuFamily) {
     }[mcuFamily] || null;
 }
 
-function getDFPVersion(dfpName) {
-    const pdsc = path.join('C:\\picpio\\packs', dfpName, `Microchip.${dfpName}.pdsc`);
-    if (!fs.existsSync(pdsc)) return null;
-    const m = fs.readFileSync(pdsc, 'utf8').match(/release version="([^"]+)"/);
-    return m ? m[1] : null;
-}
-
 // ─── DFP INSTALLER FOR MPLAB X ──────────────────────────────────────────────
 function ensureDFPinMPLABX(family) {
     family = family || 'PIC18F-K_DFP';
@@ -645,14 +638,11 @@ function cmdUpload(opts) {
         console.log(`[PICPIO] Programmer detected: ${devices.map(d => d.name).join(', ')}`);
     }
 
-    // Map MCU family → DFP pack name
+    // Make sure the DFP is in MPLAB X's packs cache so ipecmd can
+    // auto-discover it (it picks up the pack on its own -- passing it
+    // explicitly via -OWD makes ipecmd crash with no output).
     const dfpName = getDFPName(cfg.family);
-    let owdFlag = '';
-    if (dfpName) {
-        ensureDFPinMPLABX(dfpName);
-        const dfpVer = getDFPVersion(dfpName);
-        if (dfpVer) owdFlag = `-OWD${dfpName},${dfpVer},Microchip`;
-    }
+    if (dfpName) ensureDFPinMPLABX(dfpName);
 
     const progFlag = {
         'PICKit4': '-TPPK4',
@@ -671,7 +661,12 @@ function cmdUpload(opts) {
         console.log(`[PICPIO] Powering target from ${prog} at ${cfg.power_voltage}V`);
     }
 
-    const command = `"${ipecmd}" -P${mcu} ${progFlag} -F"${hexFile}" -M ${owdFlag} ${powerFlag} -OL`;
+    // ipecmd's -P device name excludes the "PIC"/"dsPIC" prefix, e.g.
+    // PIC18F27K40 -> -P18F27K40. Passing the prefix gives "Could not find
+    // device:PICPIC18F27K40".
+    const devPart = mcu.replace(/^(PIC|dsPIC)/i, '');
+
+    const command = `"${ipecmd}" -P${devPart} ${progFlag} -F"${hexFile}" -M ${powerFlag} -OL`;
     console.log(`[PICPIO] Uploading to ${mcu} via ${prog}...`);
     console.log(`[PICPIO] Running: ${command}`);
 
@@ -750,12 +745,8 @@ function cmdErase() {
     }
 
     const dfpName = getDFPName(cfg.family);
-    let owdFlag = '';
-    if (dfpName) {
-        ensureDFPinMPLABX(dfpName);
-        const dfpVer = getDFPVersion(dfpName);
-        if (dfpVer) owdFlag = `-OWD${dfpName},${dfpVer},Microchip`;
-    }
+    if (dfpName) ensureDFPinMPLABX(dfpName);
+
     const progFlag = {
         'PICKit4': '-TPPK4',
         'PICKit5': '-TPPK5',
@@ -770,7 +761,8 @@ function cmdErase() {
         console.log(`[PICPIO] Powering target from ${prog} at ${cfg.power_voltage}V`);
     }
 
-    const eraseCommand = `"${ipecmd}" -P${mcu} ${progFlag} -E ${owdFlag} ${powerFlag} -OL`;
+    const devPart = mcu.replace(/^(PIC|dsPIC)/i, '');
+    const eraseCommand = `"${ipecmd}" -P${devPart} ${progFlag} -E ${powerFlag} -OL`;
     console.log(`[PICPIO] Running: ${eraseCommand}`);
     const eraseResult = cp.spawnSync(eraseCommand, [], { shell: true, stdio: 'inherit' });
     if (eraseResult.error) {
