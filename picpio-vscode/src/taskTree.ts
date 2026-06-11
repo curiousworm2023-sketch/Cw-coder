@@ -72,6 +72,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
                 new TaskNode('Verbose Upload', 'upload -v',    'list-tree'),
                 new TaskNode('Size Report',    'build --size', 'graph'),
                 new TaskNode('Erase Flash',    'erase',        'warning'),
+                new TaskNode('Check Programmer', 'devices',    'plug'),
             ]);
 
             const misc = new GroupNode('Miscellaneous', [
@@ -118,6 +119,7 @@ export class QuickAccessProvider implements vscode.TreeDataProvider<TaskNode | P
 
         const misc = new GroupNode('Miscellaneous', [
             new TaskNode('PICPIO Core CLI', '_cli', 'terminal'),
+            new TaskNode('Check Programmer', 'devices', 'plug'),
         ]);
 
         return [

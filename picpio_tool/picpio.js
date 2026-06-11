@@ -30,6 +30,7 @@ switch (cmd) {
     case 'vscode':       cmdVscode();              break;
     case 'erase':        cmdErase();               break;
     case 'install-dfp':  cmdInstallDFP(args[1]);   break;
+    case 'devices':      cmdDevices();             break;
     default:
         console.error(`[PICPIO] Unknown command: ${cmd}`);
         printHelp();
@@ -60,6 +61,7 @@ Commands:
                 Defaults to the [project] mcu in picpio.ini.
                 Accepts any device part number (e.g. PIC16F877A)
                 or DFP pack name (e.g. PIC16Fxxx_DFP).
+  devices       Check whether a PICkit/ICD/Snap programmer is connected
 `);
 }
 
@@ -277,6 +279,65 @@ function findCompiler(family) {
     if (family.startsWith('PIC32') || family === 'PIC32') return findXC32();
     if (family.startsWith('PIC24') || family.startsWith('DSPIC')) return findXC16();
     return findXC8();
+}
+
+// ─── PROGRAMMER DETECTION ────────────────────────────────────────────────────
+// Microchip's USB vendor ID is 04D8. Known product IDs identify which tool
+// (PICkit/ICD/Snap) is plugged in; unrecognized 04D8 devices still show up
+// so the user knows *something* Microchip-branded is connected.
+function detectProgrammers() {
+    const MICROCHIP_PID_NAMES = {
+        '900A': 'PICkit 3',
+        '9006': 'PICkit 3 (bootloader mode)',
+        '9012': 'PICkit 4',
+        '9018': 'PICkit 4 (bootloader mode)',
+        '9026': 'PICkit 5',
+        '9007': 'MPLAB ICD 3',
+        '9011': 'MPLAB ICD 4',
+        '9024': 'MPLAB Snap',
+    };
+
+    const ps = "Get-PnpDevice | Where-Object { $_.InstanceId -match 'VID_04D8' -and $_.Status -eq 'OK' } | Select-Object -Property FriendlyName,InstanceId | ConvertTo-Json -Compress";
+    const result = cp.spawnSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8' });
+    if (result.status !== 0 || !result.stdout || !result.stdout.trim()) return [];
+
+    let raw;
+    try { raw = JSON.parse(result.stdout.trim()); } catch { return []; }
+    const list = Array.isArray(raw) ? raw : [raw];
+
+    const devices = list.map(d => {
+        const m = /PID_([0-9A-Fa-f]{4})/.exec(d.InstanceId || '');
+        const pid = m ? m[1].toUpperCase() : null;
+        return {
+            name: (pid && MICROCHIP_PID_NAMES[pid]) || d.FriendlyName || 'Unknown Microchip device',
+            pid,
+        };
+    });
+
+    // A single physical tool often shows up as multiple PnP entries
+    // (composite USB device + HID interface) -- dedupe by PID.
+    const seen = new Set();
+    return devices.filter(d => {
+        const key = d.pid || d.name;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function cmdDevices() {
+    const devices = detectProgrammers();
+    if (devices.length === 0) {
+        console.log('[PICPIO] No PICkit / ICD / Snap programmer detected.');
+        console.log('         Plug in your programmer via USB and try again');
+        console.log('         (Windows can take a few seconds to recognize it after plugging in).');
+        process.exitCode = 1;
+        return;
+    }
+    console.log('[PICPIO] Connected Microchip programmers:');
+    for (const d of devices) {
+        console.log(`  - ${d.name}${d.pid ? ` (USB VID_04D8&PID_${d.pid})` : ''}`);
+    }
 }
 
 function findIPE() {
@@ -592,6 +653,14 @@ function cmdUpload(opts) {
         process.exit(1);
     }
 
+    const devices = detectProgrammers();
+    if (devices.length === 0) {
+        console.warn(`[PICPIO] WARNING: No PICkit/ICD/Snap detected on USB (expected ${prog}).`);
+        console.warn('         Connect your programmer -- continuing anyway...');
+    } else {
+        console.log(`[PICPIO] Programmer detected: ${devices.map(d => d.name).join(', ')}`);
+    }
+
     // Map MCU family → DFP pack name
     const dfpName = getDFPName(cfg.family);
     let owdFlag = '';
@@ -675,6 +744,15 @@ function cmdErase() {
     const prog    = cfg.programmer || 'PICKit4';
     const ipecmd  = findIPE();
     if (!ipecmd) { console.error('[PICPIO] MPLAB IPE not found.'); process.exit(1); }
+
+    const devices = detectProgrammers();
+    if (devices.length === 0) {
+        console.warn(`[PICPIO] WARNING: No PICkit/ICD/Snap detected on USB (expected ${prog}).`);
+        console.warn('         Connect your programmer -- continuing anyway...');
+    } else {
+        console.log(`[PICPIO] Programmer detected: ${devices.map(d => d.name).join(', ')}`);
+    }
+
     const dfpName = getDFPName(cfg.family);
     let owdFlag = '';
     if (dfpName) {
