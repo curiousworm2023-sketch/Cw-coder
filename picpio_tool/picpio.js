@@ -6,6 +6,13 @@ const path = require('path');
 const cp   = require('child_process');
 const os   = require('os');
 
+// DFP pack storage (used by resolvePack/findDFP/cmdInstallDFP below)
+const PACKS_DIR             = 'C:\\picpio\\packs';
+const PACK_INDEX_PATH       = path.join(PACKS_DIR, 'index.idx');
+const PACK_INDEX_URL        = 'https://packs.download.microchip.com/index.idx';
+const DFP_MANIFEST_PATH     = path.join(PACKS_DIR, 'manifest.json');
+const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const cmd  = args[0];
@@ -49,6 +56,10 @@ Commands:
   lib update    Update library registry
   init          Create a new project (use --name --mcu --family etc.)
   vscode        Generate .vscode/tasks.json and c_cpp_properties.json
+  install-dfp [device|pack]  Download a Device Family Pack.
+                Defaults to the [project] mcu in picpio.ini.
+                Accepts any device part number (e.g. PIC16F877A)
+                or DFP pack name (e.g. PIC16Fxxx_DFP).
 `);
 }
 
@@ -85,10 +96,89 @@ function findXC8() {
     return vers.length ? path.join(base, vers[0], 'bin', 'xc8-cc.exe') : null;
 }
 
-// XC8 v3.x requires a DFP (Device Family Pack) for device headers/linker scripts.
-// Search order: picpio.ini [build] dfp_path → MPLAB X packs → ~/.mchp_packs → C:\picpio\packs
+// ─── DFP RESOLUTION (Microchip Packs Index) ──────────────────────────────────
+// picpio can install the DFP for ANY Microchip device by downloading and
+// querying the official pack index, instead of relying on a hardcoded list.
+
+function loadDFPManifest() {
+    try { return JSON.parse(fs.readFileSync(DFP_MANIFEST_PATH, 'utf8')); } catch { return {}; }
+}
+
+function saveDFPManifest(manifest) {
+    fs.mkdirSync(PACKS_DIR, { recursive: true });
+    fs.writeFileSync(DFP_MANIFEST_PATH, JSON.stringify(manifest, null, 2));
+}
+
+// Download (or reuse a cached copy of) Microchip's full pack index, used to
+// resolve any device name to its Device Family Pack name + latest version.
+function ensurePackIndex() {
+    if (fs.existsSync(PACK_INDEX_PATH)) {
+        const age = Date.now() - fs.statSync(PACK_INDEX_PATH).mtimeMs;
+        if (age < PACK_INDEX_MAX_AGE_MS) return PACK_INDEX_PATH;
+    }
+    fs.mkdirSync(PACKS_DIR, { recursive: true });
+    console.log('[PICPIO] Fetching Microchip pack index (one-time, ~40MB)...');
+    const result = cp.spawnSync(
+        `powershell -Command "Invoke-WebRequest -Uri '${PACK_INDEX_URL}' -OutFile '${PACK_INDEX_PATH}' -UseBasicParsing"`,
+        [], { shell: true, stdio: 'inherit', timeout: 180000 }
+    );
+    if (result.status !== 0 || !fs.existsSync(PACK_INDEX_PATH)) return null;
+    return PACK_INDEX_PATH;
+}
+
+// Resolve `name` to a DFP: either a device part number (e.g. "PIC16F877A",
+// found by searching every pack's device list) or a DFP pack name itself
+// (e.g. "PIC16Fxxx_DFP", matched directly). Returns { name, version } or null.
+function resolvePack(name) {
+    const idxPath = ensurePackIndex();
+    if (!idxPath) return null;
+    const data   = fs.readFileSync(idxPath, 'utf8');
+    const target = name.toUpperCase();
+    const blocks = data.split(/(?=<pdsc )/);
+    for (const block of blocks) {
+        if (!block.startsWith('<pdsc ')) continue;
+        const nameM = block.match(/atmel:name="([^"]+)"/);
+        if (!nameM || !/_DFP$/.test(nameM[1])) continue;
+        const verM = block.match(/^<pdsc[^>]*\sversion="([^"]+)"/);
+        if (!verM) continue;
+        if (nameM[1].toUpperCase() === target) return { name: nameM[1], version: verM[1] };
+        const re = new RegExp(`<atmel:device name="${target}"`, 'i');
+        if (re.test(block)) return { name: nameM[1], version: verM[1] };
+    }
+    return null;
+}
+
+// Download + extract a pack by exact name/version into C:\picpio\packs\<name>
+function downloadPack(name, version) {
+    const destDir = path.join(PACKS_DIR, name);
+    fs.mkdirSync(destDir, { recursive: true });
+    const url = `https://packs.download.microchip.com/Microchip.${name}.${version}.atpack`;
+    const tmp = path.join(os.tmpdir(), `${name}_${version}.zip`);
+    console.log(`[PICPIO] Downloading ${name} v${version}...`);
+    const result = cp.spawnSync(
+        `powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${tmp}' -UseBasicParsing"`,
+        [], { shell: true, stdio: 'inherit', timeout: 180000 }
+    );
+    if (result.status === 0 && fs.existsSync(tmp) && fs.statSync(tmp).size > 10000) {
+        console.log('[PICPIO] Extracting...');
+        cp.spawnSync(
+            `powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${destDir}' -Force"`,
+            [], { shell: true, stdio: 'inherit' }
+        );
+        fs.rmSync(tmp, { force: true });
+        return destDir;
+    }
+    try { fs.rmSync(tmp, { force: true }); } catch {}
+    fs.rmSync(destDir, { recursive: true, force: true });
+    return null;
+}
+
+// XC8 v3.x / XC16 v2.x require a DFP for device-specific headers/linker scripts.
+// Search order: manifest (from a previous "picpio install-dfp") → family-name
+// guess → MPLAB X packs → ~/.mchp_packs → C:\picpio\packs
 function findDFP(mcu) {
-    const family = dfpFamilyFor(mcu);
+    const manifest = loadDFPManifest();
+    const family = manifest[(mcu || '').toUpperCase()] || dfpFamilyFor(mcu);
     // XC8 needs the xc8/ subdirectory inside the pack
     const xc8Sub = (p) => {
         const sub = path.join(p, 'xc8');
@@ -106,13 +196,14 @@ function findDFP(mcu) {
     return null;
 }
 
+// Fast offline guess used as a fallback when no manifest entry exists yet.
 function dfpFamilyFor(mcu) {
     const u = (mcu || '').toUpperCase();
     if (u.match(/PIC18F\d+K/))   return 'PIC18F-K_DFP';
     if (u.match(/PIC18F\d+J/))   return 'PIC18F-J_DFP';
     if (u.match(/PIC18F/))        return 'PIC18F_DFP';
-    if (u.match(/PIC16F1/))       return 'PIC16F1_DFP';
-    if (u.match(/PIC16/))         return 'PIC16_DFP';
+    if (u.match(/PIC16F1/))       return 'PIC16F1xxxx_DFP';
+    if (u.match(/PIC16/))         return 'PIC16Fxxx_DFP';
     if (u.match(/PIC24/))         return 'PIC24F_DFP';
     if (u.match(/DSPIC33/))       return 'dsPIC33_DFP';
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
@@ -195,11 +286,13 @@ function collectSources(cfg) {
     const srcDir    = path.join(root, cfg.src_dir || 'src');
     const libDir    = path.join(root, 'lib');
     const scriptDir = path.dirname(process.argv[1]);
-    // arduino_compat: look next to picpio.js (tool-level), never required in project
+    // arduino_compat: look next to picpio.js (tool-level), never required in project.
+    // Classic PIC16F8xx parts (no LATx/ANSELx/PPS) use a separate HAL variant.
+    const acName = dfpFamilyFor(cfg.mcu) === 'PIC16Fxxx_DFP' ? 'arduino_compat_pic16' : 'arduino_compat';
     const acDir = [
-        path.join(scriptDir, 'arduino_compat'),
-        path.join(scriptDir, '..', 'arduino_compat'),
-    ].find(d => fs.existsSync(d)) || path.join(root, 'arduino_compat');
+        path.join(scriptDir, acName),
+        path.join(scriptDir, '..', acName),
+    ].find(d => fs.existsSync(d)) || path.join(root, acName);
 
     // src/
     if (fs.existsSync(srcDir)) {
@@ -310,7 +403,7 @@ function cmdBuild(opts) {
         if (verbose) console.log(`[PICPIO] DFP: ${dfp}`);
     } else if (!family.startsWith('PIC32')) {
         console.warn('[PICPIO] WARNING: DFP pack not found. Build may fail.');
-        console.warn('         Run: picpio install-dfp   to download device support files.');
+        console.warn('         Run: picpio install-dfp   (auto-detects the device from picpio.ini)');
         console.warn('         Or set dfp_path in picpio.ini [build] section.');
     }
 
@@ -370,7 +463,7 @@ function cmdBuild(opts) {
 function getDFPName(mcuFamily) {
     return {
         'PIC18': 'PIC18F-K_DFP',
-        'PIC16': 'PIC12-16F1xxx_DFP',
+        'PIC16': 'PIC16Fxxx_DFP',
         'PIC24': 'PIC24F-GA-GB_DFP',
     }[mcuFamily] || null;
 }
@@ -868,62 +961,57 @@ function cmdVscode() {
 }
 
 // ─── INSTALL DFP ─────────────────────────────────────────────────────────────
-function cmdInstallDFP(family) {
-    family = family || 'PIC18F-K_DFP';
-    const destDir = `C:\\picpio\\packs\\${family}`;
-    if (fs.existsSync(destDir) && fs.readdirSync(destDir).length > 0) {
-        console.log(`[PICPIO] DFP already installed at: ${destDir}`);
-        return;
-    }
-    fs.mkdirSync(destDir, { recursive: true });
+// Works for ANY Microchip device or DFP pack name by resolving against the
+// official pack index (see resolvePack). Examples:
+//   picpio install-dfp                 (uses [project] mcu from picpio.ini)
+//   picpio install-dfp PIC16F877A      (resolve by device part number)
+//   picpio install-dfp PIC16Fxxx_DFP   (resolve by exact pack name)
+function cmdInstallDFP(arg) {
+    let mcu = null;
+    let target = arg;
 
-    // Known working versions to try
-    const versions = {
-        'PIC18F-K_DFP':  ['1.13.292','1.11.274','1.9.240','1.7.200'],
-        'PIC18F_DFP':    ['1.4.335','1.3.303'],
-        'PIC16F1_DFP':   ['1.8.290','1.6.182'],
-        'PIC16_DFP':     ['1.8.290','1.6.182'],
-        'PIC24F_DFP':    ['1.14.293','1.12.234'],
-        'dsPIC33_DFP':   ['1.6.225','1.4.185'],
-        'PIC32MX_DFP':   ['1.5.259','1.3.220'],
-        'PIC32MZ_DFP':   ['1.4.240','1.2.190'],
-    };
-
-    const tryVersions = versions[family] || ['1.0.0'];
-    let downloaded = false;
-
-    for (const ver of tryVersions) {
-        const url = `https://packs.download.microchip.com/Microchip.${family}.${ver}.atpack`;
-        const tmp = path.join(os.tmpdir(), `${family}_${ver}.zip`);
-        console.log(`[PICPIO] Downloading ${family} v${ver}...`);
-
-        const result = cp.spawnSync(
-            `powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${tmp}' -UseBasicParsing"`,
-            [], { shell: true, stdio: 'inherit', timeout: 120000 }
-        );
-
-        if (result.status === 0 && fs.existsSync(tmp) && fs.statSync(tmp).size > 10000) {
-            console.log('[PICPIO] Extracting...');
-            cp.spawnSync(
-                `powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${destDir}' -Force"`,
-                [], { shell: true, stdio: 'inherit' }
-            );
-            fs.rmSync(tmp, { force: true });
-            console.log(`[PICPIO] DFP installed: ${destDir}`);
-            console.log('[PICPIO] Run "picpio build" again.');
-            downloaded = true;
-            break;
-        } else {
-            try { fs.rmSync(tmp, { force: true }); } catch {}
+    if (!target) {
+        const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+        if (!cfg || !cfg.mcu) {
+            console.error('[PICPIO] No device specified and no picpio.ini with [project] mcu found.');
+            console.error('         Usage: picpio install-dfp <device or DFP name>  (e.g. PIC16F877A)');
+            process.exit(1);
         }
+        mcu = cfg.mcu;
+        target = cfg.mcu;
+    } else if (!/_DFP$/i.test(target)) {
+        mcu = target;
     }
 
-    if (!downloaded) {
-        console.error(`[PICPIO] Could not download ${family} automatically.`);
-        console.error('         Install MPLAB X and use Tools > Packs to install the DFP,');
-        console.error('         then set dfp_path in picpio.ini [build] section:');
-        console.error('         dfp_path = C:\\path\\to\\PIC18F-K_DFP\\1.x.xxx');
+    console.log(`[PICPIO] Resolving DFP for ${target}...`);
+    const pack = resolvePack(target);
+    if (!pack) {
+        console.error(`[PICPIO] Could not find a Device Family Pack for "${target}" in the Microchip pack index.`);
+        console.error('         Check the device/pack name, or install MPLAB X and use Tools > Packs.');
+        process.exit(1);
     }
+
+    const destDir = path.join(PACKS_DIR, pack.name);
+    if (fs.existsSync(destDir) && fs.readdirSync(destDir).length > 0) {
+        console.log(`[PICPIO] DFP already installed: ${destDir} (${pack.name} v${pack.version})`);
+    } else {
+        const dir = downloadPack(pack.name, pack.version);
+        if (!dir) {
+            console.error(`[PICPIO] Could not download ${pack.name} v${pack.version}.`);
+            console.error('         Install MPLAB X and use Tools > Packs to install the DFP,');
+            console.error('         then set dfp_path in picpio.ini [build] section:');
+            console.error(`         dfp_path = C:\\path\\to\\${pack.name}\\${pack.version}`);
+            process.exit(1);
+        }
+        console.log(`[PICPIO] DFP installed: ${dir} (${pack.name} v${pack.version})`);
+    }
+
+    if (mcu) {
+        const manifest = loadDFPManifest();
+        manifest[mcu.toUpperCase()] = pack.name;
+        saveDFPManifest(manifest);
+    }
+    console.log('[PICPIO] Run "picpio build" again.');
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────

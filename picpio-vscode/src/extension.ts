@@ -11,6 +11,7 @@ import { openSerialMonitor }    from './serialMonitor';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
+import { registerPinCompletion } from './pinCompletion';
 
 /** Find the highest installed XC8 version under C:/Program Files/Microchip/xc8/ */
 function findXC8Version(): string {
@@ -111,6 +112,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── Status bar ────────────────────────────────────────────────────────────
     createStatusBar(context);
+
+    // ── GPIO pin-name completion (RAx/RBx/RCx) ───────────────────────────────
+    registerPinCompletion(context);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const reg = (id: string, fn: (...args: any[]) => any) =>

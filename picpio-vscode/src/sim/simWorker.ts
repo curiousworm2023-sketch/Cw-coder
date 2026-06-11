@@ -2,8 +2,9 @@
 // mimics the Arduino-compat API surface, emitting JSON events for pin
 // changes, PWM, Serial and I2C/SPI traffic. Runs setup() once, then loop()
 // repeatedly on a real-time interval. delay()/delayMicroseconds() advance a
-// virtual clock AND really pause (scaled down) so pin changes either side of
-// a delay are streamed to the webview with visibly distinct timing.
+// virtual clock AND really pause (1:1 with real time, matching hardware) so
+// pin changes either side of a delay are streamed to the webview with
+// visibly distinct timing.
 import { parentPort, workerData } from 'worker_threads';
 import * as vm from 'vm';
 
@@ -13,9 +14,13 @@ const code: string = workerData.code;
 const MAX_ITERS = 100000;
 const MAX_RUN_REAL_MS = 10 * 60 * 1000; // 10 minutes
 const LOOP_INTERVAL_MS = 120;
-const RUN_TIMEOUT_MS = 5000;
-// 1 virtual ms of delay() == this many real ms of pause (10x speedup).
-const DELAY_SCALE = 0.1;
+// Caps a single setup()/loop() call, including any delay() inside it — must
+// comfortably exceed the total delay() time a typical sketch uses per loop()
+// now that delay() is 1:1 with real time.
+const RUN_TIMEOUT_MS = 15000;
+// 1 virtual ms of delay() == this many real ms of pause (1:1 — matches
+// real hardware timing).
+const DELAY_SCALE = 1;
 
 let stopped = false;
 const realStart = Date.now();
@@ -24,10 +29,13 @@ function emit(ev: Record<string, unknown>): void {
     parentPort?.postMessage(ev);
 }
 
+// Native port-pin names — must match the RAx/RBx/RCx aliases defined in
+// arduino_compat's Arduino.h (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
 function pinLabel(pin: number): string {
     const i = Math.trunc(Number(pin));
-    if (i >= 0 && i <= 13) return 'D' + i;
-    if (i >= 14 && i <= 19) return 'A' + (i - 14);
+    if (i >= 0 && i <= 7)  return 'RC' + i;
+    if (i >= 8 && i <= 13) return 'RB' + (i - 8);
+    if (i >= 14 && i <= 19) return 'RA' + (i - 14);
     return 'P' + i;
 }
 
@@ -82,9 +90,10 @@ function sleepReal(ms: number): void {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, real);
 }
 
-// millis()/micros() track real elapsed wall-clock time scaled by 1/DELAY_SCALE
-// (10x), so sketches that poll millis() for non-blocking timing (instead of
-// calling delay()) still see the clock advance between loop() iterations.
+// millis()/micros() track real elapsed wall-clock time (scaled by
+// 1/DELAY_SCALE, currently 1:1), so sketches that poll millis() for
+// non-blocking timing (instead of calling delay()) still see the clock
+// advance between loop() iterations.
 function millis(): number { return Math.floor((Date.now() - realStart) / DELAY_SCALE); }
 function micros(): number { return millis() * 1000; }
 
@@ -264,6 +273,10 @@ const baseGlobals: Record<string, unknown> = {
 };
 for (let i = 0; i <= 13; i++) baseGlobals['D' + i] = i;
 for (let i = 0; i <= 5; i++) baseGlobals['A' + i] = 14 + i;
+// Native port-pin aliases (same indices as D0-D13/A0-A5 — see Arduino.h)
+for (let i = 0; i <= 7; i++) baseGlobals['RC' + i] = i;
+for (let i = 0; i <= 5; i++) baseGlobals['RB' + i] = 8 + i;
+for (let i = 0; i <= 5; i++) baseGlobals['RA' + i] = 14 + i;
 
 // Stub object: stands in for any unknown identifier (PIC SFRs/PPS registers
 // like TRISBbits.TRISB7, RB1PPS, ANSELCbits, etc). Reads/writes are no-ops

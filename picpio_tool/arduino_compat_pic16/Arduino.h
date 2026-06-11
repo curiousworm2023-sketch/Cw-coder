@@ -10,7 +10,7 @@
 
 // ── Chip config (place in sketch to override) ─────────────────────────────────
 #ifndef _XTAL_FREQ
-#  define _XTAL_FREQ 64000000UL
+#  define _XTAL_FREQ 20000000UL
 #endif
 
 // ── Arduino types ─────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-// ── Arduino pin numbers → PIC18F27K40 ────────────────────────────────────────
+// ── Arduino pin numbers → PIC16F877A (classic PIC16F8xx) ─────────────────────
 // D0–D7  = RC0–RC7   (D0=RC0 … D7=RC7)
 // D8–D13 = RB0–RB5   (D13 = RB5, the "LED" pin)
 // A0–A5  = RA0–RA5
@@ -190,8 +190,8 @@ extern SPIClass_t SPI;
 #define SPI_CLOCK_DIV128 128
 
 // ── Interrupt helpers ─────────────────────────────────────────────────────────
-#define interrupts()    (GIE = 1)
-#define noInterrupts()  (GIE = 0)
+#define interrupts()    (INTCONbits.GIE = 1)
+#define noInterrupts()  (INTCONbits.GIE = 0)
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
 void arduino_init(void);

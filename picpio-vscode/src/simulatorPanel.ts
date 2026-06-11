@@ -1,8 +1,13 @@
 import * as vscode from 'vscode';
 import { SimulatorServer } from './sim/simulatorServer';
 
-const DIGITAL_PINS = Array.from({ length: 14 }, (_, i) => `D${i}`);
-const ANALOG_PINS  = Array.from({ length: 6 },  (_, i) => `A${i}`);
+// Native port-pin names — must match pinLabel() in sim/simWorker.ts
+// (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
+const DIGITAL_PINS = [
+    ...Array.from({ length: 8 }, (_, i) => `RC${i}`),
+    ...Array.from({ length: 6 }, (_, i) => `RB${i}`),
+];
+const ANALOG_PINS = Array.from({ length: 6 }, (_, i) => `RA${i}`);
 
 function pinCell(label: string): string {
     return `
@@ -13,14 +18,18 @@ function pinCell(label: string): string {
       </div>`;
 }
 
-// Analog input pins get a slider so the user can simulate a potentiometer
-// or sensor: dragging it overrides analogRead() for that pin.
+// RAx pins are dual-purpose: pinMode/digitalWrite/digitalRead work on them
+// just like digital pins (LED + INPUT/OUTPUT/PULLUP mode label), but they
+// also accept analogRead(). Tapping the cell reveals a slider so the user can
+// simulate a potentiometer or sensor — dragging it overrides analogRead() for
+// that pin. Tapping outside the cell hides the slider again.
 function analogPinCell(label: string): string {
     return `
-      <div class="pin-cell analog" id="pin-${label}">
+      <div class="pin-cell analog" id="pin-${label}" title="Click to show analog input slider">
+        <div class="pin-led" id="led-${label}"></div>
         <div class="pin-name">${label}</div>
-        <input type="range" class="pin-slider" id="slider-${label}" min="0" max="1023" value="512">
         <div class="pin-mode" id="mode-${label}">auto</div>
+        <input type="range" class="pin-slider" id="slider-${label}" min="0" max="1023" value="512">
       </div>`;
 }
 
@@ -134,8 +143,9 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-cell{width:64px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 4px;text-align:center}
 .pin-cell.input{cursor:pointer;border-color:#3794ff}
 .pin-cell.input:hover{border-color:#5dabff}
-.pin-cell.analog{width:110px}
-.pin-slider{width:100%;margin:8px 0 4px;accent-color:#3794ff}
+.pin-cell.analog{cursor:pointer;width:90px}
+.pin-slider{display:none;width:100%;margin:8px 0 4px;accent-color:#3794ff}
+.pin-cell.analog.expanded .pin-slider{display:block}
 .pin-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto 6px;transition:background .1s,box-shadow .15s,opacity .15s}
 .pin-led.on{background:#4ec9b0;box-shadow:0 0 8px #4ec9b0}
 .pin-led.input-on{background:#3794ff;box-shadow:0 0 8px #3794ff}
@@ -328,7 +338,11 @@ function reset() {
     setInputClickable(p, false);
   });
   ANALOG_PINS_JS.forEach(p => {
+    setLed(p, false, false);
     setMode(p, 'auto');
+    setInputClickable(p, false);
+    const cell = document.getElementById('pin-' + p);
+    if (cell) cell.classList.remove('expanded');
     const slider = document.getElementById('slider-' + p);
     if (slider) slider.value = 512;
   });
@@ -341,14 +355,33 @@ function reset() {
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
 const ANALOG_PINS_JS  = ${JSON.stringify(ANALOG_PINS)};
 
-// Dragging an analog pin's slider simulates a potentiometer/sensor: it
-// overrides analogRead() for that pin until the simulation is restarted.
+// Tapping an analog pin cell reveals its slider; tapping anywhere outside
+// the cell hides it again. Dragging the slider simulates a potentiometer/
+// sensor, overriding analogRead() for that pin until the simulation is
+// restarted. If the sketch has put the pin in digital INPUT/INPUT_PULLUP
+// mode, the cell instead acts like a digital input (see setInputClickable)
+// and the slider toggle is suppressed.
 ANALOG_PINS_JS.forEach(p => {
+  const cell = document.getElementById('pin-' + p);
   const slider = document.getElementById('slider-' + p);
-  if (!slider) return;
+  if (!cell || !slider) return;
+  cell.addEventListener('click', e => {
+    if (e.target === slider || pinIsInput.has(p)) return;
+    cell.classList.toggle('expanded');
+  });
+  slider.addEventListener('click', e => e.stopPropagation());
   slider.addEventListener('input', () => {
     setMode(p, slider.value);
     sendMessage({ command: 'setAnalog', pin: p, value: Number(slider.value) });
+  });
+});
+
+document.addEventListener('click', e => {
+  ANALOG_PINS_JS.forEach(p => {
+    const cell = document.getElementById('pin-' + p);
+    if (cell && cell.classList.contains('expanded') && !cell.contains(e.target)) {
+      cell.classList.remove('expanded');
+    }
   });
 });
 
