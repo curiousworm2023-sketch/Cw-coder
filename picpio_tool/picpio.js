@@ -695,8 +695,12 @@ function cmdUpload(opts) {
 
     const command = `"${ipecmd}" -P${mcu} ${progFlag} -F"${hexFile}" -M ${owdFlag} ${powerFlag} -OL`;
     console.log(`[PICPIO] Uploading to ${mcu} via ${prog}...`);
+    console.log(`[PICPIO] Running: ${command}`);
 
     const result = cp.spawnSync(command, [], { shell: true, stdio: 'inherit' });
+    if (result.error) {
+        console.error(`[PICPIO] Failed to launch MPLAB IPE: ${result.error.message}`);
+    }
     if (result.status !== 0) {
         console.error('[PICPIO] UPLOAD FAILED');
         process.exit(result.status || 1);
@@ -788,7 +792,12 @@ function cmdErase() {
         console.log(`[PICPIO] Powering target from ${prog} at ${cfg.power_voltage}V`);
     }
 
-    cp.spawnSync(`"${ipecmd}" -P${mcu} ${progFlag} -E ${owdFlag} ${powerFlag} -OL`, [], { shell: true, stdio: 'inherit' });
+    const eraseCommand = `"${ipecmd}" -P${mcu} ${progFlag} -E ${owdFlag} ${powerFlag} -OL`;
+    console.log(`[PICPIO] Running: ${eraseCommand}`);
+    const eraseResult = cp.spawnSync(eraseCommand, [], { shell: true, stdio: 'inherit' });
+    if (eraseResult.error) {
+        console.error(`[PICPIO] Failed to launch MPLAB IPE: ${eraseResult.error.message}`);
+    }
 }
 
 // ─── LIB ─────────────────────────────────────────────────────────────────────
