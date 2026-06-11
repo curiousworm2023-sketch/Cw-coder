@@ -586,43 +586,21 @@ function ensureDFPinMPLABX(family) {
         if (m) version = m[1];
     }
 
-    // Find MPLAB X install
-    const mplabBase = 'C:\\Program Files\\Microchip\\MPLABX';
-    if (!fs.existsSync(mplabBase)) return;
-    const vers = fs.readdirSync(mplabBase).filter(d => d.startsWith('v')).sort((a,b) => parseFloat(b.slice(1)) - parseFloat(a.slice(1)));
-    if (!vers[0]) return;
-
-    const destDir = path.join(mplabBase, vers[0], 'packs', 'Microchip', family, version);
+    // MPLAB X (and ipecmd's -OWD flag) read packs from the shared Packs cache
+    // at %USERPROFILE%\.mchp_packs\Microchip\<DFP>\<version>\ -- the same
+    // location the Pack Manager downloads to. Installing into the MPLAB X
+    // program directory instead leaves -OWD unable to find the pack, which
+    // makes ipecmd crash silently (no output, exit code 1).
+    const destDir = path.join(process.env.USERPROFILE, '.mchp_packs', 'Microchip', family, version);
     if (fs.existsSync(destDir)) return; // already installed
 
-    console.log(`[PICPIO] Installing DFP ${family} v${version} into MPLAB X...`);
+    console.log(`[PICPIO] Installing DFP ${family} v${version} into MPLAB X packs cache...`);
     try {
         copyDirRecursive(srcDir, destDir);
         console.log(`[PICPIO] DFP installed at ${destDir}`);
     } catch (e) {
-        if (e.code === 'EPERM' || e.code === 'EACCES') {
-            // Program Files requires admin — write script to C:\picpio (no spaces) and run elevated
-            console.log('[PICPIO] Admin required — requesting elevation (UAC prompt will appear)...');
-            const scriptPath = 'C:\\picpio\\dfp_install.ps1';
-            fs.writeFileSync(scriptPath, [
-                `New-Item -ItemType Directory -Force '${destDir}' | Out-Null`,
-                `Copy-Item -Path '${srcDir}\\*' -Destination '${destDir}' -Recurse -Force`,
-            ].join('\r\n'));
-            cp.spawnSync('powershell', [
-                '-NoProfile', '-Command',
-                `Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File C:\\picpio\\dfp_install.ps1'`
-            ], { stdio: 'inherit' });
-            try { fs.unlinkSync(scriptPath); } catch (_) {}
-            if (fs.existsSync(destDir)) {
-                console.log('[PICPIO] DFP installed successfully.');
-            } else {
-                console.warn('[PICPIO] DFP install failed or was cancelled.');
-                console.warn(`[PICPIO] Manual fix: open MPLAB X → Tools → Packs → install ${family}`);
-            }
-        } else {
-            console.warn(`[PICPIO] Could not install DFP: ${e.message}`);
-            console.warn(`[PICPIO] Manual fix: open MPLAB X → Tools → Packs → install ${family}`);
-        }
+        console.warn(`[PICPIO] Could not install DFP: ${e.message}`);
+        console.warn(`[PICPIO] Manual fix: open MPLAB X → Tools → Packs → install ${family}`);
     }
 }
 
