@@ -685,7 +685,15 @@ function cmdUpload(opts) {
         'Snap':    '-TPSNAP',
     }[prog] || '-TPPK4';
 
-    const command = `"${ipecmd}" -P${mcu} ${progFlag} -F"${hexFile}" -M ${owdFlag} -OL`;
+    // Power the target board from the programmer (e.g. power_voltage = 5.0 in
+    // picpio.ini's [upload] section). Without this, ipecmd fails to find the
+    // target on boards that have no separate power supply.
+    const powerFlag = cfg.power_voltage ? `-W${cfg.power_voltage}` : '';
+    if (powerFlag) {
+        console.log(`[PICPIO] Powering target from ${prog} at ${cfg.power_voltage}V`);
+    }
+
+    const command = `"${ipecmd}" -P${mcu} ${progFlag} -F"${hexFile}" -M ${owdFlag} ${powerFlag} -OL`;
     console.log(`[PICPIO] Uploading to ${mcu} via ${prog}...`);
 
     const result = cp.spawnSync(command, [], { shell: true, stdio: 'inherit' });
@@ -766,8 +774,21 @@ function cmdErase() {
         const dfpVer = getDFPVersion(dfpName);
         if (dfpVer) owdFlag = `-OWD${dfpName},${dfpVer},Microchip`;
     }
-    const progFlag = { 'PICKit4':'-TPPK4','PICKit5':'-TPPK5','PICKit3':'-TPPK3' }[prog] || '-TPPK4';
-    cp.spawnSync(`"${ipecmd}" -P${mcu} ${progFlag} -E ${owdFlag} -OL`, [], { shell: true, stdio: 'inherit' });
+    const progFlag = {
+        'PICKit4': '-TPPK4',
+        'PICKit5': '-TPPK5',
+        'PICKit3': '-TPPK3',
+        'ICD4':    '-TPICD4',
+        'ICD5':    '-TPICD5',
+        'Snap':    '-TPSNAP',
+    }[prog] || '-TPPK4';
+
+    const powerFlag = cfg.power_voltage ? `-W${cfg.power_voltage}` : '';
+    if (powerFlag) {
+        console.log(`[PICPIO] Powering target from ${prog} at ${cfg.power_voltage}V`);
+    }
+
+    cp.spawnSync(`"${ipecmd}" -P${mcu} ${progFlag} -E ${owdFlag} ${powerFlag} -OL`, [], { shell: true, stdio: 'inherit' });
 }
 
 // ─── LIB ─────────────────────────────────────────────────────────────────────
@@ -958,6 +979,8 @@ function cmdInit(args) {
         '',
         '[upload]',
         `programmer = ${prog}`,
+        '# power_voltage = 5.0  -- uncomment to power the target board from the',
+        '#                         programmer (needed if your board has no own supply)',
         '',
         '[libraries]',
         `installed  =`,
