@@ -5,7 +5,7 @@ import { HomePanel }        from './homePanel';
 import { createStatusBar }  from './statusBar';
 import { TaskTreeProvider, QuickAccessProvider } from './taskTree';
 import { ProjectProvider, LibrariesProvider }    from './projectTree';
-import { picpio, getTerminal, runTracked }  from './terminal';
+import { picpio, getTerminal }  from './terminal';
 import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
 import { disposeSerialMonitorServer } from './serialMonitorServer';
@@ -131,22 +131,22 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── Commands ──────────────────────────────────────────────────────────────
     reg('picpio.home',          () => HomePanel.createOrShow(context));
-    reg('picpio.build',         () => runTracked('build', 'Building'));
-    reg('picpio.upload',        () => runTracked('upload', 'Uploading'));
-    reg('picpio.buildUpload',   () => runTracked('build -u', 'Building & Uploading'));
-    reg('picpio.clean',         () => runTracked('clean', 'Cleaning').then(refreshAll));
-    reg('picpio.cleanBuild',    () => runTracked('clean', 'Cleaning').then(() => runTracked('build', 'Building')));
+    reg('picpio.build',         () => picpio('build'));
+    reg('picpio.upload',        () => picpio('upload'));
+    reg('picpio.buildUpload',   () => picpio('build -u'));
+    reg('picpio.clean',         () => { picpio('clean'); setTimeout(refreshAll, 800); });
+    reg('picpio.cleanBuild',    () => { picpio('clean'); setTimeout(() => picpio('build'), 1200); });
     reg('picpio.serialMonitor', () => openSerialMonitor());
     reg('picpio.libManager',    () => HomePanel.createOrShow(context));
 
     reg('picpio.taskMenu', async () => {
         type Task = { label: string; description: string; action: () => void };
         const tasks: Task[] = [
-            { label: '$(check)          Build',          description: 'Ctrl+Alt+B', action: () => runTracked('build', 'Building') },
-            { label: '$(arrow-right)    Upload',         description: 'Ctrl+Alt+U', action: () => runTracked('upload', 'Uploading') },
-            { label: '$(arrow-up)       Upload & Monitor',description: '',          action: () => runTracked('build -u', 'Building & Uploading') },
-            { label: '$(trash)          Clean',          description: '',           action: () => runTracked('clean', 'Cleaning').then(refreshAll) },
-            { label: '$(debug-restart)  Clean Build',    description: 'Ctrl+Alt+R', action: () => runTracked('clean', 'Cleaning').then(() => runTracked('build', 'Building')) },
+            { label: '$(check)          Build',          description: 'Ctrl+Alt+B', action: () => picpio('build') },
+            { label: '$(arrow-right)    Upload',         description: 'Ctrl+Alt+U', action: () => picpio('upload') },
+            { label: '$(arrow-up)       Upload & Monitor',description: '',          action: () => picpio('build -u') },
+            { label: '$(trash)          Clean',          description: '',           action: () => { picpio('clean'); setTimeout(refreshAll, 800); } },
+            { label: '$(debug-restart)  Clean Build',    description: 'Ctrl+Alt+R', action: () => { picpio('clean'); setTimeout(() => picpio('build'), 1200); } },
             { label: '$(plug)           Serial Monitor', description: 'Ctrl+Alt+S', action: () => openSerialMonitor() },
             { label: '$(terminal)       Open CLI',       description: '',           action: () => getTerminal().show(false) },
         ];
