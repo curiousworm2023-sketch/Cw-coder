@@ -98,8 +98,10 @@ let serverPort = 0;
 let scriptPath: string | undefined;
 let proc: cp.ChildProcess | undefined;
 const sseClients: http.ServerResponse[] = [];
+let currentStatus: any = { command: 'status', connected: false };
 
 function broadcast(msg: any): void {
+    if (msg.command === 'status') currentStatus = msg;
     const data = `data: ${JSON.stringify(msg)}\n\n`;
     for (const res of sseClients) {
         try { res.write(data); } catch { /* ignore */ }
@@ -215,6 +217,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
             'Connection': 'keep-alive',
         });
         res.write('\n');
+        res.write(`data: ${JSON.stringify({ ...currentStatus, replay: true })}\n\n`);
         sseClients.push(res);
         req.on('close', () => {
             const i = sseClients.indexOf(res);
@@ -483,6 +486,14 @@ es.onmessage = e => {
     const msg = JSON.parse(e.data);
     switch (msg.command) {
         case 'status':
+            if (msg.replay) {
+                if (msg.connected) {
+                    setConnected(true, 'Connected: ' + msg.port + ' @ ' + msg.baud);
+                    portSelect.value = msg.port;
+                    baudSelect.value = String(msg.baud);
+                }
+                break;
+            }
             if (msg.connecting) {
                 statusBadge.className = 'status connecting';
                 statusBadge.textContent = 'Connecting...';
