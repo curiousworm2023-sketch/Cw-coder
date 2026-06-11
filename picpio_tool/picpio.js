@@ -196,6 +196,27 @@ function findDFP(mcu) {
     return null;
 }
 
+// Auto-download the DFP for `mcu` when findDFP() comes up empty, so a fresh
+// checkout/build doesn't require a separate "picpio install-dfp" step.
+// Returns the resolved DFP path, or null if it couldn't be resolved/downloaded.
+function ensureDFP(mcu) {
+    const pack = resolvePack(mcu);
+    if (!pack) return null;
+
+    const destDir = path.join(PACKS_DIR, pack.name);
+    if (!(fs.existsSync(destDir) && fs.readdirSync(destDir).length > 0)) {
+        const dir = downloadPack(pack.name, pack.version);
+        if (!dir) return null;
+        console.log(`[PICPIO] DFP installed: ${dir} (${pack.name} v${pack.version})`);
+    }
+
+    const manifest = loadDFPManifest();
+    manifest[mcu.toUpperCase()] = pack.name;
+    saveDFPManifest(manifest);
+
+    return findDFP(mcu);
+}
+
 // Fast offline guess used as a fallback when no manifest entry exists yet.
 function dfpFamilyFor(mcu) {
     const u = (mcu || '').toUpperCase();
@@ -397,7 +418,11 @@ function cmdBuild(opts) {
 
     // DFP flag (required by XC8 v3.x / XC16 v2.x for device-specific headers)
     let dfpFlag = '';
-    const dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
+    let dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
+    if (!dfp && !cfg.dfp_path && !family.startsWith('PIC32')) {
+        console.log(`[PICPIO] DFP pack not found for ${mcu}; downloading automatically...`);
+        dfp = ensureDFP(mcu);
+    }
     if (dfp) {
         dfpFlag = `-mdfp="${dfp}"`;
         if (verbose) console.log(`[PICPIO] DFP: ${dfp}`);
