@@ -95,10 +95,12 @@ export function runTracked(args: string, title: string): Promise<number> {
 
     return new Promise<number>(resolve => {
         const writeEmitter = new vscode.EventEmitter<string>();
-        const closeEmitter = new vscode.EventEmitter<number>();
         const pty: vscode.Pseudoterminal = {
             onDidWrite: writeEmitter.event,
-            onDidClose: closeEmitter.event,
+            // No onDidClose is fired -- the terminal stays open after the
+            // process finishes so the user can review its output. Only the
+            // spinner goes away.
+            onDidClose: new vscode.EventEmitter<number>().event,
             open: () => {
                 writeEmitter.fire(`> ${exe} ${args}\r\n`);
                 const proc = cp.spawn(`${exe} ${args}`, {
@@ -110,13 +112,11 @@ export function runTracked(args: string, title: string): Promise<number> {
                 proc.stderr?.on('data', onData);
                 proc.on('close', (code: number | null) => {
                     hideSpinner();
-                    closeEmitter.fire(code ?? -1);
                     resolve(code ?? -1);
                 });
                 proc.on('error', (err: Error) => {
                     writeEmitter.fire(`\r\n[PICPIO] Failed to run: ${err.message}\r\n`);
                     hideSpinner();
-                    closeEmitter.fire(-1);
                     resolve(-1);
                 });
             },
