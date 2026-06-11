@@ -1,20 +1,5 @@
 import * as vscode from 'vscode';
 import * as cp     from 'child_process';
-import * as fs     from 'fs';
-
-// The extension host's process.env.PATH is a snapshot taken when VS Code
-// started, so it can miss directories (like the picpio CLI's install dir)
-// added to the user's PATH afterwards. Patch them in for spawned processes.
-const EXTRA_PATH_DIRS = ['C:\\picpio'];
-
-function spawnEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '1' };
-    const dirs = (env.PATH ?? '').split(';');
-    for (const dir of EXTRA_PATH_DIRS) {
-        if (fs.existsSync(dir) && !dirs.includes(dir)) env.PATH = `${env.PATH};${dir}`;
-    }
-    return env;
-}
 
 let _terminal: vscode.Terminal | undefined;
 let _channel: vscode.OutputChannel | undefined;
@@ -69,7 +54,7 @@ export function runTracked(args: string, title: string): Promise<number> {
     }, () => new Promise<number>(resolve => {
         const proc = cp.spawn(`${exe} ${args}`, {
             cwd, shell: true, windowsHide: true,
-            env: spawnEnv(),
+            env: { ...process.env, FORCE_COLOR: '1' },
         });
         proc.stdout?.on('data', (d: Buffer) => channel.append(d.toString()));
         proc.stderr?.on('data', (d: Buffer) => channel.append(d.toString()));
