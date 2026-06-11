@@ -4,6 +4,7 @@ import * as path from 'path';
 import { Worker } from 'worker_threads';
 import { readConfig } from './iniParser';
 import { transpileSketch } from './sim/transpile';
+import { detectComponents } from './sim/detectComponents';
 import { SimulatorPanel, renderSimulatorHtml } from './simulatorPanel';
 import { SimulatorServer } from './sim/simulatorServer';
 
@@ -69,6 +70,7 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         const { code, warnings } = transpileSketch(src);
         for (const w of warnings) panel.post({ t: 'error', phase: 'transpile', message: w });
 
+        panel.autoCircuit(detectComponents(src));
         panel.setStatus('running');
 
         const workerPath = path.join(context.extensionPath, 'out', 'sim', 'simWorker.js');
