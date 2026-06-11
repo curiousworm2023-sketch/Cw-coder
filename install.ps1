@@ -2,12 +2,11 @@
 # Installs: XC8 compiler + MPLAB X IPE + picpio tool + VS Code extension
 #
 # One-liner:
-#   iex (irm https://raw.githubusercontent.com/123him/picpio/main/install.ps1)
+#   iex (irm https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/install.ps1)
 
 $ErrorActionPreference = 'Stop'
 $INSTALL_DIR = 'C:\picpio'
-$REPO_RAW    = 'https://raw.githubusercontent.com/123him/picpio/main'
-$REPO_REL    = 'https://github.com/123him/picpio/releases/latest/download'
+$REPO_RAW    = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main'
 
 $XC8_URL    = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v3.10-full-install-windows-x64-installer.exe'
 $MPLABX_URL = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/MPLABX-v6.00-windows-installer.exe'
@@ -115,22 +114,22 @@ if (-not $codeCmd) {
 if ($codeCmd) {
     $vsix = "$env:TEMP\picpio.vsix"
     try {
-        Invoke-WebRequest "$REPO_REL/picpio.vsix" -OutFile $vsix -UseBasicParsing
+        Invoke-WebRequest "$REPO_RAW/picpio-vscode/picpio.vsix" -OutFile $vsix -UseBasicParsing
         & $codeCmd --install-extension $vsix
         Write-Info "Extension installed in VS Code"
     } catch {
         Write-Warn "Could not auto-install extension."
-        Write-Warn "Get picpio.vsix from: https://github.com/123him/picpio/releases"
+        Write-Warn "Get picpio.vsix from: https://github.com/curiousworm2023-sketch/Cw-coder"
         Write-Warn "VS Code: Extensions > ... > Install from VSIX"
     }
 } else {
     Write-Warn "VS Code not found. Install from https://code.visualstudio.com"
-    Write-Warn "Then install extension from: https://github.com/123him/picpio/releases"
+    Write-Warn "Then install extension from: https://github.com/curiousworm2023-sketch/Cw-coder"
 }
 
 Write-Host ""
 Write-Host "  PICPIO installation complete!" -ForegroundColor Cyan
 Write-Host "  1. Restart VS Code" -ForegroundColor White
 Write-Host "  2. PICPIO icon in sidebar > New Project" -ForegroundColor White
-Write-Host "  Docs: https://github.com/123him/picpio" -ForegroundColor DarkCyan
+Write-Host "  Docs: https://github.com/curiousworm2023-sketch/Cw-coder" -ForegroundColor DarkCyan
 Write-Host ""

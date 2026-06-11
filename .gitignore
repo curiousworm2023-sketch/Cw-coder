@@ -3,6 +3,7 @@
 picpio-vscode/out/
 picpio-vscode/node_modules/
 picpio-vscode/*.vsix
+!picpio-vscode/picpio.vsix
 
 # Logs
 *.log
