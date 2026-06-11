@@ -35,24 +35,36 @@ try {
     \$sp = New-Object System.IO.Ports.SerialPort \$Port, \$Baud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
     \$sp.Open()
 } catch {
-    Write-Output "PICPIO_ERROR:\$($_.Exception.Message)"
+    [Console]::Out.WriteLine("PICPIO_ERROR:\$($_.Exception.Message)")
+    [Console]::Out.Flush()
     exit 1
 }
 
-Write-Output "PICPIO_CONNECTED:\$Port@\$Baud"
+[Console]::Out.WriteLine("PICPIO_CONNECTED:\$Port@\$Baud")
+[Console]::Out.Flush()
 
-\$action = {
-    \$port = \$Event.MessageData
-    try {
-        \$data = \$port.ReadExisting()
-        if (\$data) {
-            \$bytes = [System.Text.Encoding]::UTF8.GetBytes(\$data)
-            \$b64 = [Convert]::ToBase64String(\$bytes)
-            Write-Output "PICPIO_DATA:\$b64"
-        }
-    } catch {}
-}
-Register-ObjectEvent -InputObject \$sp -EventName DataReceived -Action \$action -MessageData \$sp | Out-Null
+# Reader runs on its own runspace (real OS thread) so it can poll the port
+# while the main thread blocks on stdin -- Register-ObjectEvent's -Action
+# doesn't reliably forward Write-Output to the process's real stdout, so a
+# plain polling loop with [Console]::Out is used instead.
+\$reader = [PowerShell]::Create()
+\$reader.AddScript({
+    param(\$sp)
+    while (\$sp.IsOpen) {
+        try {
+            \$data = \$sp.ReadExisting()
+            if (\$data) {
+                \$bytes = [System.Text.Encoding]::UTF8.GetBytes(\$data)
+                \$b64 = [Convert]::ToBase64String(\$bytes)
+                [Console]::Out.WriteLine("PICPIO_DATA:\$b64")
+                [Console]::Out.Flush()
+            } else {
+                Start-Sleep -Milliseconds 30
+            }
+        } catch { Start-Sleep -Milliseconds 100 }
+    }
+}).AddArgument(\$sp) | Out-Null
+\$readerHandle = \$reader.BeginInvoke()
 
 while (\$true) {
     \$line = [Console]::In.ReadLine()
@@ -67,10 +79,8 @@ while (\$true) {
     }
 }
 
-try {
-    Get-EventSubscriber | Unregister-Event
-    \$sp.Close()
-} catch {}
+try { \$sp.Close() } catch {}
+try { \$reader.Stop(); \$reader.Dispose() } catch {}
 `;
 
 export class SerialMonitorPanel {
@@ -243,6 +253,7 @@ button.danger{background:var(--red);color:#000;border-color:var(--red);font-weig
 .status.disconnected{background:#3a1e1e;color:var(--red);border:1px solid var(--red)}
 .status.connecting{background:#2a2a1a;color:#dcdcaa;border:1px solid #dcdcaa}
 #output{flex:1;overflow-y:auto;padding:10px 12px;font-family:Consolas,'Courier New',monospace;font-size:13px;white-space:pre-wrap;word-break:break-all}
+.echo{color:var(--blue)}
 .inputbar{display:flex;gap:8px;padding:8px 12px;background:#252526;border-top:1px solid var(--border)}
 #inputText{flex:1;font-family:Consolas,'Courier New',monospace}
 label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;white-space:nowrap}
@@ -260,6 +271,7 @@ label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;wh
     <button id="connectBtn" class="primary">&#9654; Start</button>
     <button id="clearBtn">Clear</button>
     <label><input type="checkbox" id="autoscroll" checked> Autoscroll</label>
+    <label><input type="checkbox" id="localEcho" checked> Local echo</label>
     <span class="status disconnected" id="statusBadge">Disconnected</span>
   </div>
   <div id="output"></div>
@@ -283,6 +295,7 @@ const refreshBtn   = document.getElementById('refreshBtn');
 const connectBtn   = document.getElementById('connectBtn');
 const clearBtn     = document.getElementById('clearBtn');
 const autoscroll   = document.getElementById('autoscroll');
+const localEcho    = document.getElementById('localEcho');
 const statusBadge  = document.getElementById('statusBadge');
 const output       = document.getElementById('output');
 const inputText    = document.getElementById('inputText');
@@ -309,6 +322,16 @@ function appendOutput(text) {
     if (autoscroll.checked || atBottom) output.scrollTop = output.scrollHeight;
 }
 
+function appendEcho(text) {
+    const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 10;
+    const span = document.createElement('span');
+    span.className = 'echo';
+    span.textContent = text;
+    output.appendChild(span);
+    output.appendChild(document.createTextNode('\\n'));
+    if (autoscroll.checked || atBottom) output.scrollTop = output.scrollHeight;
+}
+
 refreshBtn.addEventListener('click', () => vscode.postMessage({ command: 'refreshPorts' }));
 
 connectBtn.addEventListener('click', () => {
@@ -330,6 +353,7 @@ function send() {
     const text = inputText.value;
     if (!connected || text === '') return;
     vscode.postMessage({ command: 'send', text, lineEnding: lineEnding.value });
+    if (localEcho.checked) appendEcho('> ' + text);
     inputText.value = '';
 }
 sendBtn.addEventListener('click', send);
