@@ -102,6 +102,22 @@ if ($machine -notlike "*$INSTALL_DIR*") {
     Write-Skip "Already in PATH"
 }
 
+# Make picpio/node available in already-open shells (e.g. an existing VS Code
+# window) too, since registry PATH changes only apply to brand-new processes.
+$profileDir = Split-Path $PROFILE -Parent
+New-Item -ItemType Directory -Force $profileDir | Out-Null
+$pathFix = @"
+foreach (`$dir in '$INSTALL_DIR', 'C:\Program Files\nodejs') {
+    if ((`$env:Path -split ';') -notcontains `$dir) {
+        `$env:Path += ";`$dir"
+    }
+}
+"@
+if ((-not (Test-Path $PROFILE)) -or -not (Select-String -Path $PROFILE -Pattern ([regex]::Escape($INSTALL_DIR)) -Quiet)) {
+    Add-Content -Path $PROFILE -Value $pathFix
+    Write-Info "PowerShell profile updated -- new terminals will see picpio/node immediately"
+}
+
 # STEP 5 - VS Code extension
 Write-Step 5 "VS Code extension"
 $_gc = Get-Command code -ErrorAction SilentlyContinue
