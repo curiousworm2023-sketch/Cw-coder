@@ -26,17 +26,17 @@ if (Test-Path "C:\Program Files\Microchip\xc8") {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\xc8" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: XC8 $ver -- skipping"
 } else {
-    Write-Info "Downloading XC8 compiler (~150 MB)..."
+    Write-Info "Downloading XC8 compiler (~107 MB)..."
     $xc8Installer = "$env:TEMP\xc8-installer.exe"
     try {
         Invoke-WebRequest $XC8_URL -OutFile $xc8Installer -UseBasicParsing
-        Write-Info "Running XC8 installer (accept the free license)..."
-        Start-Process $xc8Installer -Wait
+        Write-Info "Installing XC8 silently (accepts free license; one UAC prompt may appear)..."
+        Start-Process $xc8Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
         Remove-Item $xc8Installer -Force -ErrorAction SilentlyContinue
         if (Test-Path "C:\Program Files\Microchip\xc8") {
             Write-Info "XC8 installed."
         } else {
-            Write-Warn "XC8 may have been cancelled. Get it at: https://www.microchip.com/xc8"
+            Write-Warn "XC8 install did not complete. Get it at: https://www.microchip.com/xc8"
         }
     } catch {
         Write-Warn "Download failed. Install manually: https://www.microchip.com/xc8"
@@ -49,18 +49,21 @@ if (Test-Path "C:\Program Files\Microchip\MPLABX") {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\MPLABX" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: MPLAB X $ver -- skipping"
 } else {
-    Write-Host ""
-    Write-Host "  *** MPLAB X IPE required (one-time manual install) ***" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  Microchip requires a browser download for MPLAB X." -ForegroundColor White
-    Write-Host "  1. Open: https://www.microchip.com/mplabx" -ForegroundColor Cyan
-    Write-Host "  2. Click 'Download' for Windows" -ForegroundColor White
-    Write-Host "  3. Install it (select 'IPE' component is enough)" -ForegroundColor White
-    Write-Host "  4. Re-run this installer after MPLAB X is installed" -ForegroundColor White
-    Write-Host ""
-    # Open the download page automatically
-    try { Start-Process "https://www.microchip.com/mplabx" } catch {}
-    Read-Host "  Press Enter to continue with the rest of the install, or Ctrl+C to exit"
+    Write-Info "Downloading MPLAB X installer (~640 MB, this may take a while)..."
+    $mplabxInstaller = "$env:TEMP\mplabx-installer.exe"
+    try {
+        Invoke-WebRequest $MPLABX_URL -OutFile $mplabxInstaller -UseBasicParsing
+        Write-Info "Installing MPLAB X silently (one UAC prompt may appear)..."
+        Start-Process $mplabxInstaller -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
+        Remove-Item $mplabxInstaller -Force -ErrorAction SilentlyContinue
+        if (Test-Path "C:\Program Files\Microchip\MPLABX") {
+            Write-Info "MPLAB X installed."
+        } else {
+            Write-Warn "MPLAB X install did not complete. Get it at: https://www.microchip.com/mplabx"
+        }
+    } catch {
+        Write-Warn "Download failed. Install manually: https://www.microchip.com/mplabx"
+    }
 }
 
 # STEP 3 - PICPIO tool
