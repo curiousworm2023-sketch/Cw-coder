@@ -72,7 +72,8 @@ function showSpinner(title: string): void {
     _spinner.webview.html = `<!DOCTYPE html><html><body>
 <style>
   body { display:flex; flex-direction:column; align-items:center; justify-content:center;
-         height:100vh; margin:0; font-family:var(--vscode-font-family); color:#F27F0C; }
+         height:100vh; margin:0; font-family:var(--vscode-font-family);
+         background:var(--vscode-editor-background); color:var(--vscode-editor-foreground); }
   .spinner { width:60px; height:60px; border:6px solid rgba(242,127,12,0.25);
              border-top-color:#F27F0C; border-radius:50%; animation:spin 1s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
