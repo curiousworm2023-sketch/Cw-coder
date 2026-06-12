@@ -29,35 +29,21 @@ const PIN_MACROS: Record<string, number> = {
     LED_BUILTIN: 13,
 };
 
-// Native port-pin names (e.g. "RB0") -- arduino_compat's Arduino.h also
-// defines these as aliases for D8/A0/etc., so a sketch that writes
-// "pinMode(RB0, ...)" or "#define MODE_PIN0 RB0" refers to a pin already in
-// the simulator's own RAx/RBx/RCx label format.
-function isNativeLabel(t: string): boolean {
-    const m = t.match(/^R([ABC])(\d)$/);
-    if (!m) return false;
-    const n = parseInt(m[2], 10);
-    return m[1] === 'C' ? n <= 7 : n <= 5;
-}
-
 export function detectComponents(src: string): DetectResult {
     // Strip comments so they can't confuse the regexes below.
     const s = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-    // Resolve #define NAME <value> so custom pin aliases (e.g.
-    // "#define LED_PIN 5" or "#define MODE_PIN0 RB0") work too.
-    const defines: Record<string, string> = {};
-    for (const m of s.matchAll(/^[ \t]*#define\s+(\w+)\s+(\S+)\s*$/gm)) {
-        defines[m[1]] = m[2];
+    // Resolve #define NAME <int> so custom pin aliases (e.g. "#define LED_PIN 5") work too.
+    const defines: Record<string, number> = {};
+    for (const m of s.matchAll(/^[ \t]*#define\s+(\w+)\s+(\d+)\s*$/gm)) {
+        defines[m[1]] = parseInt(m[2], 10);
     }
 
-    const resolvePin = (token: string, depth = 0): string | null => {
-        if (depth > 8) return null;
+    const resolvePin = (token: string): string | null => {
         const t = token.trim();
         if (/^\d+$/.test(t))      return pinLabel(parseInt(t, 10));
-        if (isNativeLabel(t))     return t;
         if (t in PIN_MACROS)      return pinLabel(PIN_MACROS[t]);
-        if (t in defines)         return resolvePin(defines[t], depth + 1);
+        if (t in defines)         return pinLabel(defines[t]);
         return null;
     };
 
@@ -98,13 +84,6 @@ export function detectComponents(src: string): DetectResult {
     // Display libraries — wired to the fixed I2C pins (RA4=SDA, RA5=SCL) or
     // the fixed hardware-SPI pins (RB3=MOSI/SDA, RB5=SCK).
     const has = (needle: string): boolean => s.includes(needle);
-
-    // Any Wire (I2C master) usage, e.g. an I2C sensor driver, claims the
-    // fixed I2C pins even without a recognized display library.
-    if (/\bWire\.(begin|beginTransmission|requestFrom)\s*\(/.test(s)) {
-        pinModes['RA4'] = 'I2C';
-        pinModes['RA5'] = 'I2C';
-    }
 
     if (has('SPI.h') && /Adafruit_(ST7735|ST7789|ILI9341)/.test(s)) {
         let cs = 'RB2', dc = 'RB1', rst = 'RB0'; // default to D10/D9/D8

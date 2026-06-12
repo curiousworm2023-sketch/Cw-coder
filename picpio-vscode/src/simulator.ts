@@ -27,27 +27,6 @@ function stopWorker(): void {
     }
 }
 
-// pinMode()/digitalRead()/etc. calls -- and the #defines that name their pin
-// arguments -- are often split across the project's other source/header
-// files (e.g. a peripheral driver's .c + its .h), not just main.cpp. Gather
-// those files' text too so detectComponents() can see the whole picture.
-const SOURCE_EXTS = new Set(['.c', '.cpp', '.h', '.hpp', '.ino']);
-
-function gatherProjectSources(root: string, srcDir: string, mainPath: string): string {
-    let combined = '';
-    for (const dir of [path.join(root, srcDir), path.join(root, 'include')]) {
-        let entries: string[];
-        try { entries = fs.readdirSync(dir); } catch { continue; }
-        for (const name of entries) {
-            const full = path.join(dir, name);
-            if (full === mainPath) continue;
-            if (!SOURCE_EXTS.has(path.extname(name).toLowerCase())) continue;
-            try { combined += '\n' + fs.readFileSync(full, 'utf8'); } catch { /* ignore */ }
-        }
-    }
-    return combined;
-}
-
 export function runSimulation(context: vscode.ExtensionContext): void {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!root) {
@@ -96,8 +75,7 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         const { code, warnings } = transpileSketch(src);
         for (const w of warnings) panel.post({ t: 'error', phase: 'transpile', message: w });
 
-        const extraSrc = gatherProjectSources(root, srcDir, mainPath);
-        const { parts, pinModes } = detectComponents(src + '\n' + extraSrc);
+        const { parts, pinModes } = detectComponents(src);
         panel.autoCircuit(parts, pinModes);
         panel.setStatus('running');
 
