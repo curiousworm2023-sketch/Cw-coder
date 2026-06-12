@@ -1,5 +1,5 @@
 // Best-effort transpiler: converts a common subset of Arduino-flavoured C/C++
-// (as used in PICPIO's arduino_compat sketches) into plain JavaScript that can
+// (as used in PICPIO's picpio_compat sketches) into plain JavaScript that can
 // run inside a Node vm sandbox for live simulation.
 //
 // It does NOT attempt to be a full C parser. It handles the patterns that

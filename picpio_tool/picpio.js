@@ -390,9 +390,9 @@ function collectSources(cfg) {
     const srcDir    = path.join(root, cfg.src_dir || 'src');
     const libDir    = path.join(root, 'lib');
     const scriptDir = path.dirname(process.argv[1]);
-    // arduino_compat: look next to picpio.js (tool-level), never required in project.
+    // picpio_compat: look next to picpio.js (tool-level), never required in project.
     // Classic PIC16F8xx parts (no LATx/ANSELx/PPS) use a separate HAL variant.
-    const acName = dfpFamilyFor(cfg.mcu) === 'PIC16Fxxx_DFP' ? 'arduino_compat_pic16' : 'arduino_compat';
+    const acName = dfpFamilyFor(cfg.mcu) === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
     const acDir = [
         path.join(scriptDir, acName),
         path.join(scriptDir, '..', acName),
@@ -408,7 +408,7 @@ function collectSources(cfg) {
     const incDir = path.join(root, 'include');
     if (fs.existsSync(incDir)) includes.push(incDir);
 
-    // arduino_compat/ (tool-level, if framework = arduino)
+    // picpio_compat/ (tool-level, if framework = arduino)
     if ((cfg.framework || '').toLowerCase() === 'arduino' && fs.existsSync(acDir)) {
         scanDir(acDir, sources, tempFiles);
         includes.push(acDir);
@@ -858,16 +858,16 @@ function libAdd(name) {
         return;
     }
 
-    // Bundled library — copy from arduino_compat/
+    // Bundled library — copy from picpio_compat/
     const lname    = name.toLowerCase();
-    const acDir    = path.join(process.cwd(), 'arduino_compat');
+    const acDir    = path.join(process.cwd(), 'picpio_compat');
     const scriptDir = path.dirname(process.argv[1]);
 
-    // Try arduino_compat in project, then next to picpio.js
+    // Try picpio_compat in project, then next to picpio.js
     const searchPaths = [
         acDir,
-        path.join(scriptDir, 'arduino_compat'),
-        path.join(scriptDir, '..', 'arduino_compat'),
+        path.join(scriptDir, 'picpio_compat'),
+        path.join(scriptDir, '..', 'picpio_compat'),
     ];
 
     let found = false;
@@ -986,7 +986,7 @@ function cmdInit(args) {
         : path.join(outDir, 'src', 'main.c');
 
     const mainContent = fw === 'arduino' ? [
-        '#include <Arduino.h>',
+        '#include <Picpio.h>',
         '',
         'void setup() {',
         '    Serial.begin(115200);',
@@ -1073,7 +1073,7 @@ function cmdVscode() {
                 xc8Inc.replace('/include', '/include/proc'),
                 'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
                 'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-                'C:/picpio/arduino_compat',
+                'C:/picpio/picpio_compat',
                 ...extraInclude
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${cfg.clock_hz || '64000000'}`],

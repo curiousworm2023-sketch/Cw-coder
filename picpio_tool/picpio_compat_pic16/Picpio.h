@@ -1,5 +1,5 @@
-#ifndef ARDUINO_H
-#define ARDUINO_H
+#ifndef PICPIO_H
+#define PICPIO_H
 
 #include <xc.h>
 #include <stdint.h>
@@ -175,6 +175,17 @@ typedef struct {
 
 extern SPIClass_t SPI;
 
+// ── Second-instance protocols (software/bit-banged) ──────────────────────────
+// The PIC16F877A has only ONE hardware USART and ONE MSSP module, so these
+// "doubled" protocols are implemented by bit-banging free GPIO pins:
+//   Serial2 : software UART — TX2=RC0 (D0), RX2=RC1 (D1)
+//   Wire2   : software I2C  — SCL2=RB0 (D8), SDA2=RB1 (D9) (needs external pull-ups)
+//   SPI2    : software SPI  — SCK2=RB2 (D10), MOSI2=RB3 (D11), MISO2=RB4 (D12)
+//             (no fixed CS — drive any free pin manually with digitalWrite)
+extern HardwareSerial_t Serial2;
+extern TwoWire_t Wire2;
+extern SPIClass_t SPI2;
+
 #define MSBFIRST 1
 #define LSBFIRST 0
 #define SPI_MODE0 0
@@ -200,4 +211,4 @@ void arduino_init(void);
 void setup(void);
 void loop(void);
 
-#endif // ARDUINO_H
+#endif // PICPIO_H

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-// Native port-pin names defined by arduino_compat's Arduino.h
+// Native port-pin names defined by picpio_compat's Picpio.h
 // (same mapping for both PIC18F27K40 and PIC16F877A HALs).
 const PIN_NAMES: { name: string; detail: string }[] = [
     ...Array.from({ length: 8 }, (_, i) => ({ name: `RC${i}`, detail: `PORTC bit ${i}` })),

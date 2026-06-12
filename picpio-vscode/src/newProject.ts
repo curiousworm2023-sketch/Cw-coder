@@ -105,7 +105,7 @@ function scaffoldProject(opts: {
     // Starter main file
     if (framework === 'arduino') {
         fs.writeFileSync(path.join(projectDir, 'src', 'main.cpp'), [
-            '#include <Arduino.h>',
+            '#include <Picpio.h>',
             '',
             'void setup() {',
             '    Serial.begin(115200);',
@@ -176,7 +176,7 @@ function scaffoldProject(opts: {
                 'C:/Program Files/Microchip/xc8/v3.10/pic/include/proc',
                 'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
                 'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-                'C:/picpio/arduino_compat'
+                'C:/picpio/picpio_compat'
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${clock}`],
             cStandard:   'c99',

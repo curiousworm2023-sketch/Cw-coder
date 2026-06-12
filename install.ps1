@@ -143,11 +143,11 @@ Unblock-File "$INSTALL_DIR\picpio.js"  -ErrorAction SilentlyContinue
 Unblock-File "$INSTALL_DIR\picpio.cmd" -ErrorAction SilentlyContinue
 Write-Info "picpio.js -> $INSTALL_DIR"
 
-$acDir = "$INSTALL_DIR\arduino_compat"
+$acDir = "$INSTALL_DIR\picpio_compat"
 New-Item -ItemType Directory -Force $acDir | Out-Null
-foreach ($f in @('Arduino.h','wiring.c','main_entry.c')) {
+foreach ($f in @('Picpio.h','wiring.c','main_entry.c')) {
     try {
-        Invoke-WebRequest "$REPO_RAW/picpio-vscode/arduino_compat/$f" -OutFile "$acDir\$f" -UseBasicParsing
+        Invoke-WebRequest "$REPO_RAW/picpio-vscode/picpio_compat/$f" -OutFile "$acDir\$f" -UseBasicParsing
         Write-Info "  downloaded: $f"
     } catch {
         Write-Skip "  skipped: $f"

@@ -11,7 +11,7 @@
 #pragma config WDTCWS  = WDTCWS_7
 #pragma config LVP     = ON
 
-#include "Arduino.h"
+#include "Picpio.h"
 
 void main(void) {
     arduino_init();

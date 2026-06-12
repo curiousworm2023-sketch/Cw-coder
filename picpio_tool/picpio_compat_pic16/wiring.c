@@ -1,4 +1,4 @@
-#include "Arduino.h"
+#include "Picpio.h"
 
 // ── Pin map ───────────────────────────────────────────────────────────────────
 // Classic PIC16F8xx (e.g. PIC16F877A) has no LATx (latch) registers — writes
@@ -317,4 +317,238 @@ SPIClass_t SPI = {
     .setBitOrder    = _spi_setBitOrder,
     .setDataMode    = _spi_setDataMode,
     .setClockDivider= _spi_setClkDiv,
+};
+
+// ── Serial2 (software UART bit-bang, TX2=RC0, RX2=RC1) ───────────────────────
+// Blocking TX/RX — no ISR/ring buffer, so loop() must call Serial2.read()
+// promptly after available() to avoid missing the start bit.
+#define SERIAL2_TX RC0
+#define SERIAL2_RX RC1
+
+static uint32_t _ser2_bit_us;
+
+static void _serial2_begin(uint32_t baud) {
+    _ser2_bit_us = 1000000UL / baud;
+    pinMode(SERIAL2_TX, OUTPUT);
+    digitalWrite(SERIAL2_TX, HIGH); // idle high
+    pinMode(SERIAL2_RX, INPUT);
+}
+
+static void _serial2_write(uint8_t b) {
+    noInterrupts();
+    digitalWrite(SERIAL2_TX, LOW);              // start bit
+    delayMicroseconds(_ser2_bit_us);
+    for (uint8_t i = 0; i < 8; i++) {
+        digitalWrite(SERIAL2_TX, (b >> i) & 1); // LSB first
+        delayMicroseconds(_ser2_bit_us);
+    }
+    digitalWrite(SERIAL2_TX, HIGH);             // stop bit
+    delayMicroseconds(_ser2_bit_us);
+    interrupts();
+}
+
+static void _serial2_print_s(const char *s) { while (*s) _serial2_write((uint8_t)*s++); }
+
+static void _serial2_print_i(int32_t n) {
+    char buf[12];
+    sprintf(buf, "%ld", (long)n);
+    _serial2_print_s(buf);
+}
+
+static void _serial2_print_f(float f, uint8_t dec) {
+    char buf[20];
+    if      (dec == 0) sprintf(buf, "%ld",  (long)f);
+    else if (dec == 1) sprintf(buf, "%.1f", (double)f);
+    else if (dec == 2) sprintf(buf, "%.2f", (double)f);
+    else               sprintf(buf, "%.3f", (double)f);
+    _serial2_print_s(buf);
+}
+
+static void _serial2_println_s(const char *s) { _serial2_print_s(s); _serial2_write('\r'); _serial2_write('\n'); }
+static void _serial2_println_i(int32_t n)     { _serial2_print_i(n); _serial2_write('\r'); _serial2_write('\n'); }
+static void _serial2_println_f(float f, uint8_t dec) { _serial2_print_f(f, dec); _serial2_write('\r'); _serial2_write('\n'); }
+
+static int _serial2_available(void) { return digitalRead(SERIAL2_RX) == LOW ? 1 : 0; }
+
+static int _serial2_read(void) {
+    if (digitalRead(SERIAL2_RX) != LOW) return -1; // idle high = no start bit
+    noInterrupts();
+    delayMicroseconds(_ser2_bit_us + _ser2_bit_us / 2); // skip start bit, center on bit 0
+    uint8_t b = 0;
+    for (uint8_t i = 0; i < 8; i++) {
+        b |= (uint8_t)(digitalRead(SERIAL2_RX) << i); // LSB first
+        delayMicroseconds(_ser2_bit_us);
+    }
+    interrupts();
+    return b;
+}
+
+static void _serial2_flush(void) { /* writes are blocking — nothing buffered */ }
+static void _serial2_end(void) {
+    pinMode(SERIAL2_TX, INPUT);
+    pinMode(SERIAL2_RX, INPUT);
+}
+
+HardwareSerial_t Serial2 = {
+    .begin     = _serial2_begin,
+    .end       = _serial2_end,
+    .print     = _serial2_print_s,
+    .println   = _serial2_println_s,
+    .print_s   = _serial2_print_s,
+    .print_i   = _serial2_print_i,
+    .print_f   = _serial2_print_f,
+    .println_s = _serial2_println_s,
+    .println_i = _serial2_println_i,
+    .println_f = _serial2_println_f,
+    .write     = _serial2_write,
+    .available = _serial2_available,
+    .read      = _serial2_read,
+    .flush     = _serial2_flush,
+};
+
+// ── Wire2 (software I2C bit-bang, SCL2=RB0, SDA2=RB1) ────────────────────────
+// Requires external pull-up resistors (~4.7k) to VCC on both lines.
+#define WIRE2_SCL RB0
+#define WIRE2_SDA RB1
+#define I2C2_DELAY() delayMicroseconds(5) // ~100kHz
+
+static uint8_t _i2c2_rxbuf[32];
+static uint8_t _i2c2_rxlen = 0, _i2c2_rxpos = 0;
+
+static void _i2c2_sda_release(void) { pinMode(WIRE2_SDA, INPUT); }
+static void _i2c2_sda_low(void)     { pinMode(WIRE2_SDA, OUTPUT); digitalWrite(WIRE2_SDA, LOW); }
+static void _i2c2_scl_release(void) { pinMode(WIRE2_SCL, INPUT); while (!digitalRead(WIRE2_SCL)); } // clock stretch
+static void _i2c2_scl_low(void)     { pinMode(WIRE2_SCL, OUTPUT); digitalWrite(WIRE2_SCL, LOW); }
+
+static void _i2c2_start(void) {
+    _i2c2_sda_release(); _i2c2_scl_release(); I2C2_DELAY();
+    _i2c2_sda_low();      I2C2_DELAY();
+    _i2c2_scl_low();      I2C2_DELAY();
+}
+
+static void _i2c2_stop(void) {
+    _i2c2_sda_low();     I2C2_DELAY();
+    _i2c2_scl_release(); I2C2_DELAY();
+    _i2c2_sda_release(); I2C2_DELAY();
+}
+
+static uint8_t _i2c2_write_byte(uint8_t b) {
+    for (int8_t i = 7; i >= 0; i--) {
+        if ((b >> i) & 1) _i2c2_sda_release(); else _i2c2_sda_low();
+        I2C2_DELAY();
+        _i2c2_scl_release(); I2C2_DELAY();
+        _i2c2_scl_low();
+    }
+    _i2c2_sda_release(); I2C2_DELAY();
+    _i2c2_scl_release(); I2C2_DELAY();
+    uint8_t ack = !digitalRead(WIRE2_SDA); // ACK = SDA held low by slave
+    _i2c2_scl_low();
+    return ack;
+}
+
+static uint8_t _i2c2_read_byte(uint8_t ack) {
+    uint8_t b = 0;
+    _i2c2_sda_release();
+    for (uint8_t i = 0; i < 8; i++) {
+        _i2c2_scl_release(); I2C2_DELAY();
+        b = (uint8_t)((b << 1) | digitalRead(WIRE2_SDA));
+        _i2c2_scl_low(); I2C2_DELAY();
+    }
+    if (ack) _i2c2_sda_low(); else _i2c2_sda_release();
+    I2C2_DELAY();
+    _i2c2_scl_release(); I2C2_DELAY();
+    _i2c2_scl_low();
+    _i2c2_sda_release();
+    return b;
+}
+
+static void _wire2_begin(void) {
+    _i2c2_sda_release();
+    _i2c2_scl_release();
+}
+
+static void _wire2_beginTx(uint8_t addr) {
+    _i2c2_start();
+    _i2c2_write_byte((uint8_t)(addr << 1));
+}
+
+static void _wire2_write(uint8_t b) { _i2c2_write_byte(b); }
+
+static uint8_t _wire2_endTx(void) { _i2c2_stop(); return 0; }
+
+static uint8_t _wire2_requestFrom(uint8_t addr, uint8_t len) {
+    _i2c2_rxlen = 0; _i2c2_rxpos = 0;
+    _i2c2_start();
+    _i2c2_write_byte((uint8_t)((addr << 1) | 1));
+    for (uint8_t i = 0; i < len; i++) {
+        _i2c2_rxbuf[i] = _i2c2_read_byte(i < (uint8_t)(len - 1));
+        _i2c2_rxlen++;
+    }
+    _i2c2_stop();
+    return _i2c2_rxlen;
+}
+
+static int _wire2_available(void) { return _i2c2_rxpos < _i2c2_rxlen; }
+static int _wire2_read(void)      { return _wire2_available() ? _i2c2_rxbuf[_i2c2_rxpos++] : -1; }
+
+TwoWire_t Wire2 = {
+    .begin             = _wire2_begin,
+    .beginTransmission = _wire2_beginTx,
+    .endTransmission   = _wire2_endTx,
+    .requestFrom       = _wire2_requestFrom,
+    .write             = _wire2_write,
+    .available         = _wire2_available,
+    .read              = _wire2_read,
+};
+
+// ── SPI2 (software SPI bit-bang, SCK2=RB2, MOSI2=RB3, MISO2=RB4) ─────────────
+// No fixed CS pin — drive any free GPIO manually with digitalWrite() around transfer().
+#define SPI2_SCK  RB2
+#define SPI2_MOSI RB3
+#define SPI2_MISO RB4
+
+static uint8_t _spi2_mode = SPI_MODE0;
+
+static void _spi2_begin(void) {
+    pinMode(SPI2_SCK,  OUTPUT);
+    pinMode(SPI2_MOSI, OUTPUT);
+    pinMode(SPI2_MISO, INPUT);
+    digitalWrite(SPI2_SCK, (_spi2_mode >> 1) & 1); // idle level = CPOL
+}
+
+static uint8_t _spi2_transfer(uint8_t b) {
+    uint8_t cpol = (_spi2_mode >> 1) & 1;
+    uint8_t cpha = _spi2_mode & 1;
+    for (int8_t i = 7; i >= 0; i--) {
+        uint8_t outbit = (b >> i) & 1;
+        if (cpha == 0) {
+            digitalWrite(SPI2_MOSI, outbit);
+            digitalWrite(SPI2_SCK, !cpol);
+            b = (uint8_t)((b & ~(1u << i)) | (digitalRead(SPI2_MISO) << i));
+            digitalWrite(SPI2_SCK, cpol);
+        } else {
+            digitalWrite(SPI2_SCK, !cpol);
+            digitalWrite(SPI2_MOSI, outbit);
+            digitalWrite(SPI2_SCK, cpol);
+            b = (uint8_t)((b & ~(1u << i)) | (digitalRead(SPI2_MISO) << i));
+        }
+    }
+    return b;
+}
+
+static void _spi2_setBitOrder(uint8_t o)  { (void)o; /* MSB-first only */ }
+static void _spi2_setDataMode(uint8_t m)  { _spi2_mode = m; digitalWrite(SPI2_SCK, (m >> 1) & 1); }
+static void _spi2_setClkDiv(uint8_t d)    { (void)d; /* speed is bit-bang loop overhead */ }
+static void _spi2_end(void) {
+    pinMode(SPI2_SCK,  INPUT);
+    pinMode(SPI2_MOSI, INPUT);
+}
+
+SPIClass_t SPI2 = {
+    .begin          = _spi2_begin,
+    .end            = _spi2_end,
+    .transfer       = _spi2_transfer,
+    .setBitOrder    = _spi2_setBitOrder,
+    .setDataMode    = _spi2_setDataMode,
+    .setClockDivider= _spi2_setClkDiv,
 };

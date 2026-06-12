@@ -15,7 +15,7 @@ function pinLabel(n: number): string | null {
     return null;
 }
 
-// Arduino.h pin-name macros (see arduino_compat).
+// Picpio.h pin-name macros (see picpio_compat).
 const PIN_MACROS: Record<string, number> = {
     D0: 0, D1: 1, D2: 2, D3: 3, D4: 4, D5: 5, D6: 6, D7: 7,
     D8: 8, D9: 9, D10: 10, D11: 11, D12: 12, D13: 13,
@@ -104,8 +104,8 @@ export function detectComponents(src: string): AutoPart[] {
     return parts;
 }
 
-// Fixed hardware pin assignments for arduino_compat's communication
-// peripherals (see arduino_compat_pic16/wiring.c). These objects' begin()
+// Fixed hardware pin assignments for picpio_compat's communication
+// peripherals (see picpio_compat_pic16/wiring.c). These objects' begin()
 // etc. run inside the (un-simulated) library, so the simulator never sees
 // their pinMode() calls — label the pins statically instead whenever the
 // sketch references the corresponding object.

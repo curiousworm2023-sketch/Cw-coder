@@ -30,7 +30,7 @@ function emit(ev: Record<string, unknown>): void {
 }
 
 // Native port-pin names — must match the RAx/RBx/RCx aliases defined in
-// arduino_compat's Arduino.h (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
+// picpio_compat's Picpio.h (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
 function pinLabel(pin: number): string {
     const i = Math.trunc(Number(pin));
     if (i >= 0 && i <= 7)  return 'RC' + i;
@@ -112,7 +112,7 @@ const Serial = {
     end() { /* no-op */ },
     print(x: unknown) { emit({ t: 'serial', dir: 'tx', data: String(x) }); },
     println(x?: unknown) { emit({ t: 'serial', dir: 'tx', data: (x === undefined ? '' : String(x)) + '\n' }); },
-    // arduino_compat's typed Serial.print_*/println_* members (used directly,
+    // picpio_compat's typed Serial.print_*/println_* members (used directly,
     // or via the Serial_print()/Serial_println() _Generic macros)
     print_s(x: unknown) { this.print(x); },
     print_i(x: unknown) { this.print(x); },
@@ -170,7 +170,7 @@ const SPI = {
 };
 
 // SSD1306-style OLED emulation: a 21-col x 8-row character grid, mirroring
-// the common arduino_compat ssd1306_* helper API. Each call re-emits the
+// the common picpio_compat ssd1306_* helper API. Each call re-emits the
 // full grid as `{t:'oled', lines: string[]}` so the panel can redraw it.
 const OLED_COLS = 21;
 const OLED_ROWS = 8;
@@ -273,7 +273,7 @@ const baseGlobals: Record<string, unknown> = {
 };
 for (let i = 0; i <= 13; i++) baseGlobals['D' + i] = i;
 for (let i = 0; i <= 5; i++) baseGlobals['A' + i] = 14 + i;
-// Native port-pin aliases (same indices as D0-D13/A0-A5 — see Arduino.h)
+// Native port-pin aliases (same indices as D0-D13/A0-A5 — see Picpio.h)
 for (let i = 0; i <= 7; i++) baseGlobals['RC' + i] = i;
 for (let i = 0; i <= 5; i++) baseGlobals['RB' + i] = 8 + i;
 for (let i = 0; i <= 5; i++) baseGlobals['RA' + i] = 14 + i;

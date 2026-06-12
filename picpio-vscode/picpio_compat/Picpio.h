@@ -1,5 +1,5 @@
-#ifndef ARDUINO_H
-#define ARDUINO_H
+#ifndef PICPIO_H
+#define PICPIO_H
 
 #include <xc.h>
 #include <stdint.h>
@@ -200,4 +200,4 @@ void arduino_init(void);
 void setup(void);
 void loop(void);
 
-#endif // ARDUINO_H
+#endif // PICPIO_H

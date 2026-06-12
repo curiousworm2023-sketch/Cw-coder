@@ -63,7 +63,7 @@ function ensureCppProperties(projectDir: string): void {
         `${xc8base}/pic/include/proc`,
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-        'C:/picpio/arduino_compat',
+        'C:/picpio/picpio_compat',
         ...extras,
     ];
 

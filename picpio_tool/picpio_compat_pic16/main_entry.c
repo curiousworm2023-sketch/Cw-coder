@@ -9,7 +9,7 @@
 #pragma config WRT   = OFF
 #pragma config CP    = OFF
 
-#include "Arduino.h"
+#include "Picpio.h"
 
 void main(void) {
     arduino_init();
