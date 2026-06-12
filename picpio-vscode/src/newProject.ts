@@ -12,7 +12,13 @@ export interface McuChoice {
 }
 
 export const MCU_LIST: McuChoice[] = [
-    { label:'PIC18F27K40',      description:'128KB / 64MHz / 3.7KB SRAM — recommended', family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F27K40',      description:'128KB / 64MHz / 28-pin — recommended',     family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F24K40',      description:'16KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F25K40',      description:'32KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F26K40',      description:'64KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F45K40',      description:'32KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F46K40',      description:'64KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F47K40',      description:'128KB / 64MHz / 40-pin, +PORTD/E',         family:'PIC18', clock:'64000000'  },
     { label:'PIC18F4550',       description:'32KB / 48MHz / USB 2.0',                   family:'PIC18', clock:'48000000'  },
     { label:'PIC18F452',        description:'32KB / 40MHz / SPI + I2C',                 family:'PIC18', clock:'40000000'  },
     { label:'PIC18F2550',       description:'32KB / 48MHz / USB + ADC',                 family:'PIC18', clock:'48000000'  },

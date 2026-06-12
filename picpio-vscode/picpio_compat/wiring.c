@@ -34,8 +34,25 @@ static const PinInfo _pins[] = {
     { &TRISA, &LATA, &PORTA, &ANSELA, NULL, 3, 0x03   }, // A3  RA3
     { &TRISA, &LATA, &PORTA, NULL,    NULL, 4, NO_ADC }, // A4  RA4 (no ADC)
     { &TRISA, &LATA, &PORTA, &ANSELA, NULL, 5, 0x04   }, // A5  RA5
+#ifdef PICPIO_HAS_PORTDE
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 0, NO_ADC }, // D14 RD0
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 1, NO_ADC }, // D15 RD1
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 2, NO_ADC }, // D16 RD2
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 3, NO_ADC }, // D17 RD3
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 4, NO_ADC }, // D18 RD4
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 5, NO_ADC }, // D19 RD5
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 6, NO_ADC }, // D20 RD6
+    { &TRISD, &LATD, &PORTD, &ANSELD, &WPUD, 7, NO_ADC }, // D21 RD7
+    { &TRISE, &LATE, &PORTE, &ANSELE, &WPUE, 0, NO_ADC }, // D22 RE0
+    { &TRISE, &LATE, &PORTE, &ANSELE, &WPUE, 1, NO_ADC }, // D23 RE1
+    { &TRISE, &LATE, &PORTE, &ANSELE, &WPUE, 2, NO_ADC }, // D24 RE2
+#endif
 };
+#ifdef PICPIO_HAS_PORTDE
+#define PIN_COUNT 31
+#else
 #define PIN_COUNT 20
+#endif
 
 // ── millis counter ────────────────────────────────────────────────────────────
 static volatile uint32_t _ms = 0;
@@ -64,6 +81,10 @@ void __interrupt(high_priority) ISR_High(void) {
 void arduino_init(void) {
     ANSELA = 0x00; ANSELB = 0x00; ANSELC = 0x00;
     WPUB   = 0x00;
+#ifdef PICPIO_HAS_PORTDE
+    ANSELD = 0x00; ANSELE = 0x00;
+    WPUD   = 0x00; WPUE   = 0x00;
+#endif
 
     // Timer0: Fosc/4, 1:16 prescaler → 1MHz timer → reload 0xFC18 for 1ms
     T0CON1 = 0b01000100;
