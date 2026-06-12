@@ -23,8 +23,9 @@
 
 // ── Low-RAM classic PIC16F8xxA detection ──────────────────────────────────────
 // PIC16F873A/874A have only 192 bytes of RAM (vs 368 on PIC16F876A/877A).
-// Shrink the serial/I2C ring buffers below so the HAL fits.
-#if defined(_16F873A) || defined(_16F874A)
+// PIC16F628A has 224 bytes. Shrink the serial/I2C ring buffers below so the
+// HAL fits.
+#if defined(_16F873A) || defined(_16F874A) || defined(_16F628A)
 #define PICPIO_SMALL_RAM 1
 #endif
 
@@ -41,6 +42,44 @@ typedef bool     boolean;
 #define LOW            0
 
 // ── Arduino pin numbers → classic PIC16F8xxA family ──────────────────────────
+#if defined(_16F628A)
+// PIC16F628A is an 18-pin chip with only PORTA and PORTB (no PORTC/D/E).
+// With FOSC=HS @ 20MHz, RA6/RA7 are OSC2/OSC1 and RA5 is MCLR (input-only),
+// leaving 13 usable GPIO: RA0-RA4 and RB0-RB7.
+// D0–D7 = RB0–RB7   (D5 = RB5, the "LED" pin)
+// A0–A4 = RA0–RA4   (no ADC hardware — these are plain digital pins)
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define A0   8
+#define A1   9
+#define A2   10
+#define A3   11
+#define A4   12
+#define LED_BUILTIN  D5
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RA0  A0
+#define RA1  A1
+#define RA2  A2
+#define RA3  A3
+#define RA4  A4
+
+#else // classic 28/40-pin PIC16F8xxA (873A/874A/876A/877A)
+
 // D0–D7  = RC0–RC7   (D0=RC0 … D7=RC7)
 // D8–D13 = RB0–RB5   (D13 = RB5, the "LED" pin)
 // A0–A5  = RA0–RA5
@@ -92,6 +131,8 @@ typedef bool     boolean;
 #define RA4  A4
 #define RA5  A5
 
+#endif // _16F628A
+
 #ifdef PICPIO_HAS_PORTDE
 #define D14  20
 #define D15  21
@@ -142,8 +183,8 @@ typedef bool     boolean;
 void    pinMode(uint8_t pin, uint8_t mode);
 void    digitalWrite(uint8_t pin, uint8_t val);
 int     digitalRead(uint8_t pin);
-int     analogRead(uint8_t pin);        // 10-bit result (0-1023)
-void    analogWrite(uint8_t pin, uint8_t duty); // 8-bit PWM on D5 (RC2/CCP1)
+int     analogRead(uint8_t pin);        // 10-bit result (0-1023); always 0 on chips with no ADC (e.g. PIC16F628A)
+void    analogWrite(uint8_t pin, uint8_t duty); // 8-bit PWM via CCP1 (pin varies by chip)
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 void        delay(uint32_t ms);
@@ -226,9 +267,13 @@ extern SPIClass_t SPI;
 //   Wire2   : software I2C  — SCL2=RB0 (D8), SDA2=RB1 (D9) (needs external pull-ups)
 //   SPI2    : software SPI  — SCK2=RB2 (D10), MOSI2=RB3 (D11), MISO2=RB4 (D12)
 //             (no fixed CS — drive any free pin manually with digitalWrite)
+// PIC16F628A has no MSSP at all, so its Wire/SPI are *already* bit-banged
+// (see wiring.c) and there aren't enough spare pins to usefully double them.
+#ifndef _16F628A
 extern HardwareSerial_t Serial2;
 extern TwoWire_t Wire2;
 extern SPIClass_t SPI2;
+#endif
 
 #define MSBFIRST 1
 #define LSBFIRST 0
