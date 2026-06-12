@@ -197,6 +197,7 @@ function downloadPack(name, version) {
 function findDFP(mcu) {
     const manifest = loadDFPManifest();
     const family = manifest[(mcu || '').toUpperCase()] || dfpFamilyFor(mcu);
+    if (!family) return null; // e.g. dsPIC30F: XC16 bundles headers/linker scripts, no DFP needed
     // XC8 needs the xc8/ subdirectory inside the pack
     const xc8Sub = (p) => {
         const sub = path.join(p, 'xc8');
@@ -244,6 +245,7 @@ function dfpFamilyFor(mcu) {
     if (u.match(/PIC18F/))        return 'PIC18F_DFP';
     if (u.match(/PIC16F1/))       return 'PIC12-16F1xxx_DFP';
     if (u.match(/PIC16/))         return 'PIC16Fxxx_DFP';
+    if (u.match(/DSPIC30F/))      return ''; // XC16 v2.10 bundles dsPIC30F headers/linker scripts -- no DFP needed
     if (u.match(/PIC24/))         return 'PIC24F_DFP';
     if (u.match(/DSPIC33/))       return 'dsPIC33_DFP';
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
@@ -257,6 +259,7 @@ function halVariantFor(mcu) {
     if (u.match(/PIC16F1/)) return 'picpio_compat_pic16f1';
     if (u.match(/PIC16/))   return 'picpio_compat_pic16';
     if (u.match(/PIC18F(4550|452|2550)/)) return 'picpio_compat_pic18_classic';
+    if (u.match(/DSPIC30F/)) return 'picpio_compat_pic30f';
     return 'picpio_compat';
 }
 
@@ -510,16 +513,18 @@ function cmdBuild(opts) {
     const incFlags = includes.map(i => `-I"${i}"`).join(' ');
 
     // DFP flag (required by XC8 v3.x / XC16 v2.x for device-specific headers)
+    // dsPIC30F is bundled directly in XC16 v2.10 and needs no DFP at all.
+    const needsDFP = !family.startsWith('PIC32') && !/DSPIC30F/.test(mcu.toUpperCase());
     let dfpFlag = '';
     let dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
-    if (!dfp && !cfg.dfp_path && !family.startsWith('PIC32')) {
+    if (!dfp && !cfg.dfp_path && needsDFP) {
         console.log(`[PICPIO] DFP pack not found for ${mcu}; downloading automatically...`);
         dfp = ensureDFP(mcu);
     }
     if (dfp) {
         dfpFlag = `-mdfp="${dfp}"`;
         if (verbose) console.log(`[PICPIO] DFP: ${dfp}`);
-    } else if (!family.startsWith('PIC32')) {
+    } else if (needsDFP) {
         console.warn('[PICPIO] WARNING: DFP pack not found. Build may fail.');
         console.warn('         Run: picpio install-dfp   (auto-detects the device from picpio.ini)');
         console.warn('         Or set dfp_path in picpio.ini [build] section.');
@@ -529,7 +534,11 @@ function cmdBuild(opts) {
     if (family.startsWith('PIC32')) {
         compilerFlags = `-mprocessor=${mcu} -O${optLevel} -D_XTAL_FREQ=${clock}`;
     } else if (family.startsWith('PIC24') || family.toUpperCase().startsWith('DSPIC')) {
-        compilerFlags = `-mcpu=${mcu} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock}`;
+        // XC16's -mcpu wants the bare part number, e.g. "30F4011" not "dsPIC30F4011".
+        // -mcpu alone doesn't select the device linker script -- pass -T explicitly,
+        // it's found via xc16-gcc's built-in -L search of support/*/gld/.
+        const xc16Cpu = mcu.replace(/^(dsPIC|PIC)/i, '');
+        compilerFlags = `-mcpu=${xc16Cpu} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -Wl,-Tp${xc16Cpu}.gld`;
     } else {
         // XC8 — lowercase MCU name required
         compilerFlags = `-mcpu=${mcu.toLowerCase()} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -std=c99`;
@@ -1042,8 +1051,10 @@ function cmdInit(args) {
 
 // ─── VSCODE CONFIG ───────────────────────────────────────────────────────────
 function cmdVscode() {
-    const cfg  = requireConfig();
-    const mcu  = cfg.mcu || 'PIC18F27K40';
+    const cfg    = requireConfig();
+    const mcu    = cfg.mcu || 'PIC18F27K40';
+    const family = (cfg.family || 'PIC18').toUpperCase();
+    const isXC16 = family.startsWith('PIC24') || family.startsWith('DSPIC') || /DSPIC30F/.test(mcu.toUpperCase());
 
     // Find XC8 include dirs (v3.x has separate include and include/c99)
     const base = 'C:\\Program Files\\Microchip\\xc8';
@@ -1055,6 +1066,21 @@ function cmdVscode() {
             xc8Inc  = `C:/Program Files/Microchip/xc8/${vers[0]}/pic/include`;
             xc8Inc2 = `C:/Program Files/Microchip/xc8/${vers[0]}/pic/include/c99`;
         }
+    }
+
+    // XC16 (PIC24/dsPIC) bundles device headers under <install>/support/<family>/h
+    let xc16Includes = [];
+    let buildProblemMatcher = ['$xc8', '$xc8-2'];
+    if (isXC16) {
+        const xc16Gcc = findXC16();
+        if (xc16Gcc) {
+            const root = path.join(path.dirname(xc16Gcc), '..');
+            xc16Includes = [
+                path.join(root, 'include').replace(/\\/g, '/'),
+                path.join(root, 'support', 'dsPIC30F', 'h').replace(/\\/g, '/'),
+            ];
+        }
+        buildProblemMatcher = ['$gcc'];
     }
 
     // Family-specific DFP (e.g. PIC18F-K_DFP, PIC16Fxxx_DFP) and HAL ("picpio_compat*") dirs
@@ -1077,7 +1103,7 @@ function cmdVscode() {
     fs.writeFileSync(path.join(vsDir, 'tasks.json'), JSON.stringify({
         version: '2.0.0',
         tasks: [
-            { label:'PICPIO: Build',  type:'shell', command:'picpio build',  group:{ kind:'build', isDefault:true }, problemMatcher:['$xc8','$xc8-2'] },
+            { label:'PICPIO: Build',  type:'shell', command:'picpio build',  group:{ kind:'build', isDefault:true }, problemMatcher: buildProblemMatcher },
             { label:'PICPIO: Upload', type:'shell', command:'picpio upload', group:'test', problemMatcher:[] },
             { label:'PICPIO: Clean',  type:'shell', command:'picpio clean',  group:'none', problemMatcher:[] },
         ]
@@ -1092,9 +1118,7 @@ function cmdVscode() {
                 '${workspaceFolder}/src',
                 '${workspaceFolder}/include',
                 '${workspaceFolder}/lib/**',
-                xc8Inc,
-                xc8Inc2,
-                xc8Inc.replace('/include', '/include/proc'),
+                ...(isXC16 ? xc16Includes : [xc8Inc, xc8Inc2, xc8Inc.replace('/include', '/include/proc')]),
                 ...dfpIncludes,
                 acDir.replace(/\\/g, '/'),
                 ...extraInclude

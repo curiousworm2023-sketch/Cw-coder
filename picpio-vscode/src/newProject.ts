@@ -41,6 +41,7 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC16F1824',       description:'7KB / 32MHz / MSSP + CCP, 14-pin',         family:'PIC16', clock:'32000000'  },
     { label:'PIC16F1823',       description:'3.5KB / 32MHz / MSSP + CCP, 14-pin',       family:'PIC16', clock:'32000000'  },
     { label:'PIC24FJ128GA010',  description:'128KB / 32MHz / 16-bit PIC24',             family:'PIC24', clock:'32000000'  },
+    { label:'dsPIC30F4011',     description:'28KB / 30MIPS / 16-bit dsPIC, UART+SPI+I2C+PWM', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC33EP512MU810',description:'512KB / 140MHz / DSP + FPU',               family:'dsPIC', clock:'140000000' },
     { label:'PIC32MX360F512L',  description:'512KB / 80MHz / 32-bit MIPS',              family:'PIC32', clock:'80000000'  },
     { label:'PIC32MZ2048EFH144',description:'2MB / 200MHz / MIPS M-Class + FPU',        family:'PIC32', clock:'200000000' },
@@ -74,6 +75,7 @@ function isPicpioInstalled(): boolean {
 // Mirrors picpio.js's dfpFamilyFor() for the MCUs in MCU_LIST.
 export function dfpFamilyFor(mcu: string): string {
     const u = mcu.toUpperCase();
+    if (/DSPIC30F/.test(u)) return ''; // XC16 v2.10 bundles dsPIC30F headers/linker scripts -- no DFP needed
     if (/PIC18F\d+K/.test(u)) return 'PIC18F-K_DFP';
     if (/PIC18F\d+Q10/.test(u)) return 'PIC18F-Q_DFP';
     if (/PIC16F1/.test(u))    return 'PIC12-16F1xxx_DFP';
@@ -87,7 +89,18 @@ export function halVariantFor(mcu: string): string {
     if (/PIC16F1/.test(u)) return 'picpio_compat_pic16f1';
     if (/PIC16/.test(u))   return 'picpio_compat_pic16';
     if (/PIC18F(4550|452|2550)/.test(u)) return 'picpio_compat_pic18_classic';
+    if (/DSPIC30F/.test(u)) return 'picpio_compat_pic30f';
     return 'picpio_compat';
+}
+
+// Mirrors picpio.js's findXC16() but returns the install root (not the gcc exe path).
+function findXC16Root(): string | null {
+    const base = 'C:\\Program Files\\Microchip\\xc16';
+    if (!fs.existsSync(base)) return null;
+    const vers = fs.readdirSync(base)
+        .filter(d => d.startsWith('v') && fs.existsSync(path.join(base, d, 'bin', 'xc16-gcc.exe')))
+        .sort((a, b) => parseFloat(b.slice(1)) - parseFloat(a.slice(1)));
+    return vers.length ? path.join(base, vers[0]) : null;
 }
 
 // Creates the project folder and picpio.ini manually (no picpio.exe needed)
@@ -173,6 +186,9 @@ function scaffoldProject(opts: {
         ].join('\n'));
     }
 
+    // dsPIC/PIC24 use the XC16 toolchain (gcc-based) instead of XC8
+    const isXC16 = /^(PIC24|DSPIC)/.test(family.toUpperCase());
+
     // .vscode/tasks.json
     fs.writeFileSync(path.join(projectDir, '.vscode', 'tasks.json'), JSON.stringify({
         version: '2.0.0',
@@ -182,7 +198,7 @@ function scaffoldProject(opts: {
                 type: 'shell',
                 command: 'picpio build',
                 group: { kind: 'build', isDefault: true },
-                problemMatcher: ['$xc8', '$xc8-2'],
+                problemMatcher: isXC16 ? ['$gcc'] : ['$xc8', '$xc8-2'],
                 presentation: { reveal: 'always', panel: 'dedicated' }
             },
             {
@@ -214,6 +230,13 @@ function scaffoldProject(opts: {
         'C:/picpio/packs/PIC18F-Q_DFP/xc8/pic/include/proc',
     ] : [];
 
+    // XC16 (PIC24/dsPIC) bundles device headers under <install>/support/<family>/h
+    const xc16Root = findXC16Root();
+    const xc16Includes = xc16Root ? [
+        path.join(xc16Root, 'include').replace(/\\/g, '/'),
+        path.join(xc16Root, 'support', 'dsPIC30F', 'h').replace(/\\/g, '/'),
+    ] : [];
+
     fs.writeFileSync(path.join(projectDir, '.vscode', 'c_cpp_properties.json'), JSON.stringify({
         configurations: [{
             name: 'PIC',
@@ -221,9 +244,11 @@ function scaffoldProject(opts: {
                 '${workspaceFolder}/src',
                 '${workspaceFolder}/include',
                 '${workspaceFolder}/lib/**',
-                'C:/Program Files/Microchip/xc8/v3.10/pic/include',
-                'C:/Program Files/Microchip/xc8/v3.10/pic/include/c99',
-                'C:/Program Files/Microchip/xc8/v3.10/pic/include/proc',
+                ...(isXC16 ? xc16Includes : [
+                    'C:/Program Files/Microchip/xc8/v3.10/pic/include',
+                    'C:/Program Files/Microchip/xc8/v3.10/pic/include/c99',
+                    'C:/Program Files/Microchip/xc8/v3.10/pic/include/proc',
+                ]),
                 ...dfpIncludes,
                 `C:/picpio/${acName}`
             ],
