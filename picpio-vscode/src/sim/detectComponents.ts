@@ -103,3 +103,38 @@ export function detectComponents(src: string): AutoPart[] {
 
     return parts;
 }
+
+// Fixed hardware pin assignments for arduino_compat's communication
+// peripherals (see arduino_compat_pic16/wiring.c). These objects' begin()
+// etc. run inside the (un-simulated) library, so the simulator never sees
+// their pinMode() calls — label the pins statically instead whenever the
+// sketch references the corresponding object.
+const PERIPHERAL_PINS: Record<string, [pin: string, role: string][]> = {
+    Wire:    [['RC3', 'SCL'],  ['RC4', 'SDA']],
+    Wire2:   [['RB0', 'SCL'],  ['RB1', 'SDA']],
+    SPI:     [['RC3', 'SCK'],  ['RC5', 'MOSI'], ['RC4', 'MISO']],
+    SPI2:    [['RB2', 'SCK'],  ['RB3', 'MOSI'], ['RB4', 'MISO']],
+    Serial:  [['RC6', 'TX'],   ['RC7', 'RX']],
+    Serial2: [['RC0', 'TX'],   ['RC1', 'RX']],
+};
+
+const PERIPHERAL_LABELS: Record<string, string> = {
+    Wire: 'I2C-1', Wire2: 'I2C-2',
+    SPI: 'SPI-1', SPI2: 'SPI-2',
+    Serial: 'USART-1', Serial2: 'USART-2',
+};
+
+export interface PeripheralPin { proto: string; role: string; }
+
+export function detectPeripheralPins(src: string): Record<string, PeripheralPin> {
+    const s = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+    const result: Record<string, PeripheralPin> = {};
+    for (const name of Object.keys(PERIPHERAL_PINS)) {
+        if (!new RegExp(`\\b${name}\\s*\\.`).test(s)) continue;
+        for (const [pin, role] of PERIPHERAL_PINS[name]) {
+            result[pin] = { proto: PERIPHERAL_LABELS[name], role };
+        }
+    }
+    return result;
+}

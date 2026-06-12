@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SimulatorServer } from './sim/simulatorServer';
-import { AutoPart } from './sim/detectComponents';
+import { AutoPart, PeripheralPin } from './sim/detectComponents';
 
 // Native port-pin names — must match pinLabel() in sim/simWorker.ts
 // (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
@@ -16,6 +16,7 @@ function pinCell(label: string): string {
         <div class="pin-led" id="led-${label}"></div>
         <div class="pin-name">${label}</div>
         <div class="pin-mode" id="mode-${label}">--</div>
+        <div class="pin-periph" id="periph-${label}"></div>
       </div>`;
 }
 
@@ -30,6 +31,7 @@ function analogPinCell(label: string): string {
         <div class="pin-led" id="led-${label}"></div>
         <div class="pin-name">${label}</div>
         <div class="pin-mode" id="mode-${label}">auto</div>
+        <div class="pin-periph" id="periph-${label}"></div>
         <input type="range" class="pin-slider" id="slider-${label}" min="0" max="1023" value="512">
       </div>`;
 }
@@ -103,6 +105,15 @@ export class SimulatorPanel {
         this._server?.broadcast({ t: '_autoCircuit', parts });
     }
 
+    /** Label MCU pins that are wired to a fixed-pin peripheral (Wire/SPI/
+     * Serial2 etc.) with their protocol and signal role, since the simulator
+     * never runs that library's pinMode() calls to report it itself. */
+    setPeripheralPins(pins: Record<string, PeripheralPin>): void {
+        if (this._disposed || Object.keys(pins).length === 0) return;
+        this._panel.webview.postMessage({ t: '_peripheralPins', pins });
+        this._server?.broadcast({ t: '_peripheralPins', pins });
+    }
+
     /** Forward a JSON event emitted by the simulation worker to the webview. */
     post(ev: Record<string, unknown>): void {
         if (this._disposed) return;
@@ -162,6 +173,8 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-led.pwm{background:var(--accent)}
 .pin-name{font-weight:600;font-size:12px}
 .pin-mode{color:var(--sub);font-size:9px;margin-top:2px;line-height:1.2;word-break:break-all;overflow-wrap:anywhere}
+.pin-periph{color:var(--accent);font-size:9px;margin-top:2px;line-height:1.3;font-weight:600}
+.pin-periph:empty{display:none}
 .circuit-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .circuit-toolbar .hint{color:var(--sub);font-size:11px}
 .circuit-wrap{position:relative;border:1px solid var(--border);border-radius:var(--radius);background:#161616;height:280px;overflow:hidden}
@@ -309,6 +322,11 @@ function setMode(pin, text) {
   if (el) el.textContent = text;
 }
 
+function setPeriph(pin, proto, role) {
+  const el = document.getElementById('periph-' + pin);
+  if (el) el.innerHTML = proto ? proto + '<br>' + role : '';
+}
+
 function setInputClickable(pin, clickable) {
   const cell = document.getElementById('pin-' + pin);
   if (!cell) return;
@@ -345,11 +363,13 @@ function reset() {
   DIGITAL_PINS_JS.forEach(p => {
     setLed(p, false, false);
     setMode(p, '--');
+    setPeriph(p, '', '');
     setInputClickable(p, false);
   });
   ANALOG_PINS_JS.forEach(p => {
     setLed(p, false, false);
     setMode(p, 'auto');
+    setPeriph(p, '', '');
     setInputClickable(p, false);
     const cell = document.getElementById('pin-' + p);
     if (cell) cell.classList.remove('expanded');
@@ -641,6 +661,11 @@ function handleSimMessage(m) {
       break;
     case '_autoCircuit':
       applyAutoCircuit(m.parts);
+      break;
+    case '_peripheralPins':
+      Object.keys(m.pins).forEach(pin => {
+        setPeriph(pin, m.pins[pin].proto, m.pins[pin].role);
+      });
       break;
     case 'pinMode':
       setMode(m.pin, m.mode === 'INPUT_PULLUP' ? 'PULLUP' : m.mode);

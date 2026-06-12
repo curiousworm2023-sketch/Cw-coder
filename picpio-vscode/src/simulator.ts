@@ -4,7 +4,7 @@ import * as path from 'path';
 import { Worker } from 'worker_threads';
 import { readConfig } from './iniParser';
 import { transpileSketch } from './sim/transpile';
-import { detectComponents } from './sim/detectComponents';
+import { detectComponents, detectPeripheralPins } from './sim/detectComponents';
 import { SimulatorPanel, renderSimulatorHtml } from './simulatorPanel';
 import { SimulatorServer } from './sim/simulatorServer';
 
@@ -25,6 +25,22 @@ function stopWorker(): void {
         activeWorker.terminate();
         activeWorker = undefined;
     }
+}
+
+// Concatenates main.cpp/.c with its sibling sources/headers (src/ and
+// include/) so peripheral detection sees Wire/SPI/Serial usage even when
+// it's tucked away in a helper module rather than the main sketch file.
+function gatherProjectSources(root: string, srcDir: string, mainSrc: string): string {
+    let combined = mainSrc;
+    for (const dir of [path.join(root, srcDir), path.join(root, 'include')]) {
+        let entries: fs.Dirent[];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+        for (const entry of entries) {
+            if (!entry.isFile() || !/\.(c|cpp|h|hpp|ino)$/i.test(entry.name)) continue;
+            try { combined += '\n' + fs.readFileSync(path.join(dir, entry.name), 'utf8'); } catch { /* skip unreadable file */ }
+        }
+    }
+    return combined;
 }
 
 export function runSimulation(context: vscode.ExtensionContext): void {
@@ -76,6 +92,7 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         for (const w of warnings) panel.post({ t: 'error', phase: 'transpile', message: w });
 
         panel.autoCircuit(detectComponents(src));
+        panel.setPeripheralPins(detectPeripheralPins(gatherProjectSources(root, srcDir, src)));
         panel.setStatus('running');
 
         const workerPath = path.join(context.extensionPath, 'out', 'sim', 'simWorker.js');
