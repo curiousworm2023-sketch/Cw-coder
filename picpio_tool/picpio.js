@@ -242,13 +242,21 @@ function dfpFamilyFor(mcu) {
     if (u.match(/PIC18F\d+J/))   return 'PIC18F-J_DFP';
     if (u.match(/PIC18F\d+Q10/)) return 'PIC18F-Q_DFP';
     if (u.match(/PIC18F/))        return 'PIC18F_DFP';
-    if (u.match(/PIC16F1/))       return 'PIC16F1xxxx_DFP';
+    if (u.match(/PIC16F1/))       return 'PIC12-16F1xxx_DFP';
     if (u.match(/PIC16/))         return 'PIC16Fxxx_DFP';
     if (u.match(/PIC24/))         return 'PIC24F_DFP';
     if (u.match(/DSPIC33/))       return 'dsPIC33_DFP';
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
     if (u.match(/PIC32MZ/))       return 'PIC32MZ_DFP';
     return 'PIC18F-K_DFP';
+}
+
+// Picks the HAL ("picpio_compat*") variant for a given MCU.
+function halVariantFor(mcu) {
+    const u = (mcu || '').toUpperCase();
+    if (u.match(/PIC16F1/)) return 'picpio_compat_pic16f1';
+    if (u.match(/PIC16/))   return 'picpio_compat_pic16';
+    return 'picpio_compat';
 }
 
 function findVersionedDFP(base, family) {
@@ -392,8 +400,8 @@ function collectSources(cfg) {
     const libDir    = path.join(root, 'lib');
     const scriptDir = path.dirname(process.argv[1]);
     // picpio_compat: look next to picpio.js (tool-level), never required in project.
-    // Classic PIC16F8xx parts (no LATx/ANSELx/PPS) use a separate HAL variant.
-    const acName = dfpFamilyFor(cfg.mcu) === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    // Classic PIC16F8xx and enhanced-midrange PIC16F1xxx parts use separate HAL variants.
+    const acName = halVariantFor(cfg.mcu);
     const acDir = [
         path.join(scriptDir, acName),
         path.join(scriptDir, '..', acName),
@@ -1050,7 +1058,7 @@ function cmdVscode() {
 
     // Family-specific DFP (e.g. PIC18F-K_DFP, PIC16Fxxx_DFP) and HAL ("picpio_compat*") dirs
     const scriptDir = path.dirname(process.argv[1]);
-    const acName = dfpFamilyFor(mcu) === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    const acName = halVariantFor(mcu);
     const acDir = [
         path.join(scriptDir, acName),
         path.join(scriptDir, '..', acName),

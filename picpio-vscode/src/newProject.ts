@@ -35,6 +35,11 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC16F873A',       description:'7KB / 20MHz / 28-pin classic PIC16',       family:'PIC16', clock:'20000000'  },
     { label:'PIC16F628A',       description:'2KB / 20MHz / tiny PIC16',                 family:'PIC16', clock:'20000000'  },
     { label:'PIC16F1829',       description:'7KB / 32MHz / MSSP + CCP',                 family:'PIC16', clock:'32000000'  },
+    { label:'PIC16F1827',       description:'7KB / 32MHz / MSSP + CCP, 18-pin',         family:'PIC16', clock:'32000000'  },
+    { label:'PIC16F1826',       description:'3.5KB / 32MHz / MSSP + CCP, 18-pin',       family:'PIC16', clock:'32000000'  },
+    { label:'PIC16F1825',       description:'7KB / 32MHz / MSSP + CCP, 14-pin, 1KB RAM',family:'PIC16', clock:'32000000'  },
+    { label:'PIC16F1824',       description:'7KB / 32MHz / MSSP + CCP, 14-pin',         family:'PIC16', clock:'32000000'  },
+    { label:'PIC16F1823',       description:'3.5KB / 32MHz / MSSP + CCP, 14-pin',       family:'PIC16', clock:'32000000'  },
     { label:'PIC24FJ128GA010',  description:'128KB / 32MHz / 16-bit PIC24',             family:'PIC24', clock:'32000000'  },
     { label:'dsPIC33EP512MU810',description:'512KB / 140MHz / DSP + FPU',               family:'dsPIC', clock:'140000000' },
     { label:'PIC32MX360F512L',  description:'512KB / 80MHz / 32-bit MIPS',              family:'PIC32', clock:'80000000'  },
@@ -71,9 +76,17 @@ export function dfpFamilyFor(mcu: string): string {
     const u = mcu.toUpperCase();
     if (/PIC18F\d+K/.test(u)) return 'PIC18F-K_DFP';
     if (/PIC18F\d+Q10/.test(u)) return 'PIC18F-Q_DFP';
-    if (/PIC16F1/.test(u))    return 'PIC16F1xxxx_DFP';
+    if (/PIC16F1/.test(u))    return 'PIC12-16F1xxx_DFP';
     if (/PIC16/.test(u))      return 'PIC16Fxxx_DFP';
     return 'PIC18F-K_DFP';
+}
+
+// Mirrors picpio.js's halVariantFor() for the MCUs in MCU_LIST.
+export function halVariantFor(mcu: string): string {
+    const u = mcu.toUpperCase();
+    if (/PIC16F1/.test(u)) return 'picpio_compat_pic16f1';
+    if (/PIC16/.test(u))   return 'picpio_compat_pic16';
+    return 'picpio_compat';
 }
 
 // Creates the project folder and picpio.ini manually (no picpio.exe needed)
@@ -191,7 +204,7 @@ function scaffoldProject(opts: {
 
     // .vscode/c_cpp_properties.json
     const dfpFamily = dfpFamilyFor(mcu);
-    const acName    = dfpFamily === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    const acName    = halVariantFor(mcu);
     const dfpIncludes = dfpFamily === 'PIC18F-K_DFP' ? [
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
