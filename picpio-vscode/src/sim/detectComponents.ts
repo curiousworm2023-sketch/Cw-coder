@@ -6,12 +6,6 @@
 export interface AutoWire { pin: string; term: string; }
 export interface AutoPart { type: string; wires: AutoWire[]; }
 
-// Per-pin configured role, shown in the simulator's pin grid (e.g. "OUTPUT",
-// "INPUT", "PULLUP", "ANALOG", "I2C", "SPI").
-export type PinModes = Record<string, string>;
-
-export interface DetectResult { parts: AutoPart[]; pinModes: PinModes; }
-
 // Native port-pin names — must match pinLabel() in sim/simWorker.ts
 // (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
 function pinLabel(n: number): string | null {
@@ -29,7 +23,7 @@ const PIN_MACROS: Record<string, number> = {
     LED_BUILTIN: 13,
 };
 
-export function detectComponents(src: string): DetectResult {
+export function detectComponents(src: string): AutoPart[] {
     // Strip comments so they can't confuse the regexes below.
     const s = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
@@ -48,19 +42,19 @@ export function detectComponents(src: string): DetectResult {
     };
 
     const outputPins = new Set<string>();
-    const inputModes = new Map<string, string>(); // label -> 'INPUT' | 'INPUT_PULLUP'
+    const inputPins  = new Set<string>();
     const analogPins = new Set<string>();
 
     for (const m of s.matchAll(/pinMode\s*\(\s*(\w+)\s*,\s*(OUTPUT|INPUT_PULLUP|INPUT)\s*\)/g)) {
         const label = resolvePin(m[1]);
         if (!label) continue;
         if (m[2] === 'OUTPUT') outputPins.add(label);
-        else inputModes.set(label, m[2]);
+        else inputPins.add(label);
     }
     // digitalWrite/analogWrite without an explicit pinMode still implies an output.
     for (const m of s.matchAll(/(?:digitalWrite|analogWrite)\s*\(\s*(\w+)\s*,/g)) {
         const label = resolvePin(m[1]);
-        if (label && !inputModes.has(label)) outputPins.add(label);
+        if (label && !inputPins.has(label)) outputPins.add(label);
     }
     for (const m of s.matchAll(/analogRead\s*\(\s*(\w+)\s*\)/g)) {
         const label = resolvePin(m[1]);
@@ -68,18 +62,12 @@ export function detectComponents(src: string): DetectResult {
     }
 
     const parts: AutoPart[] = [];
-    for (const pin of outputPins)      parts.push({ type: 'led', wires: [{ pin, term: '' }] });
-    for (const pin of inputModes.keys()) parts.push({ type: 'button', wires: [{ pin, term: '' }] });
+    for (const pin of outputPins) parts.push({ type: 'led', wires: [{ pin, term: '' }] });
+    for (const pin of inputPins)  parts.push({ type: 'button', wires: [{ pin, term: '' }] });
     for (const pin of analogPins) {
-        if (outputPins.has(pin) || inputModes.has(pin)) continue;
+        if (outputPins.has(pin) || inputPins.has(pin)) continue;
         parts.push({ type: 'pot', wires: [{ pin, term: '' }] });
     }
-
-    // Configured pin roles, shown in the simulator's pin grid.
-    const pinModes: PinModes = {};
-    for (const pin of outputPins) pinModes[pin] = 'OUTPUT';
-    for (const [pin, mode] of inputModes) pinModes[pin] = mode === 'INPUT_PULLUP' ? 'PULLUP' : 'INPUT';
-    for (const pin of analogPins) if (!(pin in pinModes)) pinModes[pin] = 'ANALOG';
 
     // Display libraries — wired to the fixed I2C pins (RA4=SDA, RA5=SCL) or
     // the fixed hardware-SPI pins (RB3=MOSI/SDA, RB5=SCK).
@@ -100,27 +88,18 @@ export function detectComponents(src: string): DetectResult {
             { pin: 'RB5', term: 'SCK' },
             { pin: rst,   term: 'RST' },
         ]});
-        pinModes['RB3'] = 'SPI';
-        pinModes['RB5'] = 'SPI';
-        pinModes[cs]    = 'OUTPUT';
-        pinModes[dc]    = 'OUTPUT';
-        pinModes[rst]   = 'OUTPUT';
     } else if (has('LiquidCrystal_I2C')) {
         const is2004 = /LiquidCrystal_I2C[^;]*\(\s*\w+\s*,\s*20\s*,\s*4\s*\)/.test(s);
         parts.push({ type: is2004 ? 'lcd2004' : 'lcd1602', wires: [
             { pin: 'RA4', term: 'SDA' },
             { pin: 'RA5', term: 'SCL' },
         ]});
-        pinModes['RA4'] = 'I2C';
-        pinModes['RA5'] = 'I2C';
     } else if (/SSD1306|U8g2|U8X8/.test(s)) {
         parts.push({ type: 'oled', wires: [
             { pin: 'RA4', term: 'SDA' },
             { pin: 'RA5', term: 'SCL' },
         ]});
-        pinModes['RA4'] = 'I2C';
-        pinModes['RA5'] = 'I2C';
     }
 
-    return { parts, pinModes };
+    return parts;
 }

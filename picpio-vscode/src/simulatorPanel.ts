@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SimulatorServer } from './sim/simulatorServer';
-import { AutoPart, PinModes } from './sim/detectComponents';
+import { AutoPart } from './sim/detectComponents';
 
 // Native port-pin names — must match pinLabel() in sim/simWorker.ts
 // (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
@@ -95,15 +95,12 @@ export class SimulatorPanel {
     }
 
     /** Auto-place and auto-wire circuit parts detected from the sketch's
-     * source, and label each MCU pin with its configured role (OUTPUT,
-     * INPUT, ANALOG, I2C, SPI, ...). Parts are skipped if the canvas is
-     * already populated (e.g. the user has added/wired their own parts);
-     * pin-mode labels are always applied. */
-    autoCircuit(parts: AutoPart[], pinModes: PinModes): void {
-        if (this._disposed) return;
-        if (parts.length === 0 && Object.keys(pinModes).length === 0) return;
-        this._panel.webview.postMessage({ t: '_autoCircuit', parts, pinModes });
-        this._server?.broadcast({ t: '_autoCircuit', parts, pinModes });
+     * source. The webview ignores this if the canvas is already populated
+     * (e.g. the user has added/wired their own parts). */
+    autoCircuit(parts: AutoPart[]): void {
+        if (this._disposed || parts.length === 0) return;
+        this._panel.webview.postMessage({ t: '_autoCircuit', parts });
+        this._server?.broadcast({ t: '_autoCircuit', parts });
     }
 
     /** Forward a JSON event emitted by the simulation worker to the webview. */
@@ -614,14 +611,9 @@ function addPart(type) {
   return id;
 }
 
-// Auto-place and auto-wire parts detected from the sketch's source, and
-// label each MCU pin with its configured role. Parts are skipped if the
-// canvas is already populated (manual edits or a previous auto-run); pin
-// labels are always applied.
-function applyAutoCircuit(autoParts, pinModes) {
-  if (pinModes) {
-    Object.keys(pinModes).forEach(pin => setMode(pin, pinModes[pin]));
-  }
+// Auto-place and auto-wire parts detected from the sketch's source. Skipped
+// if the canvas is already populated (manual edits or a previous auto-run).
+function applyAutoCircuit(autoParts) {
   if (Object.keys(parts).length > 0) return;
   autoParts.forEach(ap => {
     const id = addPart(ap.type);
@@ -648,7 +640,7 @@ function handleSimMessage(m) {
       setStatus(m.status, m.message);
       break;
     case '_autoCircuit':
-      applyAutoCircuit(m.parts, m.pinModes);
+      applyAutoCircuit(m.parts);
       break;
     case 'pinMode':
       setMode(m.pin, m.mode === 'INPUT_PULLUP' ? 'PULLUP' : m.mode);

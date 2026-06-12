@@ -75,8 +75,7 @@ export function runSimulation(context: vscode.ExtensionContext): void {
         const { code, warnings } = transpileSketch(src);
         for (const w of warnings) panel.post({ t: 'error', phase: 'transpile', message: w });
 
-        const { parts, pinModes } = detectComponents(src);
-        panel.autoCircuit(parts, pinModes);
+        panel.autoCircuit(detectComponents(src));
         panel.setStatus('running');
 
         const workerPath = path.join(context.extensionPath, 'out', 'sim', 'simWorker.js');
