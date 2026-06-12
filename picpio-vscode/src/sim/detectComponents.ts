@@ -95,21 +95,15 @@ export function detectComponents(src: string): DetectResult {
     for (const [pin, mode] of inputModes) pinModes[pin] = mode === 'INPUT_PULLUP' ? 'PULLUP' : 'INPUT';
     for (const pin of analogPins) if (!(pin in pinModes)) pinModes[pin] = 'ANALOG';
 
-    // Display libraries — wired to picpio's arduino_compat fixed bus pins:
-    //   Wire  (hardware I2C, MSSP1): SDA=RC4, SCL=RC3
-    //   Wire2 (software I2C):        SDA=RB1, SCL=RB0
-    //   SPI   (MSSP1, shared with Wire): SCK=RC3, MOSI/SDO=RC5, MISO/SDI=RC4
+    // Display libraries — wired to the fixed I2C pins (RA4=SDA, RA5=SCL) or
+    // the fixed hardware-SPI pins (RB3=MOSI/SDA, RB5=SCK).
     const has = (needle: string): boolean => s.includes(needle);
 
-    // Any Wire/Wire2 (I2C master) usage, e.g. an I2C sensor driver, claims
-    // the matching bus pins even without a recognized display library.
+    // Any Wire (I2C master) usage, e.g. an I2C sensor driver, claims the
+    // fixed I2C pins even without a recognized display library.
     if (/\bWire\.(begin|beginTransmission|requestFrom)\s*\(/.test(s)) {
-        pinModes['RC4'] = 'I2C';
-        pinModes['RC3'] = 'I2C';
-    }
-    if (/\bWire2\.(begin|beginTransmission|requestFrom)\s*\(/.test(s)) {
-        pinModes['RB1'] = 'I2C';
-        pinModes['RB0'] = 'I2C';
+        pinModes['RA4'] = 'I2C';
+        pinModes['RA5'] = 'I2C';
     }
 
     if (has('SPI.h') && /Adafruit_(ST7735|ST7789|ILI9341)/.test(s)) {
@@ -123,30 +117,30 @@ export function detectComponents(src: string): DetectResult {
         parts.push({ type: 'spi_display', wires: [
             { pin: cs,    term: 'CS'  },
             { pin: dc,    term: 'DC'  },
-            { pin: 'RC5', term: 'SDA' },
-            { pin: 'RC3', term: 'SCK' },
+            { pin: 'RB3', term: 'SDA' },
+            { pin: 'RB5', term: 'SCK' },
             { pin: rst,   term: 'RST' },
         ]});
-        pinModes['RC5'] = 'SPI';
-        pinModes['RC3'] = 'SPI';
+        pinModes['RB3'] = 'SPI';
+        pinModes['RB5'] = 'SPI';
         pinModes[cs]    = 'OUTPUT';
         pinModes[dc]    = 'OUTPUT';
         pinModes[rst]   = 'OUTPUT';
     } else if (has('LiquidCrystal_I2C')) {
         const is2004 = /LiquidCrystal_I2C[^;]*\(\s*\w+\s*,\s*20\s*,\s*4\s*\)/.test(s);
         parts.push({ type: is2004 ? 'lcd2004' : 'lcd1602', wires: [
-            { pin: 'RC4', term: 'SDA' },
-            { pin: 'RC3', term: 'SCL' },
+            { pin: 'RA4', term: 'SDA' },
+            { pin: 'RA5', term: 'SCL' },
         ]});
-        pinModes['RC4'] = 'I2C';
-        pinModes['RC3'] = 'I2C';
+        pinModes['RA4'] = 'I2C';
+        pinModes['RA5'] = 'I2C';
     } else if (/SSD1306|U8g2|U8X8/.test(s)) {
         parts.push({ type: 'oled', wires: [
-            { pin: 'RC4', term: 'SDA' },
-            { pin: 'RC3', term: 'SCL' },
+            { pin: 'RA4', term: 'SDA' },
+            { pin: 'RA5', term: 'SCL' },
         ]});
-        pinModes['RC4'] = 'I2C';
-        pinModes['RC3'] = 'I2C';
+        pinModes['RA4'] = 'I2C';
+        pinModes['RA5'] = 'I2C';
     }
 
     return { parts, pinModes };
