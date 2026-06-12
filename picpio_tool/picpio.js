@@ -256,6 +256,7 @@ function halVariantFor(mcu) {
     const u = (mcu || '').toUpperCase();
     if (u.match(/PIC16F1/)) return 'picpio_compat_pic16f1';
     if (u.match(/PIC16/))   return 'picpio_compat_pic16';
+    if (u.match(/PIC18F(4550|452|2550)/)) return 'picpio_compat_pic18_classic';
     return 'picpio_compat';
 }
 

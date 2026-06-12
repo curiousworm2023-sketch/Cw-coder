@@ -86,6 +86,7 @@ export function halVariantFor(mcu: string): string {
     const u = mcu.toUpperCase();
     if (/PIC16F1/.test(u)) return 'picpio_compat_pic16f1';
     if (/PIC16/.test(u))   return 'picpio_compat_pic16';
+    if (/PIC18F(4550|452|2550)/.test(u)) return 'picpio_compat_pic18_classic';
     return 'picpio_compat';
 }
 
