@@ -240,6 +240,7 @@ function dfpFamilyFor(mcu) {
     const u = (mcu || '').toUpperCase();
     if (u.match(/PIC18F\d+K/))   return 'PIC18F-K_DFP';
     if (u.match(/PIC18F\d+J/))   return 'PIC18F-J_DFP';
+    if (u.match(/PIC18F\d+Q10/)) return 'PIC18F-Q_DFP';
     if (u.match(/PIC18F/))        return 'PIC18F_DFP';
     if (u.match(/PIC16F1/))       return 'PIC16F1xxxx_DFP';
     if (u.match(/PIC16/))         return 'PIC16Fxxx_DFP';

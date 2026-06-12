@@ -13,11 +13,12 @@
 #  define _XTAL_FREQ 64000000UL
 #endif
 
-// ── 40-pin K40 detection ──────────────────────────────────────────────────────
-// 28-pin K40 chips (24/25/26/27K40) only have PORTA/B/C. The 40-pin chips
-// (45/46/47K40) additionally have a full PORTD and PORTE (RE0-RE2), exposed
-// below as D14-D21 and D22-D24.
-#if defined(_18F45K40) || defined(_18F46K40) || defined(_18F47K40)
+// ── 40-pin K40/Q10 detection ────────────────────────────────────────────────
+// 28-pin K40/Q10 chips (24/25/26/27K40, 24/25/26/27Q10) only have PORTA/B/C.
+// The 40-pin chips (45/46/47K40, 45/46/47Q10) additionally have a full PORTD
+// and PORTE (RE0-RE2), exposed below as D14-D21 and D22-D24.
+#if defined(_18F45K40) || defined(_18F46K40) || defined(_18F47K40) || \
+    defined(_18F45Q10) || defined(_18F46Q10) || defined(_18F47Q10)
 #define PICPIO_HAS_PORTDE 1
 #endif
 
@@ -33,12 +34,12 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-// ── Arduino pin numbers → PIC18F K40 family ──────────────────────────────────
+// ── Arduino pin numbers → PIC18F K40/Q10 family ──────────────────────────────
 // D0–D7  = RC0–RC7   (D0=RC0 … D7=RC7)
 // D8–D13 = RB0–RB5   (D13 = RB5, the "LED" pin)
 // A0–A5  = RA0–RA5
-// 28-pin chips (24/25/26/27K40) stop here (D0-D13, A0-A5).
-// 40-pin chips (45/46/47K40) additionally have:
+// 28-pin chips (24/25/26/27K40, 24/25/26/27Q10) stop here (D0-D13, A0-A5).
+// 40-pin chips (45/46/47K40, 45/46/47Q10) additionally have:
 // D14–D21 = RD0–RD7
 // D22–D24 = RE0–RE2
 #define D0   0

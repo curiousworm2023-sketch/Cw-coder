@@ -19,7 +19,14 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC18F45K40',      description:'32KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
     { label:'PIC18F46K40',      description:'64KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
     { label:'PIC18F47K40',      description:'128KB / 64MHz / 40-pin, +PORTD/E',         family:'PIC18', clock:'64000000'  },
-    { label:'PIC18F4550',       description:'32KB / 48MHz / USB 2.0',                   family:'PIC18', clock:'48000000'  },
+    { label:'PIC18F27Q10',      description:'128KB / 64MHz / 28-pin',                   family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F26Q10',      description:'64KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F25Q10',      description:'32KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F24Q10',      description:'16KB / 64MHz / 28-pin',                    family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F47Q10',      description:'128KB / 64MHz / 40-pin, +PORTD/E',         family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F46Q10',      description:'64KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F45Q10',      description:'32KB / 64MHz / 40-pin, +PORTD/E',          family:'PIC18', clock:'64000000'  },
+    { label:'PIC18F4550',     description:'32KB / 48MHz / USB 2.0',                   family:'PIC18', clock:'48000000'  },
     { label:'PIC18F452',        description:'32KB / 40MHz / SPI + I2C',                 family:'PIC18', clock:'40000000'  },
     { label:'PIC18F2550',       description:'32KB / 48MHz / USB + ADC',                 family:'PIC18', clock:'48000000'  },
     { label:'PIC16F877A',       description:'14KB / 20MHz / 40-pin, +PORTD/E',          family:'PIC16', clock:'20000000'  },
@@ -63,6 +70,7 @@ function isPicpioInstalled(): boolean {
 export function dfpFamilyFor(mcu: string): string {
     const u = mcu.toUpperCase();
     if (/PIC18F\d+K/.test(u)) return 'PIC18F-K_DFP';
+    if (/PIC18F\d+Q10/.test(u)) return 'PIC18F-Q_DFP';
     if (/PIC16F1/.test(u))    return 'PIC16F1xxxx_DFP';
     if (/PIC16/.test(u))      return 'PIC16Fxxx_DFP';
     return 'PIC18F-K_DFP';
@@ -187,6 +195,9 @@ function scaffoldProject(opts: {
     const dfpIncludes = dfpFamily === 'PIC18F-K_DFP' ? [
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
         'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
+    ] : dfpFamily === 'PIC18F-Q_DFP' ? [
+        'C:/picpio/packs/PIC18F-Q_DFP/xc8/pic/include',
+        'C:/picpio/packs/PIC18F-Q_DFP/xc8/pic/include/proc',
     ] : [];
 
     fs.writeFileSync(path.join(projectDir, '.vscode', 'c_cpp_properties.json'), JSON.stringify({
