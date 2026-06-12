@@ -118,17 +118,16 @@ const PERIPHERAL_PINS: Record<string, [pin: string, role: string][]> = {
     Serial2: [['RC0', 'TX'],   ['RC1', 'RX']],
 };
 
-const PERIPHERAL_LABELS: Record<string, string> = {
-    Wire: 'I2C-1', Wire2: 'I2C-2',
-    SPI: 'SPI-1', SPI2: 'SPI-2',
-    Serial: 'USART-1', Serial2: 'USART-2',
+// Instance number suffixed onto each role below to form a datasheet-style
+// alternate-function name (e.g. role "SCL" on Wire2 -> "SCL2").
+const PERIPHERAL_INSTANCE: Record<string, string> = {
+    Wire: '1', Wire2: '2',
+    SPI: '1', SPI2: '2',
+    Serial: '1', Serial2: '2',
 };
 
-export interface PeripheralPin { proto: string; role: string; }
-
-// Signal-name prefix -> bus type, for deriving a (proto, role) pair from a
-// bare signal name like "TX2"/"SCL2" when no "<signal> in <BUS> mode"
-// comment is present.
+// Signal-name prefix -> bus type, for recognising a bare signal name like
+// "TX2"/"SCL2" when no "<signal> in <BUS> mode" comment is present.
 const SIGNAL_BUS: Record<string, string> = {
     SCL: 'I2C', SDA: 'I2C',
     SCK: 'SPI', SDI: 'SPI', SDO: 'SPI', MOSI: 'SPI', MISO: 'SPI', SS: 'SPI',
@@ -142,31 +141,21 @@ function splitSignal(sig: string): { prefix: string; digit: string } | null {
     return m ? { prefix: m[1].toUpperCase(), digit: m[2] } : null;
 }
 
-// Combine multiple roles detected for the same pin (e.g. a PPS-routed pin
-// that's SCL in I2C mode and SCK in SPI mode) into one compact label.
-function combinePin(entries: PeripheralPin[]): PeripheralPin {
-    if (entries.length === 1) return entries[0];
-    const insts = entries.map(e => e.proto.match(/-(\d+)$/)?.[1] ?? '');
-    const bases = entries.map(e => e.proto.replace(/-\d+$/, ''));
-    const proto = insts.every(i => i === insts[0])
-        ? `${bases.join('/')}-${insts[0]}`
-        : entries.map(e => e.proto).join('/');
-    return { proto, role: entries.map(e => e.role).join('/') };
-}
-
-export function detectPeripheralPins(src: string): Record<string, PeripheralPin> {
+// Returns, for each MCU pin, a datasheet-style "/"-separated list of
+// alternate-function names (e.g. "SCL2/SCK2"), one entry per detected role.
+export function detectPeripheralPins(src: string): Record<string, string> {
     const s = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-    const entries: Record<string, PeripheralPin[]> = {};
-    const add = (pin: string, p: PeripheralPin): void => {
+    const entries: Record<string, string[]> = {};
+    const add = (pin: string, label: string): void => {
         const list = entries[pin] ??= [];
-        if (!list.some(e => e.proto === p.proto && e.role === p.role)) list.push(p);
+        if (!list.includes(label)) list.push(label);
     };
 
     for (const name of Object.keys(PERIPHERAL_PINS)) {
         if (!new RegExp(`\\b${name}\\s*\\.`).test(s)) continue;
         for (const [pin, role] of PERIPHERAL_PINS[name]) {
-            add(pin, { proto: PERIPHERAL_LABELS[name], role });
+            add(pin, role + PERIPHERAL_INSTANCE[name]);
         }
     }
 
@@ -181,17 +170,17 @@ export function detectPeripheralPins(src: string): Record<string, PeripheralPin>
         for (const bm of desc.matchAll(/(\w+)\s+in\s+(\w+)\s+mode/gi)) {
             const sp = splitSignal(bm[1]);
             const role = sp ? (ROLE_ALIAS[sp.prefix] ?? sp.prefix) : bm[1].toUpperCase();
-            add(pin, { proto: `${bm[2].toUpperCase()}-${sp?.digit ?? outerDigit}`, role });
+            add(pin, role + (sp?.digit ?? outerDigit));
             any = true;
         }
         if (!any) {
             const sp = splitSignal(outerSig);
             const bus = sp && SIGNAL_BUS[sp.prefix];
-            if (sp && bus) add(pin, { proto: `${bus}-${sp.digit}`, role: ROLE_ALIAS[sp.prefix] ?? sp.prefix });
+            if (sp && bus) add(pin, (ROLE_ALIAS[sp.prefix] ?? sp.prefix) + sp.digit);
         }
     }
 
-    const result: Record<string, PeripheralPin> = {};
-    for (const pin of Object.keys(entries)) result[pin] = combinePin(entries[pin]);
+    const result: Record<string, string> = {};
+    for (const pin of Object.keys(entries)) result[pin] = entries[pin].join('/');
     return result;
 }
