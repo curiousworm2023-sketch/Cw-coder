@@ -126,15 +126,72 @@ const PERIPHERAL_LABELS: Record<string, string> = {
 
 export interface PeripheralPin { proto: string; role: string; }
 
+// Signal-name prefix -> bus type, for deriving a (proto, role) pair from a
+// bare signal name like "TX2"/"SCL2" when no "<signal> in <BUS> mode"
+// comment is present.
+const SIGNAL_BUS: Record<string, string> = {
+    SCL: 'I2C', SDA: 'I2C',
+    SCK: 'SPI', SDI: 'SPI', SDO: 'SPI', MOSI: 'SPI', MISO: 'SPI', SS: 'SPI',
+    TX: 'USART', RX: 'USART',
+};
+// Normalize chip-datasheet signal names to the MOSI/MISO terms used elsewhere.
+const ROLE_ALIAS: Record<string, string> = { SDI: 'MOSI', SDO: 'MISO' };
+
+function splitSignal(sig: string): { prefix: string; digit: string } | null {
+    const m = sig.match(/^([A-Za-z]+)(\d)$/);
+    return m ? { prefix: m[1].toUpperCase(), digit: m[2] } : null;
+}
+
+// Combine multiple roles detected for the same pin (e.g. a PPS-routed pin
+// that's SCL in I2C mode and SCK in SPI mode) into one compact label.
+function combinePin(entries: PeripheralPin[]): PeripheralPin {
+    if (entries.length === 1) return entries[0];
+    const insts = entries.map(e => e.proto.match(/-(\d+)$/)?.[1] ?? '');
+    const bases = entries.map(e => e.proto.replace(/-\d+$/, ''));
+    const proto = insts.every(i => i === insts[0])
+        ? `${bases.join('/')}-${insts[0]}`
+        : entries.map(e => e.proto).join('/');
+    return { proto, role: entries.map(e => e.role).join('/') };
+}
+
 export function detectPeripheralPins(src: string): Record<string, PeripheralPin> {
     const s = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-    const result: Record<string, PeripheralPin> = {};
+    const entries: Record<string, PeripheralPin[]> = {};
+    const add = (pin: string, p: PeripheralPin): void => {
+        const list = entries[pin] ??= [];
+        if (!list.some(e => e.proto === p.proto && e.role === p.role)) list.push(p);
+    };
+
     for (const name of Object.keys(PERIPHERAL_PINS)) {
         if (!new RegExp(`\\b${name}\\s*\\.`).test(s)) continue;
         for (const [pin, role] of PERIPHERAL_PINS[name]) {
-            result[pin] = { proto: PERIPHERAL_LABELS[name], role };
+            add(pin, { proto: PERIPHERAL_LABELS[name], role });
         }
     }
+
+    // ── Comment-documented secondary/PPS-routed peripherals ──────────────────
+    // Best effort: matches a "// RC1 = CLK2 (SCL2 in I2C mode / SCK2 in SPI
+    // mode)" style pin-assignment comment, common in PPS-based PIC18 drivers
+    // where the simulator can't otherwise see which pins a peripheral uses.
+    for (const m of src.matchAll(/\/\/\s*(R[ABC][0-7])\s*=\s*(\w+)\s*\(([^)]*)\)/g)) {
+        const [, pin, outerSig, desc] = m;
+        const outerDigit = splitSignal(outerSig)?.digit ?? '2';
+        let any = false;
+        for (const bm of desc.matchAll(/(\w+)\s+in\s+(\w+)\s+mode/gi)) {
+            const sp = splitSignal(bm[1]);
+            const role = sp ? (ROLE_ALIAS[sp.prefix] ?? sp.prefix) : bm[1].toUpperCase();
+            add(pin, { proto: `${bm[2].toUpperCase()}-${sp?.digit ?? outerDigit}`, role });
+            any = true;
+        }
+        if (!any) {
+            const sp = splitSignal(outerSig);
+            const bus = sp && SIGNAL_BUS[sp.prefix];
+            if (sp && bus) add(pin, { proto: `${bus}-${sp.digit}`, role: ROLE_ALIAS[sp.prefix] ?? sp.prefix });
+        }
+    }
+
+    const result: Record<string, PeripheralPin> = {};
+    for (const pin of Object.keys(entries)) result[pin] = combinePin(entries[pin]);
     return result;
 }
