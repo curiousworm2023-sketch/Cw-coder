@@ -160,7 +160,12 @@ export function transpileSketch(src: string): TranspileResult {
     // Strip pointer '*' markers before subsequent declarators (e.g.
     // "int a, *b;" -> "let a, b;") without touching '*' used as
     // multiplication inside an initializer expression.
-    s = s.replace(new RegExp(`^(\\s*)${TYPES}\\s*\\*?\\s*(\\w+\\s*(?:=\\s*[^,;]+)?(?:\\s*,\\s*\\*?\\w+(?:\\s*=\\s*[^,;]+)?)*)\\s*;`, 'gm'),
+    //
+    // An initializer's "[^,;]+" can't simply stop at the first comma --
+    // function-call arguments (e.g. "float r = foo(code, REF);") contain
+    // commas too. Allow one level of parenthesized commas to pass through.
+    const VALUE = '[^,;()]*(?:\\([^()]*\\)[^,;()]*)*';
+    s = s.replace(new RegExp(`^(\\s*)${TYPES}\\s*\\*?\\s*(\\w+\\s*(?:=\\s*${VALUE})?(?:\\s*,\\s*\\*?\\w+(?:\\s*=\\s*${VALUE})?)*)\\s*;`, 'gm'),
         (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/,(\s*)\*/g, ',$1')};`);
 
     if (hoisted.length) s = hoisted.join('\n') + '\n' + s;
