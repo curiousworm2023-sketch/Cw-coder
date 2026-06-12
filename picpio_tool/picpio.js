@@ -1047,6 +1047,20 @@ function cmdVscode() {
         }
     }
 
+    // Family-specific DFP (e.g. PIC18F-K_DFP, PIC16Fxxx_DFP) and HAL ("picpio_compat*") dirs
+    const scriptDir = path.dirname(process.argv[1]);
+    const acName = dfpFamilyFor(mcu) === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    const acDir = [
+        path.join(scriptDir, acName),
+        path.join(scriptDir, '..', acName),
+    ].find(d => fs.existsSync(d)) || path.join(process.cwd(), acName);
+
+    const dfpPath = findDFP(mcu);
+    const dfpIncludes = dfpPath ? [
+        path.join(dfpPath, 'pic', 'include').replace(/\\/g, '/'),
+        path.join(dfpPath, 'pic', 'include', 'proc').replace(/\\/g, '/'),
+    ] : [];
+
     const vsDir = path.join(process.cwd(), '.vscode');
     fs.mkdirSync(vsDir, { recursive: true });
 
@@ -1071,9 +1085,8 @@ function cmdVscode() {
                 xc8Inc,
                 xc8Inc2,
                 xc8Inc.replace('/include', '/include/proc'),
-                'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
-                'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-                'C:/picpio/picpio_compat',
+                ...dfpIncludes,
+                acDir.replace(/\\/g, '/'),
                 ...extraInclude
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${cfg.clock_hz || '64000000'}`],

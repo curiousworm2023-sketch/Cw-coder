@@ -13,6 +13,7 @@ import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
 import { registerPinCompletion } from './pinCompletion';
+import { dfpFamilyFor } from './newProject';
 
 /** Find the highest installed XC8 version under C:/Program Files/Microchip/xc8/ */
 function findXC8Version(): string {
@@ -54,6 +55,13 @@ function ensureCppProperties(projectDir: string): void {
     const xc8ver   = findXC8Version();
     const xc8base  = `C:/Program Files/Microchip/xc8/${xc8ver}`;
 
+    const dfpFamily = dfpFamilyFor(mcu);
+    const acName    = dfpFamily === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    const dfpIncludes = dfpFamily === 'PIC18F-K_DFP' ? [
+        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
+        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
+    ] : [];
+
     const includePath = [
         '${workspaceFolder}/src',
         '${workspaceFolder}/include',
@@ -61,9 +69,8 @@ function ensureCppProperties(projectDir: string): void {
         `${xc8base}/pic/include`,
         `${xc8base}/pic/include/c99`,
         `${xc8base}/pic/include/proc`,
-        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
-        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-        'C:/picpio/picpio_compat',
+        ...dfpIncludes,
+        `C:/picpio/${acName}`,
         ...extras,
     ];
 

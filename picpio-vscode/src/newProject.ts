@@ -22,7 +22,10 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC18F4550',       description:'32KB / 48MHz / USB 2.0',                   family:'PIC18', clock:'48000000'  },
     { label:'PIC18F452',        description:'32KB / 40MHz / SPI + I2C',                 family:'PIC18', clock:'40000000'  },
     { label:'PIC18F2550',       description:'32KB / 48MHz / USB + ADC',                 family:'PIC18', clock:'48000000'  },
-    { label:'PIC16F877A',       description:'14KB / 20MHz / classic PIC16',             family:'PIC16', clock:'20000000'  },
+    { label:'PIC16F877A',       description:'14KB / 20MHz / 40-pin, +PORTD/E',          family:'PIC16', clock:'20000000'  },
+    { label:'PIC16F874A',       description:'7KB / 20MHz / 40-pin, +PORTD/E',           family:'PIC16', clock:'20000000'  },
+    { label:'PIC16F876A',       description:'14KB / 20MHz / 28-pin classic PIC16',      family:'PIC16', clock:'20000000'  },
+    { label:'PIC16F873A',       description:'7KB / 20MHz / 28-pin classic PIC16',       family:'PIC16', clock:'20000000'  },
     { label:'PIC16F628A',       description:'2KB / 20MHz / tiny PIC16',                 family:'PIC16', clock:'20000000'  },
     { label:'PIC16F1829',       description:'7KB / 32MHz / MSSP + CCP',                 family:'PIC16', clock:'32000000'  },
     { label:'PIC24FJ128GA010',  description:'128KB / 32MHz / 16-bit PIC24',             family:'PIC24', clock:'32000000'  },
@@ -54,6 +57,15 @@ function isPicpioInstalled(): boolean {
         }
         return false;
     }
+}
+
+// Mirrors picpio.js's dfpFamilyFor() for the MCUs in MCU_LIST.
+export function dfpFamilyFor(mcu: string): string {
+    const u = mcu.toUpperCase();
+    if (/PIC18F\d+K/.test(u)) return 'PIC18F-K_DFP';
+    if (/PIC16F1/.test(u))    return 'PIC16F1xxxx_DFP';
+    if (/PIC16/.test(u))      return 'PIC16Fxxx_DFP';
+    return 'PIC18F-K_DFP';
 }
 
 // Creates the project folder and picpio.ini manually (no picpio.exe needed)
@@ -170,6 +182,13 @@ function scaffoldProject(opts: {
     }, null, 2));
 
     // .vscode/c_cpp_properties.json
+    const dfpFamily = dfpFamilyFor(mcu);
+    const acName    = dfpFamily === 'PIC16Fxxx_DFP' ? 'picpio_compat_pic16' : 'picpio_compat';
+    const dfpIncludes = dfpFamily === 'PIC18F-K_DFP' ? [
+        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
+        'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
+    ] : [];
+
     fs.writeFileSync(path.join(projectDir, '.vscode', 'c_cpp_properties.json'), JSON.stringify({
         configurations: [{
             name: 'PIC',
@@ -180,9 +199,8 @@ function scaffoldProject(opts: {
                 'C:/Program Files/Microchip/xc8/v3.10/pic/include',
                 'C:/Program Files/Microchip/xc8/v3.10/pic/include/c99',
                 'C:/Program Files/Microchip/xc8/v3.10/pic/include/proc',
-                'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include',
-                'C:/picpio/packs/PIC18F-K_DFP/xc8/pic/include/proc',
-                'C:/picpio/picpio_compat'
+                ...dfpIncludes,
+                `C:/picpio/${acName}`
             ],
             defines: [`__${mcu}__`, `_XTAL_FREQ=${clock}`],
             cStandard:   'c99',

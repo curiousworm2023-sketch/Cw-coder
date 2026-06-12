@@ -34,8 +34,25 @@ static const PinInfo _pins[] = {
     { &TRISA, &PORTA, 3, 0x03   }, // A3  RA3/AN3
     { &TRISA, &PORTA, 4, NO_ADC }, // A4  RA4 (open-drain, no ADC)
     { &TRISA, &PORTA, 5, 0x04   }, // A5  RA5/AN4
+#ifdef PICPIO_HAS_PORTDE
+    { &TRISD, &PORTD, 0, NO_ADC }, // D14 RD0
+    { &TRISD, &PORTD, 1, NO_ADC }, // D15 RD1
+    { &TRISD, &PORTD, 2, NO_ADC }, // D16 RD2
+    { &TRISD, &PORTD, 3, NO_ADC }, // D17 RD3
+    { &TRISD, &PORTD, 4, NO_ADC }, // D18 RD4
+    { &TRISD, &PORTD, 5, NO_ADC }, // D19 RD5
+    { &TRISD, &PORTD, 6, NO_ADC }, // D20 RD6
+    { &TRISD, &PORTD, 7, NO_ADC }, // D21 RD7
+    { &TRISE, &PORTE, 0, 0x05   }, // D22 RE0/AN5
+    { &TRISE, &PORTE, 1, 0x06   }, // D23 RE1/AN6
+    { &TRISE, &PORTE, 2, 0x07   }, // D24 RE2/AN7
+#endif
 };
+#ifdef PICPIO_HAS_PORTDE
+#define PIN_COUNT 31
+#else
 #define PIN_COUNT 20
+#endif
 
 // ── millis counter (Timer1, 16-bit, Fosc/4, 1:1 prescale) ─────────────────────
 #define TMR1_RELOAD (65536UL - (_XTAL_FREQ/4UL/1000UL))
@@ -43,7 +60,11 @@ static const PinInfo _pins[] = {
 static volatile uint32_t _ms = 0;
 
 // ── Serial ring buffer ────────────────────────────────────────────────────────
+#ifdef PICPIO_SMALL_RAM
+#define RX_BUF 16
+#else
 #define RX_BUF 64
+#endif
 static volatile uint8_t _rxbuf[RX_BUF];
 static volatile uint8_t _rxhead = 0, _rxtail = 0;
 
