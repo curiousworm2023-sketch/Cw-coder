@@ -248,6 +248,7 @@ function dfpFamilyFor(mcu) {
     if (u.match(/DSPIC30F/))      return ''; // XC16 v2.10 bundles dsPIC30F headers/linker scripts -- no DFP needed
     if (u.match(/PIC24FJ/))       return ''; // XC16 v2.10 bundles PIC24F headers/linker scripts -- no DFP needed
     if (u.match(/PIC24/))         return 'PIC24F_DFP';
+    if (u.match(/DSPIC33EP/))     return ''; // XC16 v2.10 bundles dsPIC33E headers/linker scripts -- no DFP needed
     if (u.match(/DSPIC33/))       return 'dsPIC33_DFP';
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
     if (u.match(/PIC32MZ/))       return 'PIC32MZ_DFP';
@@ -262,6 +263,7 @@ function halVariantFor(mcu) {
     if (u.match(/PIC18F(4550|452|2550)/)) return 'picpio_compat_pic18_classic';
     if (u.match(/DSPIC30F/)) return 'picpio_compat_pic30f';
     if (u.match(/PIC24FJ/)) return 'picpio_compat_pic24';
+    if (u.match(/DSPIC33EP/)) return 'picpio_compat_dspic33e';
     return 'picpio_compat';
 }
 
@@ -516,7 +518,7 @@ function cmdBuild(opts) {
 
     // DFP flag (required by XC8 v3.x / XC16 v2.x for device-specific headers)
     // dsPIC30F and PIC24FJ are bundled directly in XC16 v2.10 and need no DFP at all.
-    const needsDFP = !family.startsWith('PIC32') && !/DSPIC30F/.test(mcu.toUpperCase()) && !/PIC24FJ/.test(mcu.toUpperCase());
+    const needsDFP = !family.startsWith('PIC32') && !/DSPIC30F/.test(mcu.toUpperCase()) && !/PIC24FJ/.test(mcu.toUpperCase()) && !/DSPIC33EP/.test(mcu.toUpperCase());
     let dfpFlag = '';
     if (needsDFP) {
         let dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
@@ -1083,6 +1085,7 @@ function cmdVscode() {
                 path.join(root, 'include').replace(/\\/g, '/'),
                 path.join(root, 'support', 'dsPIC30F', 'h').replace(/\\/g, '/'),
                 path.join(root, 'support', 'PIC24F', 'h').replace(/\\/g, '/'),
+                path.join(root, 'support', 'dsPIC33E', 'h').replace(/\\/g, '/'),
             ];
         }
         buildProblemMatcher = ['$gcc'];
