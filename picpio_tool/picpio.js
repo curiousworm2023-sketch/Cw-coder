@@ -1112,7 +1112,7 @@ function buildDatasheetMd(meta) {
         `# ${mcu} — Datasheet & Resources`, '',
         `Microchip product page (datasheet, errata, programming specs):`, '',
         `<!-- Ctrl+Click (Cmd+Click on Mac) the link below to open it in your browser -->`,
-        `[https://www.microchip.com/en-us/product/${mcu}](https://www.microchip.com/en-us/product/${mcu})`,
+        `[Open ${mcu} product page on microchip.com](https://www.microchip.com/en-us/product/${mcu})`,
         '',
     ].join('\n');
 }
