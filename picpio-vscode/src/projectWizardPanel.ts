@@ -95,9 +95,7 @@ export class ProjectWizardPanel {
     private _html(): string {
         const defaultLocation = path.join(os.homedir(), 'Documents', 'PICPIO', 'Projects');
 
-        const boardOptions = MCU_LIST.map(m =>
-            `<option value="${m.label}">${m.label} — ${m.description}</option>`
-        ).join('');
+        const mcuListJson = JSON.stringify(MCU_LIST.map(m => ({ label: m.label, description: m.description })));
 
         const fwOptions = FRAMEWORK_LIST.map(f =>
             `<option value="${f.label}">${f.label}</option>`
@@ -159,6 +157,19 @@ select{
   cursor:pointer;
 }
 input[type=text]:focus, select:focus{outline:1px solid var(--accent)}
+.combo{position:relative}
+.combo-dropdown{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+  max-height:240px;overflow-y:auto;z-index:50;
+  background:var(--vscode-dropdown-background);
+  border:1px solid var(--vscode-focusBorder, var(--vscode-dropdown-border, #555));
+  border-radius:var(--radius);
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+.combo-dropdown.show{display:block}
+.combo-item{padding:6px 10px;cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combo-item:hover,.combo-item.active{background:var(--vscode-list-hoverBackground, rgba(255,255,255,.08))}
+.combo-empty{padding:6px 10px;color:var(--vscode-descriptionForeground);font-size:12px}
 .loc-row{display:flex;align-items:center;gap:8px}
 .loc-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
 .loc-row label{width:auto;text-align:left;cursor:pointer}
@@ -218,7 +229,10 @@ input[type=text]:focus, select:focus{outline:1px solid var(--accent)}
     <div class="field">
       <label for="mcu">Board</label>
       <div class="field-control">
-        <select id="mcu">${boardOptions}</select>
+        <div class="combo" id="mcuCombo">
+          <input type="text" id="mcu" autocomplete="off" placeholder="Type to search boards...">
+          <div class="combo-dropdown" id="mcuDropdown"></div>
+        </div>
       </div>
     </div>
 
@@ -261,6 +275,88 @@ const vscode = acquireVsCodeApi();
 
 function send(command) { vscode.postMessage({ command }); }
 
+// --- Board combobox: type-to-search, like MPLAB's Family/Device pickers ---
+const MCU_LIST = ${mcuListJson};
+const mcuInput    = document.getElementById('mcu');
+const mcuDropdown = document.getElementById('mcuDropdown');
+const mcuCombo    = document.getElementById('mcuCombo');
+let selectedMcu   = MCU_LIST[0].label;
+let mcuFiltered   = MCU_LIST;
+let mcuActiveIndex = -1;
+mcuInput.value = selectedMcu;
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function renderMcuDropdown(filter) {
+  const f = (filter || '').trim().toLowerCase();
+  mcuFiltered = f ? MCU_LIST.filter(m => (m.label + ' ' + m.description).toLowerCase().includes(f)) : MCU_LIST;
+  mcuActiveIndex = -1;
+  mcuDropdown.innerHTML = mcuFiltered.length
+    ? mcuFiltered.map((m, i) => \`<div class="combo-item" data-index="\${i}">\${escHtml(m.label)} — \${escHtml(m.description)}</div>\`).join('')
+    : '<div class="combo-empty">No matching boards</div>';
+}
+
+function highlightMcu(i) {
+  const items = mcuDropdown.querySelectorAll('.combo-item');
+  items.forEach(el => el.classList.remove('active'));
+  if (items[i]) { items[i].classList.add('active'); items[i].scrollIntoView({ block: 'nearest' }); }
+  mcuActiveIndex = i;
+}
+
+function selectMcu(label) {
+  selectedMcu = label;
+  mcuInput.value = label;
+  mcuDropdown.classList.remove('show');
+}
+
+mcuInput.addEventListener('focus', () => {
+  renderMcuDropdown('');
+  mcuDropdown.classList.add('show');
+  mcuInput.select();
+});
+
+mcuInput.addEventListener('input', () => {
+  renderMcuDropdown(mcuInput.value);
+  mcuDropdown.classList.add('show');
+});
+
+mcuInput.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!mcuDropdown.classList.contains('show')) { renderMcuDropdown(mcuInput.value); mcuDropdown.classList.add('show'); }
+    highlightMcu(Math.min(mcuActiveIndex + 1, mcuFiltered.length - 1));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightMcu(Math.max(mcuActiveIndex - 1, 0));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (mcuActiveIndex >= 0 && mcuFiltered[mcuActiveIndex]) {
+      selectMcu(mcuFiltered[mcuActiveIndex].label);
+    } else {
+      const match = MCU_LIST.find(m => m.label.toLowerCase() === mcuInput.value.trim().toLowerCase());
+      if (match) selectMcu(match.label);
+    }
+  } else if (e.key === 'Escape') {
+    mcuDropdown.classList.remove('show');
+  }
+});
+
+mcuDropdown.addEventListener('mousedown', e => {
+  const item = e.target.closest('.combo-item');
+  if (!item) return;
+  e.preventDefault();
+  selectMcu(mcuFiltered[Number(item.dataset.index)].label);
+});
+
+document.addEventListener('click', e => {
+  if (mcuCombo.contains(e.target)) return;
+  mcuDropdown.classList.remove('show');
+  const match = MCU_LIST.find(m => m.label.toLowerCase() === mcuInput.value.trim().toLowerCase());
+  selectMcu(match ? match.label : selectedMcu);
+});
+
 function toggleLocation() {
   const useDefault = document.getElementById('useDefault').checked;
   document.getElementById('locRow').style.display = useDefault ? 'none' : 'flex';
@@ -277,7 +373,7 @@ function finish() {
   vscode.postMessage({
     command:    'create',
     name:       document.getElementById('name').value,
-    mcu:        document.getElementById('mcu').value,
+    mcu:        selectedMcu,
     framework:  document.getElementById('framework').value,
     programmer: document.getElementById('programmer').value,
     useDefault: document.getElementById('useDefault').checked,
