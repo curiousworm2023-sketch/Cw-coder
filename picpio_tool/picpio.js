@@ -73,7 +73,8 @@ Commands:
   lib list      List installed libraries
   lib update    Update library registry
   init          Create a new project (use --name --mcu --family etc.)
-  reference     (Re)generate REFERENCE.md (pin map + API) for this project
+  reference     (Re)generate REFERENCE.md (pin map + API) and DATASHEET.md
+                for this project
   vscode        Generate .vscode/tasks.json and c_cpp_properties.json
   install-dfp [device|pack]  Download a Device Family Pack.
                 Defaults to the [project] mcu in picpio.ini.
@@ -1102,6 +1103,19 @@ function parseHalHeader(halDir, mcu) {
     };
 }
 
+// Small standalone file (sits next to REFERENCE.md/README in the project root,
+// visible in the file explorer) linking to the MCU's Microchip product page —
+// datasheet, errata, and programming specs.
+function buildDatasheetMd(meta) {
+    const { mcu } = meta;
+    return [
+        `# ${mcu} — Datasheet & Resources`, '',
+        `Microchip product page (datasheet, errata, programming specs):`, '',
+        `[https://www.microchip.com/en-us/product/${mcu}](https://www.microchip.com/en-us/product/${mcu})`,
+        '',
+    ].join('\n');
+}
+
 function buildReferenceMd(meta) {
     const { name, mcu, family, clock, framework } = meta;
     const isXC16 = /^(PIC24|DSPIC)/i.test(family) || /DSPIC30F/i.test(mcu);
@@ -1120,10 +1134,6 @@ function buildReferenceMd(meta) {
     p(`| Clock | ${clock} Hz |`);
     p(`| Framework | ${framework} |`);
     p(`| Toolchain | ${isXC16 ? 'XC16 (16-bit)' : 'XC8 (8-bit)'} |`, '');
-
-    p('## Datasheet & Resources', '');
-    p(`Microchip product page (datasheet, errata, programming specs): ` +
-      `[microchip.com/en-us/product/${mcu}](https://www.microchip.com/en-us/product/${mcu})`, '');
 
     if (!halDir) {
         p('> ⚠️ No PICPIO Arduino-compatibility HAL exists for this MCU yet, so the pin map and',
@@ -1260,9 +1270,9 @@ function cmdReference() {
         clock:     cfg.clock_hz || cfg.clock || '64000000',
         framework: cfg.framework || 'bare-metal',
     };
-    const out = path.join(process.cwd(), 'REFERENCE.md');
-    fs.writeFileSync(out, buildReferenceMd(meta));
-    console.log(`[PICPIO] Wrote REFERENCE.md for ${meta.mcu}`);
+    fs.writeFileSync(path.join(process.cwd(), 'REFERENCE.md'), buildReferenceMd(meta));
+    fs.writeFileSync(path.join(process.cwd(), 'DATASHEET.md'), buildDatasheetMd(meta));
+    console.log(`[PICPIO] Wrote REFERENCE.md and DATASHEET.md for ${meta.mcu}`);
 }
 
 function cmdInit(args) {
@@ -1336,12 +1346,14 @@ function cmdInit(args) {
 
     fs.writeFileSync(mainFile, mainContent);
 
-    // REFERENCE.md — per-chip pin map + API cheat-sheet for the selected MCU
+    // REFERENCE.md / DATASHEET.md — per-chip pin map + API cheat-sheet and a
+    // link to the MCU's Microchip product page (datasheet, errata, etc.)
     try {
-        fs.writeFileSync(path.join(outDir, 'REFERENCE.md'),
-            buildReferenceMd({ name, mcu, family, clock, framework: fw }));
+        const meta = { name, mcu, family, clock, framework: fw };
+        fs.writeFileSync(path.join(outDir, 'REFERENCE.md'), buildReferenceMd(meta));
+        fs.writeFileSync(path.join(outDir, 'DATASHEET.md'), buildDatasheetMd(meta));
     } catch (e) {
-        console.error(`[PICPIO] (REFERENCE.md skipped: ${e.message})`);
+        console.error(`[PICPIO] (REFERENCE.md/DATASHEET.md skipped: ${e.message})`);
     }
 
     // .vscode/tasks.json
