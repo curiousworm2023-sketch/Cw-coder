@@ -246,6 +246,7 @@ function dfpFamilyFor(mcu) {
     if (u.match(/PIC16F1/))       return 'PIC12-16F1xxx_DFP';
     if (u.match(/PIC16/))         return 'PIC16Fxxx_DFP';
     if (u.match(/DSPIC30F/))      return ''; // XC16 v2.10 bundles dsPIC30F headers/linker scripts -- no DFP needed
+    if (u.match(/PIC24FJ/))       return ''; // XC16 v2.10 bundles PIC24F headers/linker scripts -- no DFP needed
     if (u.match(/PIC24/))         return 'PIC24F_DFP';
     if (u.match(/DSPIC33/))       return 'dsPIC33_DFP';
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
@@ -260,6 +261,7 @@ function halVariantFor(mcu) {
     if (u.match(/PIC16/))   return 'picpio_compat_pic16';
     if (u.match(/PIC18F(4550|452|2550)/)) return 'picpio_compat_pic18_classic';
     if (u.match(/DSPIC30F/)) return 'picpio_compat_pic30f';
+    if (u.match(/PIC24FJ/)) return 'picpio_compat_pic24';
     return 'picpio_compat';
 }
 
@@ -513,21 +515,23 @@ function cmdBuild(opts) {
     const incFlags = includes.map(i => `-I"${i}"`).join(' ');
 
     // DFP flag (required by XC8 v3.x / XC16 v2.x for device-specific headers)
-    // dsPIC30F is bundled directly in XC16 v2.10 and needs no DFP at all.
-    const needsDFP = !family.startsWith('PIC32') && !/DSPIC30F/.test(mcu.toUpperCase());
+    // dsPIC30F and PIC24FJ are bundled directly in XC16 v2.10 and need no DFP at all.
+    const needsDFP = !family.startsWith('PIC32') && !/DSPIC30F/.test(mcu.toUpperCase()) && !/PIC24FJ/.test(mcu.toUpperCase());
     let dfpFlag = '';
-    let dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
-    if (!dfp && !cfg.dfp_path && needsDFP) {
-        console.log(`[PICPIO] DFP pack not found for ${mcu}; downloading automatically...`);
-        dfp = ensureDFP(mcu);
-    }
-    if (dfp) {
-        dfpFlag = `-mdfp="${dfp}"`;
-        if (verbose) console.log(`[PICPIO] DFP: ${dfp}`);
-    } else if (needsDFP) {
-        console.warn('[PICPIO] WARNING: DFP pack not found. Build may fail.');
-        console.warn('         Run: picpio install-dfp   (auto-detects the device from picpio.ini)');
-        console.warn('         Or set dfp_path in picpio.ini [build] section.');
+    if (needsDFP) {
+        let dfp = cfg.dfp_path ? cfg.dfp_path : findDFP(mcu);
+        if (!dfp && !cfg.dfp_path) {
+            console.log(`[PICPIO] DFP pack not found for ${mcu}; downloading automatically...`);
+            dfp = ensureDFP(mcu);
+        }
+        if (dfp) {
+            dfpFlag = `-mdfp="${dfp}"`;
+            if (verbose) console.log(`[PICPIO] DFP: ${dfp}`);
+        } else {
+            console.warn('[PICPIO] WARNING: DFP pack not found. Build may fail.');
+            console.warn('         Run: picpio install-dfp   (auto-detects the device from picpio.ini)');
+            console.warn('         Or set dfp_path in picpio.ini [build] section.');
+        }
     }
 
     let compilerFlags = '';
@@ -1078,6 +1082,7 @@ function cmdVscode() {
             xc16Includes = [
                 path.join(root, 'include').replace(/\\/g, '/'),
                 path.join(root, 'support', 'dsPIC30F', 'h').replace(/\\/g, '/'),
+                path.join(root, 'support', 'PIC24F', 'h').replace(/\\/g, '/'),
             ];
         }
         buildProblemMatcher = ['$gcc'];

@@ -40,7 +40,7 @@ export const MCU_LIST: McuChoice[] = [
     { label:'PIC16F1825',       description:'7KB / 32MHz / MSSP + CCP, 14-pin, 1KB RAM',family:'PIC16', clock:'32000000'  },
     { label:'PIC16F1824',       description:'7KB / 32MHz / MSSP + CCP, 14-pin',         family:'PIC16', clock:'32000000'  },
     { label:'PIC16F1823',       description:'3.5KB / 32MHz / MSSP + CCP, 14-pin',       family:'PIC16', clock:'32000000'  },
-    { label:'PIC24FJ128GA010',  description:'128KB / 32MHz / 16-bit PIC24',             family:'PIC24', clock:'32000000'  },
+    { label:'PIC24FJ128GA010',  description:'128KB / 16-bit PIC24, UART x2 + SPI + I2C + 5xPWM, 7.3728MHz XT', family:'PIC24', clock:'7372800'  },
     { label:'dsPIC30F4011',     description:'28KB / 30MIPS / 16-bit dsPIC, UART+SPI+I2C+PWM', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC30F2010',     description:'12KB / 30MIPS / 16-bit dsPIC, 28-pin, UART+SPI+I2C+2xPWM', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC33EP512MU810',description:'512KB / 140MHz / DSP + FPU',               family:'dsPIC', clock:'140000000' },
@@ -77,6 +77,7 @@ function isPicpioInstalled(): boolean {
 export function dfpFamilyFor(mcu: string): string {
     const u = mcu.toUpperCase();
     if (/DSPIC30F/.test(u)) return ''; // XC16 v2.10 bundles dsPIC30F headers/linker scripts -- no DFP needed
+    if (/PIC24FJ/.test(u)) return ''; // XC16 v2.10 bundles PIC24F headers/linker scripts -- no DFP needed
     if (/PIC18F\d+K/.test(u)) return 'PIC18F-K_DFP';
     if (/PIC18F\d+Q10/.test(u)) return 'PIC18F-Q_DFP';
     if (/PIC16F1/.test(u))    return 'PIC12-16F1xxx_DFP';
@@ -91,6 +92,7 @@ export function halVariantFor(mcu: string): string {
     if (/PIC16/.test(u))   return 'picpio_compat_pic16';
     if (/PIC18F(4550|452|2550)/.test(u)) return 'picpio_compat_pic18_classic';
     if (/DSPIC30F/.test(u)) return 'picpio_compat_pic30f';
+    if (/PIC24FJ/.test(u)) return 'picpio_compat_pic24';
     return 'picpio_compat';
 }
 
@@ -236,6 +238,7 @@ function scaffoldProject(opts: {
     const xc16Includes = xc16Root ? [
         path.join(xc16Root, 'include').replace(/\\/g, '/'),
         path.join(xc16Root, 'support', 'dsPIC30F', 'h').replace(/\\/g, '/'),
+        path.join(xc16Root, 'support', 'PIC24F', 'h').replace(/\\/g, '/'),
     ] : [];
 
     fs.writeFileSync(path.join(projectDir, '.vscode', 'c_cpp_properties.json'), JSON.stringify({
