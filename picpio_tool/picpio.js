@@ -42,6 +42,7 @@ switch (cmd) {
     case 'clean':   cmdClean();               break;
     case 'monitor': cmdMonitor();             break;
     case 'init':    cmdInit(args.slice(1));   break;
+    case 'reference': cmdReference();          break;
     case 'lib':          cmdLib(args.slice(1));    break;
     case 'vscode':       cmdVscode();              break;
     case 'erase':        cmdErase();               break;
@@ -72,6 +73,7 @@ Commands:
   lib list      List installed libraries
   lib update    Update library registry
   init          Create a new project (use --name --mcu --family etc.)
+  reference     (Re)generate REFERENCE.md (pin map + API) for this project
   vscode        Generate .vscode/tasks.json and c_cpp_properties.json
   install-dfp [device|pack]  Download a Device Family Pack.
                 Defaults to the [project] mcu in picpio.ini.
@@ -970,6 +972,295 @@ function downloadAndExtract(url, libDir, name) {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// ─── REFERENCE.md GENERATOR ──────────────────────────────────────────────────
+// Builds a per-project REFERENCE.md from the selected MCU's HAL header: the full
+// pin map (Arduino number <-> native port pin <-> analog channel), the available
+// PICPIO API, and copy-paste usage. Everything except the API prose is derived by
+// lightly preprocessing the HAL's Picpio.h with the device macro the real compiler
+// predefines, so the table always matches what actually compiles for that chip.
+
+function deviceMacrosFor(mcu) {
+    const set = new Set();
+    if (!mcu) return set;
+    if (/^PIC1[68]/i.test(mcu)) set.add('_' + mcu.replace(/^PIC/i, ''));  // XC8: _16F877A, _18F47K40
+    set.add('__' + mcu + '__');                                          // XC16: __dsPIC30F2010__
+    return set;
+}
+
+function resolveHalDir(mcu) {
+    const scriptDir = path.dirname(process.argv[1]);
+    const acName = halVariantFor(mcu);
+    return [
+        path.join(scriptDir, acName),
+        path.join(scriptDir, '..', acName),
+        path.join(process.cwd(), acName),
+    ].find(d => fs.existsSync(path.join(d, 'Picpio.h')));
+}
+
+// Tiny C preprocessor: keep only lines whose #if/#ifdef/#ifndef/#elif/#else nesting
+// is active for the given predefined macros, tracking #define/#undef as it goes so
+// derived macros (e.g. PICPIO_HAS_PORTDE) resolve too. Splices line continuations.
+// Returns { text } of surviving non-directive lines and { macros } name->value for
+// every active #define (the directive lines themselves are consumed).
+function preprocessHeader(text, predefined) {
+    const joined = text.replace(/\\\r?\n/g, ' ');
+    const out = [];
+    const macros = new Map();
+    for (const n of predefined) macros.set(n, '1');
+    const has = (n) => macros.has(n);
+    const stack = [];                       // { active, taken, parent }
+    const active = () => stack.every(s => s.active);
+    const evalExpr = (expr) => {
+        let e = expr.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/, '');
+        e = e.replace(/defined\s*\(\s*([A-Za-z_]\w*)\s*\)/g, (_, n) => has(n) ? '1' : '0');
+        e = e.replace(/defined\s+([A-Za-z_]\w*)/g, (_, n) => has(n) ? '1' : '0');
+        e = e.replace(/[A-Za-z_]\w*/g, '0'); // any remaining identifier -> 0
+        e = e.replace(/[^0-9()!&|<>=+\-*/% :?]/g, ' ');
+        try { return !!Function('"use strict";return (' + e + ')')(); } catch { return false; }
+    };
+    for (const line of joined.split('\n')) {
+        const m = line.match(/^\s*#\s*(ifdef|ifndef|if|elif|else|endif|define|undef)\b(.*)$/);
+        if (m) {
+            const dir = m[1], rest = m[2].trim();
+            if (dir === 'ifdef' || dir === 'ifndef') {
+                const parent = active();
+                let cond = has(rest.split(/\s+/)[0]);
+                if (dir === 'ifndef') cond = !cond;
+                stack.push({ active: parent && cond, taken: parent && cond, parent });
+            } else if (dir === 'if') {
+                const parent = active(), cond = evalExpr(rest);
+                stack.push({ active: parent && cond, taken: parent && cond, parent });
+            } else if (dir === 'elif') {
+                const top = stack[stack.length - 1];
+                if (top) {
+                    const cond = evalExpr(rest);
+                    if (top.parent && !top.taken && cond) { top.active = true; top.taken = true; }
+                    else top.active = false;
+                }
+            } else if (dir === 'else') {
+                const top = stack[stack.length - 1];
+                if (top) { top.active = top.parent && !top.taken; top.taken = top.taken || top.active; }
+            } else if (dir === 'endif') {
+                stack.pop();
+            } else if (dir === 'define') {
+                if (active()) {
+                    const dm = rest.match(/^([A-Za-z_]\w*)\s*(.*)$/);
+                    if (dm && !macros.has(dm[1])) macros.set(dm[1], dm[2].trim());
+                }
+            } else if (dir === 'undef') {
+                if (active()) macros.delete(rest.split(/\s+/)[0]);
+            }
+            continue;
+        }
+        if (active()) out.push(line);
+    }
+    return { text: out.join('\n'), macros };
+}
+
+function parseHalHeader(halDir, mcu) {
+    const { text, macros } = preprocessHeader(fs.readFileSync(path.join(halDir, 'Picpio.h'), 'utf8'), deviceMacrosFor(mcu));
+
+    const defs = {};
+    for (const [k, v] of macros) { const tok = (v || '').match(/^[^\s/]+/); defs[k] = tok ? tok[0] : ''; }
+    const resolve = (tok, seen) => {
+        if (tok == null) return null;
+        if (/^0x[0-9a-f]+$/i.test(tok)) return parseInt(tok, 16);
+        if (/^\d+$/.test(tok)) return parseInt(tok, 10);
+        seen = seen || new Set();
+        if (defs[tok] != null && !seen.has(tok)) { seen.add(tok); return resolve(defs[tok], seen); }
+        return null;
+    };
+
+    const names = Object.keys(defs);
+    const dPins = names.filter(n => /^D\d+$/.test(n)).sort((a, b) => resolve(a) - resolve(b));
+    const aPins = names.filter(n => /^A\d+$/.test(n)).sort((a, b) => (+a.slice(1)) - (+b.slice(1)));
+    const natives = names.filter(n => /^R[A-Z]\d+$/.test(n));
+    const nativeByVal = {}, analogByVal = {};
+    for (const n of natives) { const v = resolve(n); if (v != null && nativeByVal[v] == null) nativeByVal[v] = n; }
+    for (const a of aPins)   { const v = resolve(a); if (v != null) analogByVal[v] = a; }
+
+    const grabExtern = (type, nm) => {
+        const m = text.match(new RegExp('extern\\s+' + type + '\\s+' + nm + '\\s*;[ \\t]*(?://[ \\t]*(.*))?'));
+        return m ? { present: true, note: (m[1] || '').trim() } : { present: false, note: '' };
+    };
+    const grabProto = (sig) => {
+        const m = text.match(new RegExp(sig + '[^;]*;[ \\t]*(?://[ \\t]*(.*))?'));
+        return m && m[1] ? m[1].trim() : '';
+    };
+
+    return {
+        resolve, dPins, aPins, nativeByVal, analogByVal, ledVal: resolve('LED_BUILTIN'),
+        serial:  grabExtern('HardwareSerial_t', 'Serial'),
+        serial2: grabExtern('HardwareSerial_t', 'Serial2'),
+        wire:    grabExtern('TwoWire_t', 'Wire'),
+        wire2:   grabExtern('TwoWire_t', 'Wire2'),
+        spi:     grabExtern('SPIClass_t', 'SPI'),
+        spi2:    grabExtern('SPIClass_t', 'SPI2'),
+        analogReadNote:  grabProto('int\\s+analogRead\\(uint8_t pin\\)'),
+        analogWriteNote: grabProto('void\\s+analogWrite\\(uint8_t pin, uint8_t duty\\)'),
+        hasADC: aPins.length > 0,
+    };
+}
+
+function buildReferenceMd(meta) {
+    const { name, mcu, family, clock, framework } = meta;
+    const isXC16 = /^(PIC24|DSPIC)/i.test(family) || /DSPIC30F/i.test(mcu);
+    // PIC32 (MIPS/XC32) has no PICPIO HAL yet; halVariantFor would otherwise fall
+    // through to the unrelated PIC18 K40 header and emit a bogus map.
+    const noHal = /^PIC32/i.test(mcu) || /^PIC32/i.test(family);
+    const halDir = noHal ? null : resolveHalDir(mcu);
+    const L = [];
+    const p = (...s) => L.push(...s);
+
+    p(`# ${name} — PICPIO Reference`, '');
+    p(`> Auto-generated for **${mcu}** (${family} family). Re-create any time with \`picpio reference\`.`, '');
+    p('| Property | Value |', '|---|---|');
+    p(`| MCU | ${mcu} |`);
+    p(`| Family | ${family} |`);
+    p(`| Clock | ${clock} Hz |`);
+    p(`| Framework | ${framework} |`);
+    p(`| Toolchain | ${isXC16 ? 'XC16 (16-bit)' : 'XC8 (8-bit)'} |`, '');
+
+    if (!halDir) {
+        p('> ⚠️ No PICPIO Arduino-compatibility HAL exists for this MCU yet, so the pin map and',
+          '> API helpers below are unavailable. You can still build bare-metal projects against',
+          '> `<xc.h>` directly (`framework = bare-metal` in `picpio.ini`).', '');
+        return L.join('\n');
+    }
+
+    const h = parseHalHeader(halDir, mcu);
+
+    // ── Pin map ──
+    p('## Pin Map', '');
+    p('Any of these names are interchangeable in `pinMode` / `digitalWrite` / `digitalRead`:',
+      `the Arduino number (\`D5\`), the native port pin (\`RC2\`), or — for analog-capable pins —`,
+      `the analog name (\`A0\`). This chip exposes **${h.dPins.length} digital pins** and **${h.aPins.length} analog channels**.`, '');
+    p('| Arduino | Native pin | Analog | Notes |', '|---|---|---|---|');
+    // One row per distinct pin value: prefer the D-name; include analog-only pins
+    // (e.g. A0..A5 with no D alias on 28-pin parts) so the ADC channels are listed too.
+    const dVals = new Set(h.dPins.map(d => h.resolve(d)));
+    const rows = h.dPins.map(d => ({ v: h.resolve(d), arduino: d }));
+    for (const a of h.aPins) { const v = h.resolve(a); if (!dVals.has(v)) rows.push({ v, arduino: a }); }
+    rows.sort((x, y) => x.v - y.v);
+    for (const r of rows) {
+        const notes = (h.ledVal != null && r.v === h.ledVal) ? 'LED_BUILTIN' : '';
+        const nat = h.nativeByVal[r.v] ? '`' + h.nativeByVal[r.v] + '`' : '';
+        const ana = h.analogByVal[r.v] ? '`' + h.analogByVal[r.v] + '`' : '';
+        p(`| \`${r.arduino}\` | ${nat} | ${ana} | ${notes} |`);
+    }
+    p('');
+
+    // ── Peripherals ──
+    p('## On-Chip Peripherals', '');
+    p('| Peripheral | Object / call | Pins |', '|---|---|---|');
+    const prow = (label, obj, info) => { if (info.present) p(`| ${label} | \`${obj}\` | ${info.note || '—'} |`); };
+    prow('UART', 'Serial', h.serial);
+    prow('UART #2', 'Serial2', h.serial2);
+    prow('I2C', 'Wire', h.wire);
+    prow('I2C #2', 'Wire2', h.wire2);
+    prow('SPI', 'SPI', h.spi);
+    prow('SPI #2', 'SPI2', h.spi2);
+    if (h.hasADC) p(`| ADC | \`analogRead(pin)\` | ${h.analogReadNote || ('A0..A' + (h.aPins.length - 1))} |`);
+    p(`| PWM | \`analogWrite(pin, duty)\` | ${h.analogWriteNote || 'CCP/OC output pins'} |`, '');
+
+    // ── API + usage ──
+    p('## API & Usage', '');
+    p('Everything below is available after `#include <Picpio.h>`. A sketch uses the Arduino shape —',
+      '`setup()` runs once, `loop()` runs forever:', '');
+    p('```c', '#include <Picpio.h>', '',
+      'void setup() {', '    pinMode(LED_BUILTIN, OUTPUT);', '}', '',
+      'void loop() {', '    digitalWrite(LED_BUILTIN, HIGH);', '    delay(500);',
+      '    digitalWrite(LED_BUILTIN, LOW);', '    delay(500);', '}', '```', '');
+
+    p('### Digital I/O', '');
+    p('```c',
+      'pinMode(D5, OUTPUT);          // OUTPUT | INPUT | INPUT_PULLUP',
+      'digitalWrite(D5, HIGH);       // HIGH | LOW',
+      'int s = digitalRead(D6);      // 0 or 1',
+      '```', '');
+
+    if (h.hasADC) {
+        p('### Analog Input (ADC)', '');
+        p('```c',
+          'int v = analogRead(A0);       // 10-bit, 0..1023',
+          '```', '');
+    }
+    p('### PWM Output', '');
+    p('```c',
+      'analogWrite(LED_BUILTIN, 128); // 8-bit duty 0..255 — pin must be PWM-capable',
+      '                               // (see the PWM row in On-Chip Peripherals)',
+      '```', '');
+
+    p('### Timing', '');
+    p('```c',
+      'delay(500);                   // block ms',
+      'delayMicroseconds(50);        // block us',
+      'uint32_t t  = millis();       // ms since boot',
+      'uint32_t us = micros();       // us since boot',
+      '```', '');
+
+    const serialUsage = (obj) => {
+        p('```c',
+          `${obj}.begin(9600);`,
+          `${obj}.println("hello");      // string`,
+          `${obj}.print("count = ");`,
+          `${obj}.println_i(42);         // int32`,
+          `${obj}.println_f(3.14f, 2);   // float, 2 decimals`,
+          `if (${obj}.available()) {`,
+          `    int c = ${obj}.read();`,
+          `}`,
+          '```', '',
+          `> Use the typed \`${obj}.print_i\` / \`print_f\` / \`print_s\` (and \`println_*\`) methods for`,
+          `> numbers. Avoid the type-generic \`Serial_print(x)\` / \`Serial_println(x)\` \`_Generic\` macros —`,
+          `> they do not compile reliably on this toolchain.`, '');
+    };
+    if (h.serial.present) { p('### Serial (UART)' + (h.serial.note ? ' — ' + h.serial.note : ''), ''); serialUsage('Serial'); }
+    if (h.serial2.present) { p('### Serial2 (second UART)' + (h.serial2.note ? ' — ' + h.serial2.note : ''), ''); serialUsage('Serial2'); }
+
+    if (h.wire.present) {
+        p('### I2C (Wire)' + (h.wire.note ? ' — ' + h.wire.note : ''), '');
+        p('```c',
+          'Wire.begin();',
+          'Wire.beginTransmission(0x48);',
+          'Wire.write(0x01);',
+          'Wire.endTransmission();',
+          'Wire.requestFrom(0x48, 2);',
+          'while (Wire.available()) { int b = Wire.read(); }',
+          '```', '');
+    }
+    if (h.spi.present) {
+        p('### SPI' + (h.spi.note ? ' — ' + h.spi.note : ''), '');
+        p('```c',
+          'SPI.begin();',
+          'SPI.setBitOrder(MSBFIRST);    // MSBFIRST | LSBFIRST',
+          'SPI.setDataMode(SPI_MODE0);   // SPI_MODE0..3',
+          'SPI.setClockDivider(SPI_CLOCK_DIV4);',
+          'uint8_t in = SPI.transfer(0xA5);',
+          '```', '');
+    }
+
+    p('### Helper macros', '');
+    p('`HIGH` `LOW` `INPUT` `OUTPUT` `INPUT_PULLUP` `LED_BUILTIN`, plus Arduino math/bit helpers:',
+      '`min` `max` `abs` `constrain` `map` `sq` `bitRead` `bitSet` `bitClear` `bitWrite` `bit` `lowByte` `highByte`.', '');
+
+    p('---', `_Generated by PICPIO. Pin/peripheral data parsed from \`${halVariantFor(mcu)}/Picpio.h\`._`);
+    return L.join('\n');
+}
+
+function cmdReference() {
+    const cfg = requireConfig();
+    const meta = {
+        name:      cfg.name || path.basename(process.cwd()),
+        mcu:       cfg.mcu || 'PIC18F27K40',
+        family:    cfg.family || 'PIC18',
+        clock:     cfg.clock_hz || cfg.clock || '64000000',
+        framework: cfg.framework || 'bare-metal',
+    };
+    const out = path.join(process.cwd(), 'REFERENCE.md');
+    fs.writeFileSync(out, buildReferenceMd(meta));
+    console.log(`[PICPIO] Wrote REFERENCE.md for ${meta.mcu}`);
+}
+
 function cmdInit(args) {
     const params = parseFlags(args);
     const name   = params['name'] || path.basename(process.cwd());
@@ -1040,6 +1331,14 @@ function cmdInit(args) {
     ].join('\n');
 
     fs.writeFileSync(mainFile, mainContent);
+
+    // REFERENCE.md — per-chip pin map + API cheat-sheet for the selected MCU
+    try {
+        fs.writeFileSync(path.join(outDir, 'REFERENCE.md'),
+            buildReferenceMd({ name, mcu, family, clock, framework: fw }));
+    } catch (e) {
+        console.error(`[PICPIO] (REFERENCE.md skipped: ${e.message})`);
+    }
 
     // .vscode/tasks.json
     fs.writeFileSync(path.join(outDir, '.vscode', 'tasks.json'), JSON.stringify({
