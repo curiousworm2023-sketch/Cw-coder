@@ -1121,6 +1121,10 @@ function buildReferenceMd(meta) {
     p(`| Framework | ${framework} |`);
     p(`| Toolchain | ${isXC16 ? 'XC16 (16-bit)' : 'XC8 (8-bit)'} |`, '');
 
+    p('## Datasheet & Resources', '');
+    p(`Microchip product page (datasheet, errata, programming specs): ` +
+      `[microchip.com/en-us/product/${mcu}](https://www.microchip.com/en-us/product/${mcu})`, '');
+
     if (!halDir) {
         p('> ⚠️ No PICPIO Arduino-compatibility HAL exists for this MCU yet, so the pin map and',
           '> API helpers below are unavailable. You can still build bare-metal projects against',
