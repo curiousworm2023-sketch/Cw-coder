@@ -36,6 +36,7 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
+#ifndef __dsPIC30F2010__
 // ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)
 // D9-D11  = RC13-RC15 (only 3 PORTC bits exist on this chip)
@@ -119,6 +120,70 @@ typedef bool     boolean;
 #define RF5  D28
 #define RF6  D29
 
+#else // __dsPIC30F2010__
+
+// ── Arduino pin numbers -> dsPIC30F2010 (28-pin, no PORTA on this chip) ──────
+// D0-D5  = RB0-RB5  (also A0-A5 = AN0-AN5, all analog-capable)
+// D6-D8  = RC13-RC15 (only 3 PORTC bits exist on this chip)
+// D9-D10 = RD0-RD1  (OC1/OC2 -- PWM-capable, analogWrite targets; LED_BUILTIN=D9/RD0)
+// D11-D17= RE0-RE5, RE8 (7 PORTE bits; D17=RE8 also doubles as SCK1)
+// D18-D19= RF2-RF3
+//   D18=RF2 (U1RX/SDI1/SDA), D19=RF3 (U1TX/SDO1/SCL) -- shared between
+//   UART1, SPI1 (data lines) and I2C (fixed, non-PPS pins): don't use
+//   Serial, SPI and Wire at the same time on real hardware. This chip has
+//   no UART2 hardware, so there is no Serial2.
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8
+#define D9   9    // RD0 / OC1 -- LED pin
+#define D10  10   // RD1 / OC2
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16
+#define D17  17   // RE8 / SCK1
+#define D18  18   // RF2 -- U1RX/SDI1/SDA
+#define D19  19   // RF3 -- U1TX/SDO1/SCL
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define LED_BUILTIN  D9
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RC13 D6
+#define RC14 D7
+#define RC15 D8
+#define RD0  D9
+#define RD1  D10
+#define RE0  D11
+#define RE1  D12
+#define RE2  D13
+#define RE3  D14
+#define RE4  D15
+#define RE5  D16
+#define RE8  D17
+#define RF2  D18
+#define RF3  D19
+
+#endif // __dsPIC30F2010__
+
 // ── Math ──────────────────────────────────────────────────────────────────────
 #define PI        3.14159265358979f
 #define TWO_PI    6.28318530717959f
@@ -145,7 +210,7 @@ void    pinMode(uint8_t pin, uint8_t mode);
 void    digitalWrite(uint8_t pin, uint8_t val);
 int     digitalRead(uint8_t pin);
 int     analogRead(uint8_t pin);                // 10-bit result (0-1023), pins D0-D8/A0-A8 only
-void    analogWrite(uint8_t pin, uint8_t duty); // 8-bit PWM via OC1-OC4, pins D12-D15 only
+void    analogWrite(uint8_t pin, uint8_t duty); // 8-bit PWM via OC1-OC4 (D12-D15 on 4011) / OC1-OC2 (D9-D10 on 2010)
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 void        delay(uint32_t ms);
@@ -172,7 +237,9 @@ typedef struct {
 } HardwareSerial_t;
 
 extern HardwareSerial_t Serial;   // UART1 (RF3=TX, RF2=RX)
+#ifndef __dsPIC30F2010__
 extern HardwareSerial_t Serial2;  // UART2 (RF5=TX, RF4=RX) — real hardware module
+#endif
 
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)
@@ -208,7 +275,7 @@ typedef struct {
     int     (*read)(void);
 } TwoWire_t;
 
-extern TwoWire_t Wire; // I2C module (SCL=RF3/D26, SDA=RF2/D25)
+extern TwoWire_t Wire; // I2C module (SCL=RF3, SDA=RF2 -- D26/D25 on 4011, D19/D18 on 2010)
 
 // ── SPI (function-pointer struct) ─────────────────────────────────────────────
 typedef struct {
@@ -220,7 +287,7 @@ typedef struct {
     void    (*setClockDivider)(uint8_t div);
 } SPIClass_t;
 
-extern SPIClass_t SPI; // SPI1 (SCK=RF6/D29, SDO=RF3/D26, SDI=RF2/D25)
+extern SPIClass_t SPI; // SPI1 (SDO=RF3, SDI=RF2 -- D26/D25 on 4011, D19/D18 on 2010; SCK=RF6/D29 on 4011, SCK=RE8/D17 on 2010)
 
 #define MSBFIRST 1
 #define LSBFIRST 0

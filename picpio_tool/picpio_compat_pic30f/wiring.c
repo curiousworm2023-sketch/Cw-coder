@@ -14,6 +14,7 @@ typedef struct {
 
 #define NO_ADC -1
 
+#ifndef __dsPIC30F2010__
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
@@ -47,6 +48,31 @@ static const PinInfo _pins[] = {
     { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D29 RF6 -- SCK1
 };
 #define PIN_COUNT 30
+#else // __dsPIC30F2010__
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 }, // D2  RB2/AN2 (also SS1)
+    { &TRISB, &LATB, &PORTB, 3, 3 }, // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 }, // D4  RB4/AN4
+    { &TRISB, &LATB, &PORTB, 5, 5 }, // D5  RB5/AN5
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D6  RC13 (U1ATX/CN1)
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D7  RC14 (U1ARX/CN0/T1CK)
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D8  RC15 (T2CK/SOSCI)
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D9  RD0/OC1 -- LED
+    { &TRISD, &LATD, &PORTD, 1, NO_ADC }, // D10 RD1/OC2
+    { &TRISE, &LATE, &PORTE, 0, NO_ADC }, // D11 RE0/PWM1L
+    { &TRISE, &LATE, &PORTE, 1, NO_ADC }, // D12 RE1/PWM1H
+    { &TRISE, &LATE, &PORTE, 2, NO_ADC }, // D13 RE2/PWM2L
+    { &TRISE, &LATE, &PORTE, 3, NO_ADC }, // D14 RE3/PWM2H
+    { &TRISE, &LATE, &PORTE, 4, NO_ADC }, // D15 RE4/PWM3L
+    { &TRISE, &LATE, &PORTE, 5, NO_ADC }, // D16 RE5/PWM3H
+    { &TRISE, &LATE, &PORTE, 8, NO_ADC }, // D17 RE8 -- SCK1/FLTA
+    { &TRISF, &LATF, &PORTF, 2, NO_ADC }, // D18 RF2 -- U1RX/SDI1/SDA
+    { &TRISF, &LATF, &PORTF, 3, NO_ADC }, // D19 RF3 -- U1TX/SDO1/SCL
+};
+#define PIN_COUNT 20
+#endif // __dsPIC30F2010__
 
 // ── millis (Timer1, Type A timer, auto-resets on PR1 period match) ───────────
 static volatile uint32_t _millis_count = 0;
@@ -72,7 +98,7 @@ void arduino_init(void) {
     IEC0bits.T1IE = 1;
     T1CONbits.TON = 1;
 
-    // Timer2: shared PWM time base for OC1-4 (analogWrite on D12-D15)
+    // Timer2: shared PWM time base for analogWrite (OC1-4/D12-D15 on 4011, OC1-2/D9-D10 on 2010)
     T2CON = 0x0000;
     TMR2  = 0;
     PR2   = 255;
@@ -118,8 +144,9 @@ int analogRead(uint8_t pin) {
     return (int)ADCBUF0;
 }
 
-// ── PWM (OC1-OC4 on D12-D15, driven by Timer2) ───────────────────────────────
+// ── PWM (OC1-OC4 on D12-D15 [4011] / OC1-OC2 on D9-D10 [2010], driven by Timer2) ──
 void analogWrite(uint8_t pin, uint8_t duty) {
+#ifndef __dsPIC30F2010__
     switch (pin) {
         case D12:
             OC1RS = duty; OC1R = duty;
@@ -144,6 +171,22 @@ void analogWrite(uint8_t pin, uint8_t duty) {
         default:
             return;
     }
+#else
+    switch (pin) {
+        case D9:
+            OC1RS = duty; OC1R = duty;
+            OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110;
+            TRISDbits.TRISD0 = 0;
+            break;
+        case D10:
+            OC2RS = duty; OC2R = duty;
+            OC2CONbits.OCTSEL = 0; OC2CONbits.OCM = 0b110;
+            TRISDbits.TRISD1 = 0;
+            break;
+        default:
+            return;
+    }
+#endif
 }
 
 // ── Timing ────────────────────────────────────────────────────────────────────
@@ -193,6 +236,7 @@ static void _serial_print_i(int32_t n) {
     while (i) _serial_write((uint8_t)buf[--i]);
 }
 
+#ifndef __dsPIC30F2010__
 static void _serial_print_f(float f, uint8_t dec) {
     char buf[20];
     if      (dec == 0) sprintf(buf, "%ld",  (long)f);
@@ -201,6 +245,26 @@ static void _serial_print_f(float f, uint8_t dec) {
     else               sprintf(buf, "%.3f", (double)f);
     _serial_print_s(buf);
 }
+#else
+// No-sprintf float print -- on this chip's tiny (~4K word) flash, pulling in
+// sprintf's float support overflows program memory (see
+// [[picpio_dspic30f_xc16_quirks]]).
+static void _serial_print_f(float f, uint8_t dec) {
+    if (f < 0) { _serial_write('-'); f = -f; }
+    int32_t ip = (int32_t)f;
+    _serial_print_i(ip);
+    if (dec) {
+        _serial_write('.');
+        float frac = f - (float)ip;
+        while (dec--) {
+            frac *= 10.0f;
+            int32_t d = (int32_t)frac;
+            _serial_write((uint8_t)('0' + d));
+            frac -= (float)d;
+        }
+    }
+}
+#endif
 
 static void _serial_println_s(const char *s) { _serial_print_s(s); _serial_write('\r'); _serial_write('\n'); }
 static void _serial_println_i(int32_t n)     { _serial_print_i(n); _serial_write('\r'); _serial_write('\n'); }
@@ -236,6 +300,7 @@ void _serial_println_f_def(float f)  { _serial_println_f(f, 2); }
 void _serial_print_d_def(double d)   { _serial_print_f((float)d, 2); }
 void _serial_println_d_def(double d) { _serial_println_f((float)d, 2); }
 
+#ifndef __dsPIC30F2010__
 // ── Serial2 (UART2, real hardware module -- RF5=TX, RF4=RX) ─────────────────
 static void _serial2_begin(uint32_t baud) {
     TRISFbits.TRISF4 = 1; // RF4 = U2RX input
@@ -306,12 +371,17 @@ HardwareSerial_t Serial2 = {
     .read      = _serial2_read,
     .flush     = _serial2_flush,
 };
+#endif // __dsPIC30F2010__
 
-// ── SPI (SPI1, SCK1=RF6, SDO1=RF3, SDI1=RF2) ─────────────────────────────────
+// ── SPI (SPI1, SDO1=RF3, SDI1=RF2; SCK1=RF6 on 4011 / RE8 on 2010) ───────────
 // NOTE: SDI1/SDO1 share pins with U1RX/U1TX and SDA/SCL -- don't use SPI
 // together with Serial or Wire on real hardware.
 static void _spi_begin(void) {
+#ifndef __dsPIC30F2010__
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
+#else
+    TRISEbits.TRISE8 = 0; // RE8 = SCK1 output (master)
+#endif
     TRISFbits.TRISF3 = 0; // RF3 = SDO1 output
     TRISFbits.TRISF2 = 1; // RF2 = SDI1 input
 
