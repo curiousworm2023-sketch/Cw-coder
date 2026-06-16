@@ -96,13 +96,30 @@ export function transpileSketch(src: string): TranspileResult {
             return `function ${name}(${cleaned}) {`;
         });
 
-    // Array declarations: "type name[N] = {...};" or "type name[N];"
-    s = s.replace(new RegExp(`\\b${TYPES}\\s*\\*?\\s*(\\w+)\\s*\\[\\s*(\\d*)\\s*\\]\\s*(=\\s*\\{([^}]*)\\})?\\s*;`, 'g'),
+    // Array declarations: "type name[N] = {...};" or "type name[N];". The
+    // size expression isn't always a plain integer literal -- bundled
+    // libraries declare buffers like "uint8_t buf[SSD1306_BUFFER_SIZE(128,
+    // 64)];" -- fall back to a 0-length placeholder for anything that isn't
+    // a bare digit string.
+    s = s.replace(new RegExp(`\\b${TYPES}\\s*\\*?\\s*(\\w+)\\s*\\[\\s*([^\\]]*)\\s*\\]\\s*(=\\s*\\{([^}]*)\\})?\\s*;`, 'g'),
         (_full: string, name: string, size: string, hasInit: string | undefined, items: string) => {
             if (hasInit !== undefined) return `let ${name} = [${items}];`;
-            const n = size ? parseInt(size, 10) : 0;
+            const trimmed = size.trim();
+            const n = /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : 0;
             return `let ${name} = new Array(${n}).fill(0);`;
         });
+
+    // Bundled-library "struct + functions" pattern (PID_t, SSD1306_t, LCD_t,
+    // etc. -- see picpio_tool/libraries/<Name>/): "<Name>_t varname;"
+    // declares a struct instance. Represent it as a plain object so the
+    // declaration is valid JS and the object can be passed around as a
+    // "pointer" (see the "&varname" handling below). Excludes the built-in
+    // fixed-width int types, which also end in "_t" but are scalars.
+    {
+        const BUILTIN_T_TYPES = 'uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|size_t';
+        s = s.replace(new RegExp(`^(\\s*)(?:static\\s+)?(?!(?:${BUILTIN_T_TYPES})\\b)[A-Za-z_]\\w*_t\\s+(\\w+)\\s*;`, 'gm'),
+            '$1let $2 = {};');
+    }
 
     // for-loop init declarations: "for (type i = 0; ..." -> "for (let i = 0; ..."
     s = s.replace(new RegExp(`\\bfor\\s*\\(\\s*${TYPES}\\s+(\\w+)`, 'g'), 'for (let $1');
@@ -117,6 +134,13 @@ export function transpileSketch(src: string): TranspileResult {
     // not a JS unary operator. Pass a slice starting at that index instead,
     // which behaves like the equivalent C pointer for index-based access.
     s = s.replace(/([(,]\s*)&(\w+)\[([^\]]+)\]/g, '$1$2.slice($3)');
+
+    // Address-of a bare variable in a call argument, e.g. "PID_init(&pid,
+    // ...)" or "SSD1306_init(&oled, ...)" -- the bundled libraries' pointer-
+    // to-struct pattern. Since the struct is represented as a plain object
+    // (see "<Name>_t varname;" above), passing the object itself preserves
+    // the "mutate in place" semantics of a C pointer.
+    s = s.replace(/([(,]\s*)&(\w+)\b(?!\s*\[)/g, '$1$2');
 
     // Char-literal arithmetic, e.g. (char)('0' + (value % 10)) -- the common
     // digit-to-ASCII idiom. Convert 'X' to its numeric char code, but only

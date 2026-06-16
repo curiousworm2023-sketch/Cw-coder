@@ -29,6 +29,154 @@ const PACK_INDEX_URL        = 'https://packs.download.microchip.com/index.idx';
 const DFP_MANIFEST_PATH     = path.join(PACKS_DIR, 'manifest.json');
 const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+// ─── LIB REGISTRY ────────────────────────────────────────────────────────────
+// Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
+// (struct + function API) written against the PICPIO Arduino-compatible HAL.
+const BUNDLED_LIBS = [
+    'PID', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
+    'dht22','ds18b20','servo','encoder',
+    'wire','spi','hardwareserial','at24c256','keypad','mpu6050','bmp280'
+];
+
+// Starter usage snippets injected into src/main.cpp when a bundled library
+// with a known API (the picpio_tool/libraries/<Name>/ ports) is installed
+// via `picpio lib add`. Only covers libraries that actually exist as plain-C
+// ports under picpio_tool/libraries/ — unlisted bundled names are skipped.
+const LIB_SNIPPETS = {
+    PID: {
+        include: '#include "PID.h"',
+        globals: [
+            'PID_t pid;',
+            'double pidInput, pidOutput, pidSetpoint = 100;',
+        ],
+        setup: [
+            'PID_init(&pid, &pidInput, &pidOutput, &pidSetpoint, 2.0, 0.5, 1.0, PID_DIRECT);',
+            'PID_setMode(&pid, PID_AUTOMATIC);',
+        ],
+        loop: [
+            'pidInput = analogRead(A0);',
+            'PID_compute(&pid);',
+            'analogWrite(D5, (uint8_t)pidOutput);',
+        ],
+    },
+    PCF8575: {
+        include: '#include "PCF8575.h"',
+        globals: [
+            'PCF8575_t pcf8575;',
+        ],
+        setup: [
+            'Wire.begin();',
+            'PCF8575_init(&pcf8575, 0x20);',
+            'PCF8575_begin(&pcf8575, 0xFFFF);',
+        ],
+        loop: [
+            'PCF8575_write(&pcf8575, 0, HIGH);',
+            'uint8_t pcf8575_btn = PCF8575_read(&pcf8575, 1);',
+        ],
+    },
+    ADS1115: {
+        include: '#include "ADS1115.h"',
+        define: '#define ADS1115_ADDRESS 0x48  // change to match ADDR pin wiring (0x48-0x4B)',
+        globals: [
+            'ADS1115_t ads1115;',
+        ],
+        setup: [
+            'Wire.begin();',
+            'ADS1115_init(&ads1115);',
+            'ADS1115_begin(&ads1115, ADS1115_ADDRESS);',
+        ],
+        loop: [
+            'int16_t ads1115_raw   = ADS1115_readADC_SingleEnded(&ads1115, 0);',
+            'float   ads1115_volts = ADS1115_computeVolts(&ads1115, ads1115_raw);',
+        ],
+    },
+    ADS1219: {
+        include: '#include "ADS1219.h"',
+        define: '#define ADS1219_ADDRESS 0x40  // change to match A0/A1 pin wiring',
+        globals: [
+            'ADS1219_t ads1219;',
+        ],
+        setup: [
+            'Wire.begin();',
+            'ADS1219_init(&ads1219);',
+            'ADS1219_begin(&ads1219, ADS1219_ADDRESS);',
+            'ADS1219_setConfig(&ads1219, ADS1219_MUX_AIN0, ADS1219_GAIN_1X,',
+            '                  ADS1219_DR_20SPS, ADS1219_MODE_SINGLE_SHOT, ADS1219_VREF_INTERNAL);',
+        ],
+        loop: [
+            'int32_t ads1219_raw   = ADS1219_readSingleShot(&ads1219);',
+            'float   ads1219_volts = ADS1219_computeVolts(&ads1219, ads1219_raw);',
+        ],
+    },
+    LiquidCrystal_I2C: {
+        include: '#include "LiquidCrystal_I2C.h"',
+        globals: [
+            'LCD_t lcd;',
+        ],
+        setup: [
+            'Wire.begin();',
+            'LCD_init(&lcd, 0x27, 16, 2);',
+            'LCD_begin(&lcd, 16, 2, LCD_5x8DOTS);',
+            'LCD_backlight(&lcd);',
+            'LCD_setCursor(&lcd, 0, 0);',
+            'LCD_print(&lcd, "Hello, World!");',
+        ],
+        loop: [],
+    },
+    SSD1306: {
+        include: '#include "SSD1306.h"',
+        define: '#define SSD1306_ADDRESS 0x3C  // OLED I2C address — change to 0x3D if needed',
+        globals: [
+            'SSD1306_t oled;',
+            'uint8_t ssd1306_buf[SSD1306_BUFFER_SIZE(128, 64)];',
+        ],
+        setup: [
+            'Wire.begin();',
+            'SSD1306_init(&oled, SSD1306_ADDRESS, 128, 64, ssd1306_buf);',
+            'SSD1306_begin(&oled);',
+            'SSD1306_clearDisplay(&oled);',
+            'SSD1306_setCursor(&oled, 0, 0);',
+            'SSD1306_print(&oled, "Hello!");',
+            'SSD1306_display(&oled);',
+        ],
+        // Multiple displays on one I2C bus, each at its own address (e.g.
+        // SSD1306-compatible clones with address pins/jumpers — the genuine
+        // SSD1306 itself only supports 0x3C/0x3D). Used when the user asks
+        // for more than one display when installing this library.
+        defaultAddrs: ['0x3C', '0x3D'],
+        multi: (i, addr) => ({
+            define: `#define SSD1306_ADDRESS_${i} ${addr}  // OLED #${i} I2C address — edit to match your hardware`,
+            globals: [
+                `SSD1306_t oled${i};`,
+                `uint8_t ssd1306_buf${i}[SSD1306_BUFFER_SIZE(128, 64)];`,
+            ],
+            setup: [
+                `SSD1306_init(&oled${i}, SSD1306_ADDRESS_${i}, 128, 64, ssd1306_buf${i});`,
+                `SSD1306_begin(&oled${i});`,
+                `SSD1306_clearDisplay(&oled${i});`,
+                `SSD1306_setCursor(&oled${i}, 0, 0);`,
+                `SSD1306_print(&oled${i}, "OLED ${i}");`,
+                `SSD1306_display(&oled${i});`,
+            ],
+        }),
+        loop: [],
+    },
+    LCD_HC595: {
+        include: '#include "LCD_HC595.h"',
+        globals: [
+            'LCD595_t lcd595;',
+        ],
+        setup: [
+            'LCD595_init(&lcd595, D6, D7, D8);',
+            'LCD595_begin(&lcd595, 16, 2);',
+            'LCD595_backlight(&lcd595, true);',
+            'LCD595_setCursor(&lcd595, 0, 0);',
+            'LCD595_print(&lcd595, "Hello, World!");',
+        ],
+        loop: [],
+    },
+};
+
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const cmd  = args[0];
@@ -68,7 +216,9 @@ Commands:
   upload        Flash firmware to device
   clean         Delete build artifacts
   monitor       Open serial monitor
-  lib add       <name|github:user/repo|https://url>
+  lib add       <name|github:user/repo|https://url> [--count N]
+                --count N scaffolds N numbered instances (e.g. multiple
+                SSD1306 displays at different I2C addresses) instead of one
   lib remove    <name>
   lib list      List installed libraries
   lib update    Update library registry
@@ -815,10 +965,108 @@ function cmdErase() {
 }
 
 // ─── LIB ─────────────────────────────────────────────────────────────────────
-const BUNDLED_LIBS = [
-    'dht22','ds18b20','ssd1306','liquidcrystal','servo','encoder',
-    'wire','spi','hardwareserial','at24c256','keypad','pid','mpu6050','bmp280'
-];
+// Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
+// (struct + function API) written against the PICPIO Arduino-compatible HAL.
+// BUNDLED_LIBS and LIB_SNIPPETS are declared near the top of this file
+// (before the CLI dispatch switch) since cmdLib runs synchronously from there.
+
+// Insert `line` right after the last top-level #include in `content`
+// (or at the top of the file if there are none).
+function insertAfterLastInclude(content, line) {
+    const lines = content.split('\n');
+    let last = -1;
+    for (let i = 0; i < lines.length; i++) {
+        if (/^#include\s/.test(lines[i])) last = i;
+    }
+    if (last === -1) {
+        lines.unshift(line, '');
+    } else {
+        lines.splice(last + 1, 0, line);
+    }
+    return lines.join('\n');
+}
+
+// Insert `lines` (joined) immediately before `void setup(...)`.
+function insertBeforeSetup(content, lines) {
+    if (!lines.length) return content;
+    const m = content.match(/\bvoid\s+setup\s*\([^)]*\)/);
+    if (!m) return content;
+    const text = lines.join('\n') + '\n\n';
+    return content.slice(0, m.index) + text + content.slice(m.index);
+}
+
+// Insert `lines` (indented) just before the closing brace of `void <fnName>(...) { ... }`,
+// using brace-depth tracking so nested braces in an existing body don't confuse it.
+function insertIntoFunctionBody(content, fnName, lines) {
+    if (!lines.length) return content;
+    const re = new RegExp(`void\\s+${fnName}\\s*\\([^)]*\\)\\s*\\{`);
+    const m = content.match(re);
+    if (!m) return content;
+
+    let depth = 1;
+    let i = m.index + m[0].length;
+    for (; i < content.length; i++) {
+        if (content[i] === '{') depth++;
+        else if (content[i] === '}') { depth--; if (depth === 0) break; }
+    }
+    if (i >= content.length) return content;
+
+    const body = '\n' + lines.map(l => '    ' + l).join('\n') + '\n';
+    return content.slice(0, i) + body + content.slice(i);
+}
+
+// After a bundled library with a known snippet is installed, drop a starter
+// #include + struct declaration + setup()/loop() calls into src/main.cpp so
+// the user has working example code to build on. If `count` > 1 and the
+// library declares a `multi` template (e.g. several I2C displays/sensors at
+// different addresses on one bus), generate one numbered instance per count
+// instead of the single default instance.
+function scaffoldMainUsage(dirEntry, count) {
+    const snippet = LIB_SNIPPETS[dirEntry];
+    if (!snippet) return;
+
+    const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+    if (!cfg || (cfg.framework || '').toLowerCase() !== 'arduino') return;
+
+    const mainFile = path.join(process.cwd(), cfg.src_dir || 'src', 'main.cpp');
+    if (!fs.existsSync(mainFile)) return;
+
+    let content = fs.readFileSync(mainFile, 'utf8');
+
+    const marker = `// ---- ${dirEntry} (added by picpio lib add) ----`;
+    if (content.includes(marker)) {
+        console.log(`[PICPIO] main.cpp already has ${dirEntry} example code — skipping.`);
+        return;
+    }
+
+    let globals = snippet.globals;
+    let setup   = snippet.setup;
+    let loop    = snippet.loop;
+    let defineLines = snippet.define ? [snippet.define] : [];
+
+    if (count > 1 && snippet.multi) {
+        const addrs = snippet.defaultAddrs || ['0x3C'];
+        globals = []; setup = ['Wire.begin();']; loop = []; defineLines = [];
+        for (let i = 1; i <= count; i++) {
+            const part = snippet.multi(i, addrs[(i - 1) % addrs.length]);
+            defineLines.push(part.define);
+            globals.push(...part.globals);
+            setup.push(...part.setup);
+            loop.push(...(part.loop || []));
+        }
+    }
+
+    content = insertIntoFunctionBody(content, 'loop', [marker, ...loop]);
+    content = insertIntoFunctionBody(content, 'setup', [marker, ...setup]);
+    content = insertBeforeSetup(content, [marker, ...globals]);
+    const includeLine = defineLines.length
+        ? `${defineLines.join('\n')}\n${snippet.include}  ${marker}`
+        : `${snippet.include}  ${marker}`;
+    content = insertAfterLastInclude(content, includeLine);
+
+    fs.writeFileSync(mainFile, content);
+    console.log(`[PICPIO] Added ${dirEntry} example code to ${path.relative(process.cwd(), mainFile)}`);
+}
 
 function cmdLib(args) {
     const sub = args[0];
@@ -842,7 +1090,9 @@ function cmdLib(args) {
     if (sub === 'add') {
         const name = args[1];
         if (!name) { console.error('[PICPIO] Usage: picpio lib add <name>'); process.exit(1); }
-        libAdd(name);
+        const countIdx = args.indexOf('--count');
+        const count = countIdx >= 0 ? (parseInt(args[countIdx + 1], 10) || 1) : 1;
+        libAdd(name, count);
         return;
     }
 
@@ -857,7 +1107,7 @@ function cmdLib(args) {
         const q = (args[1] || '').toLowerCase();
         console.log('[PICPIO] Available libraries:');
         BUNDLED_LIBS
-            .filter(l => !q || l.includes(q))
+            .filter(l => !q || l.toLowerCase().includes(q))
             .forEach(l => console.log(`  ${l}`));
         return;
     }
@@ -865,7 +1115,7 @@ function cmdLib(args) {
     console.error(`[PICPIO] Unknown lib subcommand: ${sub}`);
 }
 
-function libAdd(name) {
+function libAdd(name, count) {
     const libDir = path.join(process.cwd(), 'lib');
     fs.mkdirSync(libDir, { recursive: true });
 
@@ -886,32 +1136,31 @@ function libAdd(name) {
         return;
     }
 
-    // Bundled library — copy from picpio_compat/
+    // Bundled library — copy from picpio_tool/libraries/<DirName>/
     const lname    = name.toLowerCase();
-    const acDir    = path.join(process.cwd(), 'picpio_compat');
     const scriptDir = path.dirname(process.argv[1]);
 
-    // Try picpio_compat in project, then next to picpio.js
     const searchPaths = [
-        acDir,
-        path.join(scriptDir, 'picpio_compat'),
-        path.join(scriptDir, '..', 'picpio_compat'),
+        path.join(process.cwd(), 'libraries'),
+        path.join(scriptDir, 'libraries'),
+        path.join(scriptDir, '..', 'libraries'),
     ];
 
     let found = false;
     for (const base of searchPaths) {
         if (!fs.existsSync(base)) continue;
-        // Look for matching .h/.cpp files
-        const files = fs.readdirSync(base).filter(f =>
-            f.toLowerCase().replace(/\.(h|cpp|c)$/, '') === lname ||
-            f.toLowerCase().startsWith(lname + '.')
+        const dirEntry = fs.readdirSync(base).find(d =>
+            fs.statSync(path.join(base, d)).isDirectory() && d.toLowerCase() === lname
         );
-        if (files.length) {
-            const dest = path.join(libDir, name);
+        if (dirEntry) {
+            const src  = path.join(base, dirEntry);
+            const dest = path.join(libDir, dirEntry);
             fs.mkdirSync(dest, { recursive: true });
-            files.forEach(f => fs.copyFileSync(path.join(base, f), path.join(dest, f)));
-            console.log(`[PICPIO] Installed library '${name}' (${files.length} files)`);
-            updateIniLibs(name);
+            const files = fs.readdirSync(src).filter(f => fs.statSync(path.join(src, f)).isFile());
+            files.forEach(f => fs.copyFileSync(path.join(src, f), path.join(dest, f)));
+            console.log(`[PICPIO] Installed library '${dirEntry}' (${files.length} files)`);
+            updateIniLibs(dirEntry);
+            scaffoldMainUsage(dirEntry, count);
             found = true;
             break;
         }

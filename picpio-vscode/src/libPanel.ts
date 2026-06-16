@@ -12,8 +12,8 @@ interface LibEntry {
 const REGISTRY: LibEntry[] = [
     { name:'DHT22',         desc:'Humidity & temperature sensor (AM2302)',        tags:['sensor','i2c'],      source:'bundled' },
     { name:'DS18B20',       desc:'Dallas 1-Wire temperature sensor',               tags:['sensor','1wire'],    source:'bundled' },
-    { name:'SSD1306',       desc:'128×64 OLED display over I2C',                  tags:['display','i2c'],     source:'bundled' },
-    { name:'LiquidCrystal', desc:'Character LCD in 4-bit parallel mode',          tags:['display','parallel'],source:'bundled' },
+    { name:'SSD1306',       desc:'128×64/128×32 OLED display over I2C',           tags:['display','i2c'],     source:'bundled' },
+    { name:'LiquidCrystal_I2C', desc:'Character LCD over PCF8574 I2C backpack',   tags:['display','i2c'],     source:'bundled' },
     { name:'Servo',         desc:'RC servo motor via Timer1 (0.5µs resolution)',  tags:['motor','pwm'],       source:'bundled' },
     { name:'Encoder',       desc:'Quadrature encoder with 4× decode',             tags:['input','ioc'],       source:'bundled' },
     { name:'Wire',          desc:'I2C master with streaming for bulk transfer',   tags:['comms','i2c'],       source:'bundled' },
@@ -24,6 +24,10 @@ const REGISTRY: LibEntry[] = [
     { name:'PID',           desc:'PID controller with anti-windup',               tags:['control'],           source:'bundled' },
     { name:'MPU6050',       desc:'6-axis IMU (accel+gyro) over I2C',              tags:['sensor','i2c'],      source:'bundled' },
     { name:'BMP280',        desc:'Barometric pressure and temperature',           tags:['sensor','i2c','spi'],source:'bundled' },
+    { name:'ADS1115',       desc:'16-bit 4-channel I2C ADC',                      tags:['sensor','i2c'],      source:'bundled' },
+    { name:'ADS1219',       desc:'24-bit 4-channel I2C ADC',                      tags:['sensor','i2c'],      source:'bundled' },
+    { name:'PCF8575',       desc:'16-channel I2C GPIO expander',                  tags:['io','i2c'],          source:'bundled' },
+    { name:'LCD_HC595',     desc:'Character LCD via 74HC595 shift register',      tags:['display'],           source:'bundled' },
 ];
 
 export class LibPanel {
@@ -54,9 +58,24 @@ export class LibPanel {
         this._panel.webview.onDidReceiveMessage(msg => this._handle(msg), null, this._disposables);
     }
 
-    private _handle(msg: { command: string; name?: string; query?: string }): void {
+    private async _handle(msg: { command: string; name?: string; query?: string }): Promise<void> {
         if (msg.command === 'install' && msg.name) {
-            vscode.commands.executeCommand('picpio.runTask', `lib add ${msg.name}`);
+            let cmd = `lib add ${msg.name}`;
+            // Some libraries support scaffolding multiple numbered instances
+            // (e.g. several SSD1306 OLEDs at different I2C addresses on one
+            // bus) — ask only if the user wants more than the default of 1.
+            if (msg.name === 'SSD1306') {
+                const count = await vscode.window.showInputBox({
+                    title:       'PICPIO: Number of OLED Displays',
+                    prompt:      'How many SSD1306 displays do you need on this project? Leave blank for 1.',
+                    placeHolder: '1',
+                    validateInput: v => (!v || /^[1-9][0-9]?$/.test(v)) ? null : 'Enter a positive number',
+                });
+                if (count === undefined) return; // cancelled
+                const n = parseInt(count, 10);
+                if (n > 1) cmd += ` --count ${n}`;
+            }
+            vscode.commands.executeCommand('picpio.runTask', cmd);
             setTimeout(() => this._update(), 2000);
         }
         if (msg.command === 'remove' && msg.name) {

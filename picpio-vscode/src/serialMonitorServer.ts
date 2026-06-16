@@ -93,17 +93,40 @@ try { \$sp.Close() } catch {}
 try { \$reader.Stop(); \$reader.Dispose() } catch {}
 `;
 
+// Each "Open Serial Monitor" invocation gets its own session: its own
+// serial-port connection (child process), SSE subscribers, and status.
+// This lets multiple monitor tabs stay connected to different COM ports
+// at the same time within one project.
+interface SessionState {
+    proc?: cp.ChildProcess;
+    sseClients: http.ServerResponse[];
+    currentStatus: any;
+}
+
+const sessions = new Map<string, SessionState>();
+
+function getSession(id: string): SessionState {
+    let s = sessions.get(id);
+    if (!s) {
+        s = { proc: undefined, sseClients: [], currentStatus: { command: 'status', connected: false } };
+        sessions.set(id, s);
+    }
+    return s;
+}
+
+function genSessionId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 let server: http.Server | undefined;
 let serverPort = 0;
 let scriptPath: string | undefined;
-let proc: cp.ChildProcess | undefined;
-const sseClients: http.ServerResponse[] = [];
-let currentStatus: any = { command: 'status', connected: false };
 
-function broadcast(msg: any): void {
-    if (msg.command === 'status') currentStatus = msg;
+function broadcast(sessionId: string, msg: any): void {
+    const session = getSession(sessionId);
+    if (msg.command === 'status') session.currentStatus = msg;
     const data = `data: ${JSON.stringify(msg)}\n\n`;
-    for (const res of sseClients) {
+    for (const res of session.sseClients) {
         try { res.write(data); } catch { /* ignore */ }
     }
 }
@@ -115,8 +138,9 @@ function ensureScript(): string {
     return scriptPath;
 }
 
-function connect(port: string, baud: string): void {
-    if (proc) disconnect();
+function connect(sessionId: string, port: string, baud: string): void {
+    const session = getSession(sessionId);
+    if (session.proc) disconnect(sessionId);
 
     let p: cp.ChildProcess;
     try {
@@ -125,10 +149,10 @@ function connect(port: string, baud: string): void {
             '-Port', port, '-Baud', String(baud),
         ], { windowsHide: true });
     } catch (e: any) {
-        broadcast({ command: 'status', connected: false, error: e.message });
+        broadcast(sessionId, { command: 'status', connected: false, error: e.message });
         return;
     }
-    proc = p;
+    session.proc = p;
 
     let buf = '';
     p.stdout?.on('data', (chunk: Buffer) => {
@@ -137,60 +161,64 @@ function connect(port: string, baud: string): void {
         while ((idx = buf.indexOf('\n')) >= 0) {
             const line = buf.slice(0, idx).replace(/\r$/, '');
             buf = buf.slice(idx + 1);
-            handleLine(line, port, baud);
+            handleLine(sessionId, line, port, baud);
         }
     });
 
     p.stderr?.on('data', (chunk: Buffer) => {
-        broadcast({ command: 'data', text: chunk.toString('utf8') });
+        broadcast(sessionId, { command: 'data', text: chunk.toString('utf8') });
     });
 
     p.on('exit', () => {
-        if (proc === p) proc = undefined;
-        broadcast({ command: 'status', connected: false });
+        if (session.proc === p) session.proc = undefined;
+        broadcast(sessionId, { command: 'status', connected: false });
     });
 
-    broadcast({ command: 'status', connecting: true, port, baud });
+    broadcast(sessionId, { command: 'status', connecting: true, port, baud });
 }
 
-function handleLine(line: string, port: string, baud: string): void {
+function handleLine(sessionId: string, line: string, port: string, baud: string): void {
+    const session = getSession(sessionId);
     if (line.startsWith('PICPIO_CONNECTED:')) {
-        broadcast({ command: 'status', connected: true, port, baud });
+        broadcast(sessionId, { command: 'status', connected: true, port, baud });
     } else if (line.startsWith('PICPIO_ERROR:')) {
-        broadcast({ command: 'status', connected: false, error: line.substring('PICPIO_ERROR:'.length) });
-        proc = undefined;
+        broadcast(sessionId, { command: 'status', connected: false, error: line.substring('PICPIO_ERROR:'.length) });
+        session.proc = undefined;
     } else if (line.startsWith('PICPIO_DATA:')) {
         const b64 = line.substring('PICPIO_DATA:'.length);
         try {
             const text = Buffer.from(b64, 'base64').toString('utf8');
-            broadcast({ command: 'data', text });
+            broadcast(sessionId, { command: 'data', text });
         } catch { /* ignore malformed frame */ }
     }
 }
 
-function disconnect(): void {
-    const p = proc;
+function disconnect(sessionId: string): void {
+    const session = getSession(sessionId);
+    const p = session.proc;
     if (!p) return;
-    proc = undefined;
+    session.proc = undefined;
     try { p.stdin?.write('PICPIO_EXIT\n'); } catch { /* ignore */ }
     setTimeout(() => { try { p.kill(); } catch { /* ignore */ } }, 500);
-    broadcast({ command: 'status', connected: false });
+    broadcast(sessionId, { command: 'status', connected: false });
 }
 
-function send(text: string, lineEnding: string): void {
-    if (!proc?.stdin) return;
+function send(sessionId: string, text: string, lineEnding: string): void {
+    const session = getSession(sessionId);
+    if (!session.proc?.stdin) return;
     const ending = lineEnding === 'crlf' ? '\r\n'
                  : lineEnding === 'lf'   ? '\n'
                  : lineEnding === 'cr'   ? '\r'
                  : '';
     const b64 = Buffer.from(text + ending, 'utf8').toString('base64');
-    try { proc.stdin.write(`PICPIO_SEND:${b64}\n`); } catch { /* ignore */ }
+    try { session.proc.stdin.write(`PICPIO_SEND:${b64}\n`); } catch { /* ignore */ }
 }
 
-function reset(): void {
-    if (!proc?.stdin) return;
-    try { proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
-    broadcast({ command: 'system', text: '\n--- Reset (DTR pulse) ---\n' });
+function reset(sessionId: string): void {
+    const session = getSession(sessionId);
+    if (!session.proc?.stdin) return;
+    try { session.proc.stdin.write('PICPIO_RESET\n'); } catch { /* ignore */ }
+    broadcast(sessionId, { command: 'system', text: '\n--- Reset (DTR pulse) ---\n' });
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -202,31 +230,34 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 }
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const url = req.url || '/';
+    const u = new URL(req.url || '/', 'http://127.0.0.1');
+    const pathname = u.pathname;
+    const sessionId = u.searchParams.get('session') || 'default';
 
-    if (url === '/' && req.method === 'GET') {
+    if (pathname === '/' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(htmlPage());
+        res.end(htmlPage(sessionId));
         return;
     }
 
-    if (url === '/events' && req.method === 'GET') {
+    if (pathname === '/events' && req.method === 'GET') {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
         });
         res.write('\n');
-        res.write(`data: ${JSON.stringify({ ...currentStatus, replay: true })}\n\n`);
-        sseClients.push(res);
+        const session = getSession(sessionId);
+        res.write(`data: ${JSON.stringify({ ...session.currentStatus, replay: true })}\n\n`);
+        session.sseClients.push(res);
         req.on('close', () => {
-            const i = sseClients.indexOf(res);
-            if (i >= 0) sseClients.splice(i, 1);
+            const i = session.sseClients.indexOf(res);
+            if (i >= 0) session.sseClients.splice(i, 1);
         });
         return;
     }
 
-    if (url === '/api/ports' && req.method === 'GET') {
+    if (pathname === '/api/ports' && req.method === 'GET') {
         const cfg = readConfig();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -237,11 +268,11 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         return;
     }
 
-    if (url === '/api/connect' && req.method === 'POST') {
+    if (pathname === '/api/connect' && req.method === 'POST') {
         readBody(req).then(body => {
             try {
                 const { port, baud } = JSON.parse(body);
-                connect(port, String(baud));
+                connect(sessionId, port, String(baud));
             } catch { /* ignore */ }
             res.writeHead(204);
             res.end();
@@ -249,18 +280,18 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         return;
     }
 
-    if (url === '/api/disconnect' && req.method === 'POST') {
-        disconnect();
+    if (pathname === '/api/disconnect' && req.method === 'POST') {
+        disconnect(sessionId);
         res.writeHead(204);
         res.end();
         return;
     }
 
-    if (url === '/api/send' && req.method === 'POST') {
+    if (pathname === '/api/send' && req.method === 'POST') {
         readBody(req).then(body => {
             try {
                 const { text, lineEnding } = JSON.parse(body);
-                send(text, lineEnding);
+                send(sessionId, text, lineEnding);
             } catch { /* ignore */ }
             res.writeHead(204);
             res.end();
@@ -268,8 +299,8 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         return;
     }
 
-    if (url === '/api/reset' && req.method === 'POST') {
-        reset();
+    if (pathname === '/api/reset' && req.method === 'POST') {
+        reset(sessionId);
         res.writeHead(204);
         res.end();
         return;
@@ -294,14 +325,19 @@ function ensureServer(): Promise<number> {
 
 export async function openSerialMonitor(): Promise<void> {
     const port = await ensureServer();
-    vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${port}/`));
+    const sessionId = genSessionId();
+    vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${port}/?session=${sessionId}`));
 }
 
 export function disposeSerialMonitorServer(): void {
-    disconnect();
-    for (const res of sseClients.splice(0)) {
-        try { res.end(); } catch { /* ignore */ }
+    for (const sessionId of sessions.keys()) {
+        disconnect(sessionId);
+        const session = getSession(sessionId);
+        for (const res of session.sseClients.splice(0)) {
+            try { res.end(); } catch { /* ignore */ }
+        }
     }
+    sessions.clear();
     if (server) {
         try { server.close(); } catch { /* ignore */ }
         server = undefined;
@@ -313,7 +349,7 @@ export function disposeSerialMonitorServer(): void {
     }
 }
 
-function htmlPage(): string {
+function htmlPage(sessionId: string): string {
     const baudOptions = BAUD_RATES.map(b => `<option value="${b}">${b}</option>`).join('');
 
     return `<!DOCTYPE html>
@@ -380,6 +416,9 @@ label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;wh
   </div>
 
 <script>
+const SESSION = ${JSON.stringify(sessionId)};
+const Q = '?session=' + encodeURIComponent(SESSION);
+
 const portSelect   = document.getElementById('portSelect');
 const baudSelect   = document.getElementById('baudSelect');
 const refreshBtn   = document.getElementById('refreshBtn');
@@ -435,7 +474,7 @@ function appendEcho(text) {
 }
 
 function api(path, body) {
-    return fetch(path, {
+    return fetch(path + Q, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body || {}),
@@ -491,7 +530,7 @@ function send() {
 sendBtn.addEventListener('click', send);
 inputText.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
-const es = new EventSource('/events');
+const es = new EventSource('/events' + Q);
 es.onmessage = e => {
     const msg = JSON.parse(e.data);
     switch (msg.command) {
@@ -501,6 +540,7 @@ es.onmessage = e => {
                     setConnected(true, 'Connected: ' + msg.port + ' @ ' + msg.baud);
                     portSelect.value = msg.port;
                     baudSelect.value = String(msg.baud);
+                    document.title = 'Serial Monitor — ' + msg.port;
                 }
                 break;
             }
@@ -510,10 +550,12 @@ es.onmessage = e => {
             } else if (msg.connected) {
                 setConnected(true, 'Connected: ' + msg.port + ' @ ' + msg.baud);
                 appendSystem('--- Connected to ' + msg.port + ' @ ' + msg.baud + ' baud ---\\n');
+                document.title = 'Serial Monitor — ' + msg.port;
             } else {
                 setConnected(false, msg.error ? ('Error: ' + msg.error) : 'Disconnected');
                 if (msg.error) appendSystem('--- Error: ' + msg.error + ' ---\\n');
                 else if (msg.port) appendSystem('--- Disconnected ---\\n');
+                document.title = 'PICPIO Serial Monitor';
             }
             break;
         case 'data':

@@ -178,12 +178,12 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .pin-periph:empty{display:none}
 .circuit-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .circuit-toolbar .hint{color:var(--sub);font-size:11px}
-.circuit-wrap{position:relative;border:1px solid var(--border);border-radius:var(--radius);background:#161616;height:280px;overflow:hidden}
+.circuit-wrap{position:relative;border:1px solid var(--border);border-radius:var(--radius);background:#161616;height:420px;min-height:200px;max-height:85vh;overflow:auto;resize:vertical}
 .circuit-parts{position:absolute;top:0;left:0;right:0;bottom:34px}
 .circuit-pinrow{position:absolute;left:0;right:0;bottom:0;height:34px;display:flex;align-items:center;gap:10px;background:var(--card);border-top:1px solid var(--border);overflow-x:auto;padding:0 8px}
 .circuit-pin{display:flex;flex-direction:column;align-items:center;font-size:9px;color:var(--sub);flex:none}
 .wire-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.wire-layer line{stroke:var(--accent);stroke-width:2;cursor:pointer;pointer-events:stroke}
+.wire-layer line{stroke:#ffd700;stroke-width:2;cursor:pointer;pointer-events:stroke}
 .term{width:10px;height:10px;border-radius:50%;background:#555;border:1px solid var(--border);cursor:pointer;margin:0 auto 2px}
 .term.selected{background:var(--accent);box-shadow:0 0 6px var(--accent)}
 .term.wired{background:#4ec9b0}
@@ -191,6 +191,8 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .circuit-part .term{margin-top:6px}
 .circuit-part .remove{position:absolute;top:1px;right:4px;color:var(--sub);cursor:pointer;font-size:12px;line-height:1}
 .circuit-part .remove:hover{color:#f48771}
+.circuit-part.selected{outline:2px solid var(--accent)}
+.circuit-part .part-i2c{font-size:9px;color:var(--sub);margin-top:2px}
 .circuit-part .part-label{font-size:10px;margin-top:4px;color:var(--sub)}
 .part-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto;transition:opacity .15s,box-shadow .15s,background .1s}
 .part-btn{width:32px;height:32px;border-radius:6px;background:#444;border:2px solid var(--border);margin:0 auto;cursor:pointer}
@@ -243,7 +245,7 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
       <option value="pot">Potentiometer</option>
       <option value="lcd1602">LCD 16x2</option>
       <option value="lcd2004">LCD 20x4</option>
-      <option value="oled">OLED Display</option>
+      <option value="oled">SSD1306</option>
       <option value="spi_display">SPI Display</option>
     </select>
     <button id="addPartBtn">+ Add</button>
@@ -444,6 +446,7 @@ let wires = [];
 let wireCounter = 0;
 let partCounter = 0;
 let selectedTerminal = null;
+let selectedPart = null;
 
 function termCenter(el) {
   const wrapRect = circuitWrap.getBoundingClientRect();
@@ -539,7 +542,27 @@ function onTerminalClick(kind, el, data) {
   if (el) el.addEventListener('click', () => onTerminalClick('mcu', el, p));
 });
 
-function addPart(type) {
+const I2C_ADDR_DEFAULT = { lcd1602: '0x27', lcd2004: '0x27', oled: '0x3C' };
+
+function applyPartTransform(id) {
+  const p = parts[id];
+  if (!p) return;
+  const t = [];
+  if (p.rotation) t.push('rotate(' + p.rotation + 'deg)');
+  if (p.zoom !== 1) t.push('scale(' + p.zoom.toFixed(2) + ')');
+  p.el.style.transform = t.join(' ');
+  p.el.style.zIndex = (p.zoom > 1) ? '20' : '';
+  redrawAllWires();
+}
+
+function selectPart(id) {
+  if (selectedPart === id) return;
+  if (selectedPart && parts[selectedPart]) parts[selectedPart].el.classList.remove('selected');
+  selectedPart = id;
+  if (id && parts[id]) parts[id].el.classList.add('selected');
+}
+
+function addPart(type, addr) {
   const id = 'part' + (++partCounter);
   const el = document.createElement('div');
   el.className = 'circuit-part';
@@ -553,7 +576,7 @@ function addPart(type) {
   if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
   if (type === 'lcd1602') { inner = '<div class="part-lcd part-lcd1602" id="' + id + '-lcd">' + '&nbsp;'.repeat(16) + '\\n' + '&nbsp;'.repeat(16) + '</div>'; label = 'LCD 16x2'; }
   if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd">' + Array(4).fill('&nbsp;'.repeat(20)).join('\\n') + '</div>'; label = 'LCD 20x4'; }
-  if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'OLED Display'; }
+  if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SSD1306'; }
   if (type === 'spi_display') { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SPI Display'; }
 
   const terms = TERMINALS[type] || [''];
@@ -563,10 +586,26 @@ function addPart(type) {
         '<div class="part-term"><div class="term" id="' + id + '-term-' + t + '"></div><div class="term-label">' + t + '</div></div>'
       ).join('') + '</div>';
 
+  const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'oled' || type === 'spi_display';
+  const i2cAddr = (type === 'lcd1602' || type === 'lcd2004' || type === 'oled') ? (addr || I2C_ADDR_DEFAULT[type]) : null;
+  const i2cHtml = i2cAddr ? '<div class="part-i2c">I2C ' + i2cAddr + '</div>' : '';
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
-    '<div class="part-label">' + label + '</div>' + termsHtml;
+    '<div class="part-label">' + label + '</div>' + i2cHtml + termsHtml;
   circuitParts.appendChild(el);
-  parts[id] = { id, type, el };
+  parts[id] = { id, type, el, rotation: 0, zoom: 1 };
+
+  el.title = 'Click to select, then press Space to rotate' + (zoomable ? '. Scroll to zoom.' : '');
+  el.addEventListener('click', () => selectPart(id));
+
+  if (zoomable) {
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const p = parts[id];
+      p.zoom = Math.max(0.5, Math.min(3, p.zoom + (e.deltaY < 0 ? 0.1 : -0.1)));
+      applyPartTransform(id);
+    }, { passive: false });
+  }
 
   terms.forEach(t => {
     const termId = id + '-term' + (t ? '-' + t : '');
@@ -577,6 +616,7 @@ function addPart(type) {
   el.querySelector('.remove').addEventListener('click', e => {
     e.stopPropagation();
     if (selectedTerminal && selectedTerminal.kind === 'part' && selectedTerminal.data.partId === id) clearSelection();
+    if (selectedPart === id) selectedPart = null;
     wires.filter(x => x.partId === id).forEach(w => removeWire(w));
     delete parts[id];
     el.remove();
@@ -594,8 +634,15 @@ function addPart(type) {
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
     const bounds = circuitParts.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - offX, bounds.width - el.offsetWidth));
-    const y = Math.max(0, Math.min(e.clientY - offY, bounds.height - el.offsetHeight));
+    // Rotation/zoom (transform) can make the rendered box differ from the
+    // unrotated layout box (offsetLeft/offsetWidth) -- clamp using the
+    // rendered box's offset from the layout position, which stays constant
+    // as the part is translated.
+    const rect = el.getBoundingClientRect();
+    const dxRect = (rect.left - bounds.left) - el.offsetLeft;
+    const dyRect = (rect.top  - bounds.top)  - el.offsetTop;
+    const x = Math.max(-dxRect, Math.min(e.clientX - offX, bounds.width  - rect.width  - dxRect));
+    const y = Math.max(-dyRect, Math.min(e.clientY - offY, bounds.height - rect.height - dyRect));
     el.style.left = x + 'px';
     el.style.top  = y + 'px';
     redrawAllWires();
@@ -637,7 +684,7 @@ function addPart(type) {
 function applyAutoCircuit(autoParts) {
   if (Object.keys(parts).length > 0) return;
   autoParts.forEach(ap => {
-    const id = addPart(ap.type);
+    const id = addPart(ap.type, ap.addr);
     (ap.wires || []).forEach(w => {
       const mcuEl = document.getElementById('term-' + w.pin);
       const partEl = document.getElementById(id + '-term' + (w.term ? '-' + w.term : ''));
@@ -651,6 +698,22 @@ document.getElementById('addPartBtn').addEventListener('click', () => {
   addPart(sel.value);
 });
 window.addEventListener('resize', redrawAllWires);
+new ResizeObserver(redrawAllWires).observe(circuitWrap);
+
+circuitParts.addEventListener('click', e => {
+  if (e.target === circuitParts) selectPart(null);
+});
+
+window.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || !selectedPart) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  e.preventDefault();
+  const p = parts[selectedPart];
+  if (!p) return;
+  p.rotation = (p.rotation + 90) % 360;
+  applyPartTransform(selectedPart);
+});
 
 function handleSimMessage(m) {
   switch (m.t) {

@@ -10,8 +10,8 @@ interface RecentProject { path: string; name: string; mcu: string; lastOpened: n
 const REGISTRY = [
     { name:'DHT22',         desc:'Humidity & temperature sensor (AM2302)',       tags:['sensor','1-wire']   },
     { name:'DS18B20',       desc:'Dallas 1-Wire temperature sensor',             tags:['sensor','1-wire']   },
-    { name:'SSD1306',       desc:'128x64 OLED display over I2C',                 tags:['display','i2c']     },
-    { name:'LiquidCrystal', desc:'Character LCD 4-bit parallel mode',            tags:['display']           },
+    { name:'SSD1306',       desc:'128x64/128x32 OLED display over I2C',          tags:['display','i2c']     },
+    { name:'LiquidCrystal_I2C', desc:'Character LCD over PCF8574 I2C backpack',  tags:['display','i2c']     },
     { name:'Servo',         desc:'RC servo motor via Timer1',                    tags:['motor','pwm']       },
     { name:'Encoder',       desc:'Quadrature encoder with 4x decode via IOC',    tags:['input']             },
     { name:'Wire',          desc:'I2C master with streaming bulk transfer',      tags:['comms','i2c']       },
@@ -22,6 +22,10 @@ const REGISTRY = [
     { name:'PID',           desc:'PID controller with anti-windup',              tags:['control']           },
     { name:'MPU6050',       desc:'6-axis IMU accelerometer+gyro over I2C',       tags:['sensor','i2c']      },
     { name:'BMP280',        desc:'Barometric pressure and temperature sensor',   tags:['sensor','i2c','spi']},
+    { name:'ADS1115',       desc:'16-bit 4-channel I2C ADC',                     tags:['sensor','i2c']      },
+    { name:'ADS1219',       desc:'24-bit 4-channel I2C ADC',                     tags:['sensor','i2c']      },
+    { name:'PCF8575',       desc:'16-channel I2C GPIO expander',                 tags:['io','i2c']          },
+    { name:'LCD_HC595',     desc:'Character LCD via 74HC595 shift register',     tags:['display']           },
 ];
 
 const BOARDS = [
@@ -157,6 +161,9 @@ export class HomePanel {
     private _html(): string {
         const cfg       = readConfig();
         const installed = new Set(listInstalledLibs().map(n => n.toLowerCase()));
+        const logoUri   = this._panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._ctx.extensionUri, 'resources', 'icons', 'pic.svg')
+        );
 
         const allProjects = this._ctx.globalState.get<RecentProject[]>('recentProjects', []);
         const projects    = allProjects.filter(p => !p.hidden);
@@ -397,7 +404,7 @@ body{background:var(--bg);color:var(--text);font:13px/1.5 'Segoe UI',-apple-syst
 <div class="tab-pane active" id="pane-home">
   <div class="welcome-wrap">
     <div class="welcome-left">
-      <div class="logo-circle">&#9632;</div>
+      <div class="logo-circle"><img src="${logoUri}" alt="PICPIO" width="64" height="64"></div>
       <div class="welcome-title">Welcome to <b>PICPIO</b></div>
       <div class="welcome-ver">
         <span class="ver-chip">Core 1.0.0</span>

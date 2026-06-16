@@ -4,7 +4,13 @@
 // simulator can auto-place and auto-wire matching circuit parts.
 
 export interface AutoWire { pin: string; term: string; }
-export interface AutoPart { type: string; wires: AutoWire[]; }
+export interface AutoPart { type: string; wires: AutoWire[]; addr?: string; }
+
+// Normalize a captured address literal ("0x27" or "39") to a "0xNN" hex string.
+function formatAddr(raw: string): string {
+    const n = raw.toLowerCase().startsWith('0x') ? parseInt(raw, 16) : parseInt(raw, 10);
+    return '0x' + n.toString(16).toUpperCase().padStart(2, '0');
+}
 
 // Native port-pin names — must match pinLabel() in sim/simWorker.ts
 // (D0-D7=RC0-RC7, D8-D13=RB0-RB5, A0-A5=RA0-RA5).
@@ -90,14 +96,22 @@ export function detectComponents(src: string): AutoPart[] {
         ]});
     } else if (has('LiquidCrystal_I2C')) {
         const is2004 = /LiquidCrystal_I2C[^;]*\(\s*\w+\s*,\s*20\s*,\s*4\s*\)/.test(s);
-        parts.push({ type: is2004 ? 'lcd2004' : 'lcd1602', wires: [
-            { pin: 'RA4', term: 'SDA' },
-            { pin: 'RA5', term: 'SCL' },
+        const addrM = s.match(/LiquidCrystal_I2C\s+\w+\s*\(\s*(0[xX][0-9A-Fa-f]+|\d+)/);
+        const addr = addrM ? formatAddr(addrM[1]) : '0x27';
+        parts.push({ type: is2004 ? 'lcd2004' : 'lcd1602', addr, wires: [
+            { pin: 'RC4', term: 'SDA' },
+            { pin: 'RC3', term: 'SCL' },
         ]});
     } else if (/SSD1306|U8g2|U8X8/.test(s)) {
-        parts.push({ type: 'oled', wires: [
-            { pin: 'RA4', term: 'SDA' },
-            { pin: 'RA5', term: 'SCL' },
+        // Look for "#define SSD1306_ADDRESS <value>" (the documented way to
+        // override the default), then a literal address passed directly as
+        // SSD1306_init(&dev, <addr>, ...), then fall back to the default.
+        const defineM = s.match(/#define\s+SSD1306_ADDRESS\s+(0[xX][0-9A-Fa-f]+|\d+)/);
+        const initM = s.match(/SSD1306_init\s*\(\s*&?\s*\w+\s*,\s*(0[xX][0-9A-Fa-f]+|\d+)/);
+        const addr = formatAddr((defineM ?? initM)?.[1] ?? '0x3C');
+        parts.push({ type: 'oled', addr, wires: [
+            { pin: 'RC4', term: 'SDA' },
+            { pin: 'RC3', term: 'SCL' },
         ]});
     }
 

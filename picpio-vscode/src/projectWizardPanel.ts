@@ -158,6 +158,13 @@ select{
 }
 input[type=text]:focus, select:focus{outline:1px solid var(--accent)}
 .combo{position:relative}
+.combo input[type=text]{padding-right:28px}
+.combo::after{
+  content:"";position:absolute;top:50%;right:14px;
+  width:7px;height:7px;
+  border-right:1.5px solid var(--vscode-foreground);border-bottom:1.5px solid var(--vscode-foreground);
+  opacity:.8;transform:translateY(-65%) rotate(45deg);pointer-events:none;
+}
 .combo-dropdown{
   display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
   max-height:240px;overflow-y:auto;z-index:50;

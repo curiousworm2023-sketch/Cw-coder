@@ -1,19 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
   <!-- IC body -->
-  <rect x="6" y="4" width="12" height="16" rx="1" fill="#1e3a2f" stroke="#4ec9b0" stroke-width="1.2"/>
-  <!-- Chip label -->
-  <rect x="8" y="7" width="8" height="6" rx="0.5" fill="#4ec9b0" opacity="0.25"/>
-  <text x="12" y="12" text-anchor="middle" font-size="4" fill="#4ec9b0" font-family="monospace" font-weight="bold">PIC</text>
+  <rect x="6" y="4" width="12" height="16" rx="1" fill="#1a1a1a" stroke="#f27f0c" stroke-width="1.2"/>
   <!-- Left pins -->
-  <line x1="6" y1="8"  x2="3" y2="8"  stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="6" y1="11" x2="3" y2="11" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="6" y1="14" x2="3" y2="14" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="6" y1="17" x2="3" y2="17" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="8"  x2="3" y2="8"  stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="11" x2="3" y2="11" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="14" x2="3" y2="14" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="17" x2="3" y2="17" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
   <!-- Right pins -->
-  <line x1="18" y1="8"  x2="21" y2="8"  stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="18" y1="11" x2="21" y2="11" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="18" y1="14" x2="21" y2="14" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
-  <line x1="18" y1="17" x2="21" y2="17" stroke="#4ec9b0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="18" y1="8"  x2="21" y2="8"  stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="18" y1="11" x2="21" y2="11" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="18" y1="14" x2="21" y2="14" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="18" y1="17" x2="21" y2="17" stroke="#f27f0c" stroke-width="1.2" stroke-linecap="round"/>
   <!-- Pin 1 dot -->
-  <circle cx="7.5" cy="5.5" r="0.8" fill="#4ec9b0"/>
+  <circle cx="7.5" cy="5.5" r="0.8" fill="#f27f0c"/>
 </svg>

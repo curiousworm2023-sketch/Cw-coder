@@ -246,6 +246,39 @@ function ssd1306_display(): void {
     emitOled();
 }
 
+// SSD1306_t struct-based API (picpio_tool/libraries/SSD1306) -- after
+// transpilation "SSD1306_init(&oled, ...)" becomes "SSD1306_init(oled,
+// ...)", where `oled` is a plain {} object standing in for the struct
+// pointer. The device handle itself is ignored: the simulator only renders
+// a single OLED via the shared character grid above.
+const SSD1306_ADDRESS = 0x3C;
+function SSD1306_BUFFER_SIZE(w: number, h: number): number {
+    return Math.ceil((Number(w) * Number(h)) / 8);
+}
+function SSD1306_init(..._args: unknown[]): void {
+    ssd1306_init();
+}
+function SSD1306_begin(..._args: unknown[]): boolean {
+    return true;
+}
+function SSD1306_clearDisplay(..._dev: unknown[]): void {
+    ssd1306_clear();
+}
+function SSD1306_setCursor(_dev: unknown, x: number, y: number): void {
+    // Real SSD1306_setCursor takes pixel coordinates; approximate onto the
+    // 21x8 character grid (6x8px glyphs) used by the text-mode emulation.
+    ssd1306_set_cursor(Math.floor(Number(x) / 6), Math.floor(Number(y) / 8));
+}
+function SSD1306_print(_dev: unknown, x: unknown): void {
+    ssd1306_print(x);
+}
+function SSD1306_println(_dev: unknown, x?: unknown): void {
+    ssd1306_println(x);
+}
+function SSD1306_display(..._dev: unknown[]): void {
+    ssd1306_display();
+}
+
 function map(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
     return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
@@ -268,6 +301,8 @@ const baseGlobals: Record<string, unknown> = {
     Serial, Wire, SPI, Serial_print, Serial_println,
     ssd1306_init, ssd1306_clear, ssd1306_set_cursor, ssd1306_setCursor: ssd1306_set_cursor,
     ssd1306_print, ssd1306_println, ssd1306_display,
+    SSD1306_ADDRESS, SSD1306_BUFFER_SIZE, SSD1306_init, SSD1306_begin, SSD1306_clearDisplay,
+    SSD1306_setCursor, SSD1306_print, SSD1306_println, SSD1306_display,
     map, constrain, random,
     min: Math.min, max: Math.max, abs: Math.abs, pow: Math.pow, sqrt: Math.sqrt,
 };
