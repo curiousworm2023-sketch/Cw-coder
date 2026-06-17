@@ -72,6 +72,22 @@ static const PinInfo _pins[] = {
     { &TRISA, &LATA, &PORTA, 11, NO_ADC }, // D29 RA11
 };
 #define PIN_COUNT 30
+#elif defined(__dsPIC30F2011__)
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 }, // D2  RB2/AN2
+    { &TRISB, &LATB, &PORTB, 3, 3 }, // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 }, // D4  RB4/AN4 -- U1TX/SDO1/SCL
+    { &TRISB, &LATB, &PORTB, 5, 5 }, // D5  RB5/AN5 -- U1RX/SDI1/SDA
+    { &TRISB, &LATB, &PORTB, 6, 6 }, // D6  RB6/AN6 -- SCK1
+    { &TRISB, &LATB, &PORTB, 7, 7 }, // D7  RB7/AN7 -- OC2
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D8  RC13 (CN1)
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D9  RC14 (CN0/T1CK)
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D10 RC15 (OSC2/CLKO)
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D11 RD0/OC1 -- LED
+};
+#define PIN_COUNT 12
 #elif !defined(__dsPIC30F2010__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
@@ -236,6 +252,22 @@ void analogWrite(uint8_t pin, uint8_t duty) {
         default:
             return;
     }
+#elif defined(__dsPIC30F2011__)
+    // OC1 on RD0, OC2 on RB7 (this chip has no PORTF and only one PORTD pin).
+    switch (pin) {
+        case RD0:
+            OC1RS = duty; OC1R = duty;
+            OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110;
+            TRISDbits.TRISD0 = 0;
+            break;
+        case RB7:
+            OC2RS = duty; OC2R = duty;
+            OC2CONbits.OCTSEL = 0; OC2CONbits.OCM = 0b110;
+            TRISBbits.TRISB7 = 0;
+            break;
+        default:
+            return;
+    }
 #elif !defined(__dsPIC30F2010__)
     // 4011 and 4013 both put OC1-OC4 on RD0-RD3 (the RDx macros resolve to the
     // right Dn per chip), so this one branch serves both.
@@ -297,8 +329,13 @@ void delayMicroseconds(uint32_t us) { while (us--) __delay_us(1); }
 // NOTE: RF2/RF3 are also SDI1/SDA and SDO1/SCL -- don't use Serial together
 // with SPI or Wire on real hardware.
 static void _serial_begin(uint32_t baud) {
+#if defined(__dsPIC30F2011__)
+    TRISBbits.TRISB5 = 1; // RB5 = U1RX input
+    TRISBbits.TRISB4 = 0; // RB4 = U1TX output
+#else
     TRISFbits.TRISF2 = 1; // RF2 = U1RX input
     TRISFbits.TRISF3 = 0; // RF3 = U1TX output
+#endif
     U1BRG = (uint16_t)(FCY / (16UL * baud)) - 1;
     U1MODEbits.UARTEN = 1;
     U1STAbits.UTXEN = 1;
@@ -469,6 +506,11 @@ HardwareSerial_t Serial2 = {
 // NOTE: SDI1/SDO1 share pins with U1RX/U1TX and SDA/SCL -- don't use SPI
 // together with Serial or Wire on real hardware.
 static void _spi_begin(void) {
+#if defined(__dsPIC30F2011__)
+    TRISBbits.TRISB6 = 0; // RB6 = SCK1 output (master)
+    TRISBbits.TRISB4 = 0; // RB4 = SDO1 output
+    TRISBbits.TRISB5 = 1; // RB5 = SDI1 input
+#else
 #ifndef __dsPIC30F2010__
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
 #else
@@ -476,6 +518,7 @@ static void _spi_begin(void) {
 #endif
     TRISFbits.TRISF3 = 0; // RF3 = SDO1 output
     TRISFbits.TRISF2 = 1; // RF2 = SDI1 input
+#endif
 
     SPI1CONbits.MSTEN  = 1;
     SPI1CONbits.MODE16 = 0;
@@ -522,8 +565,13 @@ static void _i2c_idle(void) {
 }
 
 static void _wire_begin(void) {
+#if defined(__dsPIC30F2011__)
+    TRISBbits.TRISB5 = 1; // RB5 = SDA
+    TRISBbits.TRISB4 = 1; // RB4 = SCL
+#else
     TRISFbits.TRISF2 = 1; // SDA
     TRISFbits.TRISF3 = 1; // SCL
+#endif
     I2CBRG = (uint16_t)(FCY / 100000UL) - (uint16_t)(FCY / 1111111UL) - 1; // ~100kHz
     I2CCONbits.I2CEN = 1;
 }

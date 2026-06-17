@@ -205,6 +205,51 @@ typedef bool     boolean;
 #define RF6  D28
 #define RA11 D29
 
+#elif defined(__dsPIC30F2011__)
+// ── Arduino pin numbers -> dsPIC30F2011 (18-pin, no PORTE/PORTF) ─────────────
+// All peripheral I/O is on PORTB on this chip (there is no PORTF):
+// D0-D7  = RB0-RB7 (also A0-A7 = AN0-AN7)
+//   D4=RB4 (U1TX/SDO1/SCL), D5=RB5 (U1RX/SDI1/SDA), D6=RB6 (SCK1),
+//   D7=RB7 (OC2/AN7) -- RB4/RB5 are shared between UART1, SPI1 and I2C:
+//   don't use Serial, SPI and Wire together on real hardware.
+// D8-D10 = RC13-RC15 (RC15 = OSC2/CLKO)
+// D11    = RD0 (OC1/IC1) -- LED / PWM pin
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7    // RB7 / AN7 / OC2
+#define D8   8
+#define D9   9
+#define D10  10
+#define D11  11   // RD0 / OC1 -- LED pin
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define LED_BUILTIN  D11
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RC13 D8
+#define RC14 D9
+#define RC15 D10
+#define RD0  D11
+
 #elif !defined(__dsPIC30F2010__)
 // ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)
