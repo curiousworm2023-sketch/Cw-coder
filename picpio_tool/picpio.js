@@ -1444,6 +1444,35 @@ function buildReferenceMd(meta) {
     if (h.hasADC) p(`| ADC | \`analogRead(pin)\` | ${h.analogReadNote || ('A0..A' + (h.aPins.length - 1))} |`);
     p(`| PWM | \`analogWrite(pin, duty)\` | ${h.analogWriteNote || 'CCP/OC output pins'} |`, '');
 
+    // ── Peripheral pin map ──
+    // Lets the user see which physical pin (and Arduino name) each peripheral
+    // signal lands on. Parsed from "SIG=Rxx" tokens in the peripheral notes
+    // (e.g. `extern TwoWire_t Wire; // SCL=RC3, SDA=RC4`). Peripherals whose
+    // note carries no such tokens are simply skipped.
+    const dNameByVal = {};
+    for (const d of h.dPins) { const v = h.resolve(d); if (dNameByVal[v] == null) dNameByVal[v] = d; }
+    const periphList = [
+        ['UART', h.serial], ['UART #2', h.serial2],
+        ['I2C', h.wire], ['I2C #2', h.wire2],
+        ['SPI', h.spi], ['SPI #2', h.spi2],
+    ];
+    const pinRows = [];
+    for (const [label, info] of periphList) {
+        if (!info || !info.present || !info.note) continue;
+        for (const m of info.note.matchAll(/([A-Za-z][\w/]*)\s*=\s*(R[A-Z]\d+)/g)) {
+            const pin = m[2], v = h.resolve(pin);
+            const ard = (v != null && dNameByVal[v]) ? dNameByVal[v] : (v != null && h.analogByVal[v]) || '';
+            pinRows.push({ label, sig: m[1], pin, ard });
+        }
+    }
+    if (pinRows.length) {
+        p('## Peripheral Pins', '');
+        p('Which physical pin — and its Arduino name — each peripheral signal uses on this chip:', '');
+        p('| Peripheral | Signal | Pin | Arduino name |', '|---|---|---|---|');
+        for (const r of pinRows) p(`| ${r.label} | ${r.sig} | \`${r.pin}\` | ${r.ard ? '`' + r.ard + '`' : ''} |`);
+        p('');
+    }
+
     // ── API + usage ──
     p('## API & Usage', '');
     p('Everything below is available after `#include <Picpio.h>`. A sketch uses the Arduino shape —',
