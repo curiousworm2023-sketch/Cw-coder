@@ -57,12 +57,14 @@ static const PinInfo _pins[] = {
 // ── millis counter ────────────────────────────────────────────────────────────
 static volatile uint32_t _ms = 0;
 
-// ── Serial ring buffer ────────────────────────────────────────────────────────
+// ── Serial ring buffers (one per EUSART) ─────────────────────────────────────
 #define RX_BUF 64
 static volatile uint8_t _rxbuf[RX_BUF];
 static volatile uint8_t _rxhead = 0, _rxtail = 0;
+static volatile uint8_t _rxbuf2[RX_BUF];
+static volatile uint8_t _rxhead2 = 0, _rxtail2 = 0;
 
-// ── ISR: Timer0 millis + EUSART1 RX ring buffer ───────────────────────────────
+// ── ISR: Timer0 millis + EUSART1/EUSART2 RX ring buffers ─────────────────────
 void __interrupt(high_priority) ISR_High(void) {
     if (TMR0IF && TMR0IE) {
         TMR0H = 0xFC; TMR0L = 0x18;
@@ -74,6 +76,12 @@ void __interrupt(high_priority) ISR_High(void) {
         uint8_t b = RC1REG;
         uint8_t next = (_rxhead + 1) & (RX_BUF - 1);
         if (next != _rxtail) { _rxbuf[_rxhead] = b; _rxhead = next; }
+    }
+    if (RC2IF && RC2IE) {
+        if (RC2STAbits.OERR) { RC2STAbits.CREN = 0; RC2STAbits.CREN = 1; }
+        uint8_t b = RC2REG;
+        uint8_t next = (_rxhead2 + 1) & (RX_BUF - 1);
+        if (next != _rxtail2) { _rxbuf2[_rxhead2] = b; _rxhead2 = next; }
     }
 }
 
@@ -240,6 +248,61 @@ void _serial_println_f_def(float f)  { _serial_println_f(f, 2); }
 void _serial_print_d_def(double d)   { _serial_print_f((float)d, 2); }
 void _serial_println_d_def(double d) { _serial_println_f((float)d, 2); }
 
+// ── Serial2 (EUSART2, TX=RB0, RX=RB1 via PPS) ────────────────────────────────
+static void _serial2_begin(uint32_t baud) {
+    RB0PPS  = 0x0B;          // TX2/CK2 → RB0
+    RX2PPS  = 0x09;          // RB1 → RX2 input
+    TRISBbits.TRISB0 = 0;    // TX output
+    TRISBbits.TRISB1 = 1;    // RX input
+    BAUD2CON = 0x08;         // BRG16=1
+    uint16_t brg = (uint16_t)(_XTAL_FREQ / (4UL * baud) - 1);
+    SPBRGH2 = (uint8_t)(brg >> 8);
+    SPBRG2  = (uint8_t)(brg);
+    TX2STA  = 0b00100100;    // BRGH=1, TXEN=1, SYNC=0
+    RC2STA  = 0b10010000;    // SPEN=1, CREN=1
+    RC2IE   = 1;
+}
+static void _serial2_write(uint8_t b)      { while (!TX2STAbits.TRMT); TX2REG = b; }
+static void _serial2_print_s(const char *s){ while (*s) _serial2_write((uint8_t)*s++); }
+static void _serial2_print_i(int32_t n)    { char buf[12]; sprintf(buf, "%ld", (long)n); _serial2_print_s(buf); }
+static void _serial2_print_f(float f, uint8_t dec) {
+    char buf[20];
+    if      (dec == 0) sprintf(buf, "%ld",  (long)f);
+    else if (dec == 1) sprintf(buf, "%.1f", (double)f);
+    else if (dec == 2) sprintf(buf, "%.2f", (double)f);
+    else               sprintf(buf, "%.3f", (double)f);
+    _serial2_print_s(buf);
+}
+static void _serial2_println_s(const char *s) { _serial2_print_s(s); _serial2_write('\r'); _serial2_write('\n'); }
+static void _serial2_println_i(int32_t n)     { _serial2_print_i(n); _serial2_write('\r'); _serial2_write('\n'); }
+static void _serial2_println_f(float f, uint8_t dec) { _serial2_print_f(f, dec); _serial2_write('\r'); _serial2_write('\n'); }
+static int  _serial2_available(void) { return (_rxhead2 != _rxtail2) ? 1 : 0; }
+static int  _serial2_read(void) {
+    if (_rxhead2 == _rxtail2) return -1;
+    uint8_t b = _rxbuf2[_rxtail2];
+    _rxtail2 = (_rxtail2 + 1) & (RX_BUF - 1);
+    return b;
+}
+static void _serial2_flush(void) { while (!TX2STAbits.TRMT); }
+static void _serial2_end(void)   { RC2STA = 0x00; TX2STA = 0x00; }
+
+HardwareSerial_t Serial2 = {
+    .begin     = _serial2_begin,
+    .end       = _serial2_end,
+    .print     = _serial2_print_s,
+    .println   = _serial2_println_s,
+    .print_s   = _serial2_print_s,
+    .print_i   = _serial2_print_i,
+    .print_f   = _serial2_print_f,
+    .println_s = _serial2_println_s,
+    .println_i = _serial2_println_i,
+    .println_f = _serial2_println_f,
+    .write     = _serial2_write,
+    .available = _serial2_available,
+    .read      = _serial2_read,
+    .flush     = _serial2_flush,
+};
+
 // ── Wire / I2C (SSP1 as I2C Master, RC3=SCL, RC4=SDA) ────────────────────────
 static uint8_t _i2c_rxbuf[32];
 static uint8_t _i2c_rxlen = 0, _i2c_rxpos = 0;
@@ -308,6 +371,76 @@ TwoWire_t Wire = {
     .write             = _wire_write,
     .available         = _wire_available,
     .read              = _wire_read,
+};
+
+// ── Wire2 / I2C (SSP2 as I2C Master, RB2=SCL, RB3=SDA via PPS) ────────────────
+static uint8_t _i2c2_rxbuf[32];
+static uint8_t _i2c2_rxlen = 0, _i2c2_rxpos = 0;
+
+static void _ssp2_wait(void) { while (!SSP2IF) {} SSP2IF = 0; }
+
+static void _wire2_begin(void) {
+    RB2PPS      = 0x11;   // SCK2/SCL2 → RB2
+    RB3PPS      = 0x12;   // SDO2/SDA2 → RB3
+    SSP2CLKPPS  = 0x0A;   // RB2 → SSP2 CLK input
+    SSP2DATPPS  = 0x0B;   // RB3 → SSP2 DAT input
+    TRISBbits.TRISB2 = 1;
+    TRISBbits.TRISB3 = 1;
+    SSP2STAT = 0x80;      // SMP=1, slew rate disabled (100kHz)
+    SSP2CON1 = 0x28;      // SSPEN=1, SSPM=1000 (I2C Master Fosc/(4*(ADD+1)))
+    SSP2CON2 = 0x00;
+    SSP2ADD  = 159;       // 100kHz @ 64MHz: 64M/(4*100k)-1=159
+}
+
+static void _wire2_beginTx(uint8_t addr) {
+    SSP2CON2bits.SEN = 1;
+    _ssp2_wait();
+    SSP2BUF = (uint8_t)(addr << 1);
+    _ssp2_wait();
+}
+
+static void _wire2_write(uint8_t b) {
+    SSP2BUF = b;
+    _ssp2_wait();
+}
+
+static uint8_t _wire2_endTx(void) {
+    SSP2CON2bits.PEN = 1;
+    _ssp2_wait();
+    return 0;
+}
+
+static uint8_t _wire2_requestFrom(uint8_t addr, uint8_t len) {
+    _i2c2_rxlen = 0; _i2c2_rxpos = 0;
+    SSP2CON2bits.SEN = 1;
+    _ssp2_wait();
+    SSP2BUF = (uint8_t)((addr << 1) | 1);
+    _ssp2_wait();
+    for (uint8_t i = 0; i < len; i++) {
+        SSP2CON2bits.RCEN = 1;
+        _ssp2_wait();
+        _i2c2_rxbuf[i] = SSP2BUF;
+        _i2c2_rxlen++;
+        SSP2CON2bits.ACKDT = (i < (uint8_t)(len - 1)) ? 0 : 1;
+        SSP2CON2bits.ACKEN = 1;
+        _ssp2_wait();
+    }
+    SSP2CON2bits.PEN = 1;
+    _ssp2_wait();
+    return _i2c2_rxlen;
+}
+
+static int _wire2_available(void) { return _i2c2_rxpos < _i2c2_rxlen; }
+static int _wire2_read(void)      { return _wire2_available() ? _i2c2_rxbuf[_i2c2_rxpos++] : -1; }
+
+TwoWire_t Wire2 = {
+    .begin             = _wire2_begin,
+    .beginTransmission = _wire2_beginTx,
+    .endTransmission   = _wire2_endTx,
+    .requestFrom       = _wire2_requestFrom,
+    .write             = _wire2_write,
+    .available         = _wire2_available,
+    .read              = _wire2_read,
 };
 
 // ── SPI (SSP1 as SPI Master, RC3=SCK, RC5=MOSI, RC4=MISO) ───────────────────

@@ -1527,17 +1527,18 @@ function buildReferenceMd(meta) {
     if (h.serial.present) { p('### Serial (UART)' + (h.serial.note ? ' — ' + h.serial.note : ''), ''); serialUsage('Serial'); }
     if (h.serial2.present) { p('### Serial2 (second UART)' + (h.serial2.note ? ' — ' + h.serial2.note : ''), ''); serialUsage('Serial2'); }
 
-    if (h.wire.present) {
-        p('### I2C (Wire)' + (h.wire.note ? ' — ' + h.wire.note : ''), '');
+    const wireUsage = (obj) => {
         p('```c',
-          'Wire.begin();',
-          'Wire.beginTransmission(0x48);',
-          'Wire.write(0x01);',
-          'Wire.endTransmission();',
-          'Wire.requestFrom(0x48, 2);',
-          'while (Wire.available()) { int b = Wire.read(); }',
+          `${obj}.begin();`,
+          `${obj}.beginTransmission(0x48);`,
+          `${obj}.write(0x01);`,
+          `${obj}.endTransmission();`,
+          `${obj}.requestFrom(0x48, 2);`,
+          `while (${obj}.available()) { int b = ${obj}.read(); }`,
           '```', '');
-    }
+    };
+    if (h.wire.present)  { p('### I2C (Wire)' + (h.wire.note ? ' — ' + h.wire.note : ''), ''); wireUsage('Wire'); }
+    if (h.wire2.present) { p('### I2C #2 (Wire2)' + (h.wire2.note ? ' — ' + h.wire2.note : ''), ''); wireUsage('Wire2'); }
     if (h.spi.present) {
         p('### SPI' + (h.spi.note ? ' — ' + h.spi.note : ''), '');
         p('```c',

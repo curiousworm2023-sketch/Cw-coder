@@ -164,6 +164,7 @@ typedef struct {
 } HardwareSerial_t;
 
 extern HardwareSerial_t Serial;  // TX=RC6, RX=RC7
+extern HardwareSerial_t Serial2; // TX=RB0, RX=RB1
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)
 #define Serial_print(x)   _Generic((x), \
@@ -199,6 +200,7 @@ typedef struct {
 } TwoWire_t;
 
 extern TwoWire_t Wire;  // SCL=RC3, SDA=RC4
+extern TwoWire_t Wire2; // SCL=RB2, SDA=RB3
 // ── SPI (function-pointer struct) ─────────────────────────────────────────────
 typedef struct {
     void    (*begin)(void);
