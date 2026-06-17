@@ -30,12 +30,13 @@
 // wiring.c is used instead). Keyed on the specific device so the same HAL
 // serves the whole dsPIC30F line.
 // Parts with no second UART (no Serial2).
-#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__)
+#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__) || defined(__dsPIC30F3012__)
 #  define PICPIO_NO_UART2
 #endif
 // Parts whose flash is too small for sprintf's float support (use the
 // lightweight float printer). 4012 shares the 2010 pinout but has 4x the flash,
-// so it keeps sprintf -- hence this is a separate list from PICPIO_NO_UART2.
+// and 3012 shares the 2011 pinout but has 2x the flash, so both keep sprintf --
+// hence this is a separate list from PICPIO_NO_UART2.
 #if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__)
 #  define PICPIO_TINY_FLASH
 #endif
@@ -211,7 +212,7 @@ typedef bool     boolean;
 #define RF6  D28
 #define RA11 D29
 
-#elif defined(__dsPIC30F2011__)
+#elif defined(__dsPIC30F2011__) || defined(__dsPIC30F3012__)
 // ── Arduino pin numbers -> dsPIC30F2011 (18-pin, no PORTE/PORTF) ─────────────
 // All peripheral I/O is on PORTB on this chip (there is no PORTF):
 // D0-D7  = RB0-RB7 (also A0-A7 = AN0-AN7)
@@ -256,7 +257,7 @@ typedef bool     boolean;
 #define RC15 D10
 #define RD0  D11
 
-#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__)
+#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__)
 // ── Arduino pin numbers -> dsPIC30F6011A / dsPIC30F6012A (64-pin) ────────────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D20 = RC1,RC2,RC13,RC14,RC15
@@ -556,7 +557,7 @@ typedef bool     boolean;
 #define RG8  D66
 #define RG9  D67
 
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__)
 // ── Arduino pin numbers -> dsPIC30F6014A / dsPIC30F6013A (64/80-pin, PORTA-G) ─
 // D0-D15  = RB0-RB15 (also A0-A15 = AN0-AN15, all analog-capable)
 // D16-D31 = RD0-RD15 (D16-D23 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D16/RD0)
