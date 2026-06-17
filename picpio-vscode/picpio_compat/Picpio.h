@@ -241,8 +241,10 @@ extern SPIClass_t SPI;  // SCK=RC3, SDI=RC4, SDO=RC5
 void arduino_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
-void setup(void);
-void loop(void);
+void init(void);   // runs once at boot   (define this; `setup` still works)
+void run(void);    // runs forever        (define this; `loop` still works)
+#define setup init
+#define loop  run
 
 // ════════════════════════════════════════════════════════════════════════════
 // PICPIO native API — subsystem-prefixed names (the preferred/canonical names).

@@ -22,8 +22,8 @@
 
 void main(void) {
     arduino_init();
-    setup();
+    init();
     while (1) {
-        loop();
+        run();
     }
 }

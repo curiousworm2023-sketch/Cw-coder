@@ -49,9 +49,9 @@ _FGS(GWRP_OFF & CODE_PROT_OFF);                                    // no write p
 
 int main(void) {
     arduino_init();
-    setup();
+    init();
     while (1) {
-        loop();
+        run();
     }
     return 0;
 }

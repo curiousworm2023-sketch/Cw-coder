@@ -14,9 +14,9 @@ _FICD(ICS_PGD2 & JTAGEN_OFF);                                    // PGEC2/PGED2 
 
 int main(void) {
     arduino_init();
-    setup();
+    init();
     while (1) {
-        loop();
+        run();
     }
     return 0;
 }

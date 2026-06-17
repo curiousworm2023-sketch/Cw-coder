@@ -10,9 +10,9 @@ _CONFIG1(JTAGEN_OFF & GCP_OFF & GWRP_OFF & FWDTEN_OFF & ICS_PGx2);        // JTA
 
 int main(void) {
     arduino_init();
-    setup();
+    init();
     while (1) {
-        loop();
+        run();
     }
     return 0;
 }

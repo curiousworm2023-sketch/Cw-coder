@@ -1483,13 +1483,13 @@ function buildReferenceMd(meta) {
     p('## API & Usage', '');
     p('Everything below is available after `#include <Picpio.h>`. The names use PICPIO\'s',
       'subsystem prefixes (`gpio_`, `adc_`, `pwm_`, `sys_`, `uart1`/`i2c1`/`spi1`). A sketch',
-      'has the usual shape — `setup()` runs once, `loop()` runs forever:', '');
+      'defines `init()` (runs once at boot) and `run()` (runs forever):', '');
     p('```c', '#include <Picpio.h>', '',
-      'void setup() {', '    gpio_mode(BUILTIN_LED, GPIO_OUT);', '}', '',
-      'void loop() {', '    gpio_write(BUILTIN_LED, GPIO_HIGH);', '    sys_delay(500);',
+      'void init() {', '    gpio_mode(BUILTIN_LED, GPIO_OUT);', '}', '',
+      'void run() {', '    gpio_write(BUILTIN_LED, GPIO_HIGH);', '    sys_delay(500);',
       '    gpio_write(BUILTIN_LED, GPIO_LOW);', '    sys_delay(500);', '}', '```', '');
-    p('> The classic Arduino names (`digitalWrite`, `Serial`, `HIGH`, `delay`, …) remain',
-      '> available as aliases, so existing Arduino sketches still compile unchanged.', '');
+    p('> The classic Arduino names remain available as aliases, so existing sketches still',
+      '> compile unchanged: `setup`/`loop`, `digitalWrite`, `Serial`, `HIGH`, `delay`, …', '');
 
     p('### Digital I/O', '');
     p('```c',
