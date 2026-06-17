@@ -1435,12 +1435,12 @@ function buildReferenceMd(meta) {
     p('## On-Chip Peripherals', '');
     p('| Peripheral | Object / call | Pins |', '|---|---|---|');
     const prow = (label, obj, info) => { if (info.present) p(`| ${label} | \`${obj}\` | ${info.note || '—'} |`); };
-    prow('UART', 'Serial', h.serial);
-    prow('UART #2', 'Serial2', h.serial2);
-    prow('I2C', 'Wire', h.wire);
-    prow('I2C #2', 'Wire2', h.wire2);
-    prow('SPI', 'SPI', h.spi);
-    prow('SPI #2', 'SPI2', h.spi2);
+    prow('UART-1', 'Serial', h.serial);
+    prow('UART-2', 'Serial2', h.serial2);
+    prow('I2C-1', 'Wire', h.wire);
+    prow('I2C-2', 'Wire2', h.wire2);
+    prow('SPI-1', 'SPI', h.spi);
+    prow('SPI-2', 'SPI2', h.spi2);
     if (h.hasADC) p(`| ADC | \`analogRead(pin)\` | ${h.analogReadNote || ('A0..A' + (h.aPins.length - 1))} |`);
     p(`| PWM | \`analogWrite(pin, duty)\` | ${h.analogWriteNote || 'CCP/OC output pins'} |`, '');
 
@@ -1452,9 +1452,9 @@ function buildReferenceMd(meta) {
     const dNameByVal = {};
     for (const d of h.dPins) { const v = h.resolve(d); if (dNameByVal[v] == null) dNameByVal[v] = d; }
     const periphList = [
-        ['UART', h.serial], ['UART #2', h.serial2],
-        ['I2C', h.wire], ['I2C #2', h.wire2],
-        ['SPI', h.spi], ['SPI #2', h.spi2],
+        ['UART-1', h.serial], ['UART-2', h.serial2],
+        ['I2C-1', h.wire], ['I2C-2', h.wire2],
+        ['SPI-1', h.spi], ['SPI-2', h.spi2],
     ];
     const pinRows = [];
     for (const [label, info] of periphList) {
