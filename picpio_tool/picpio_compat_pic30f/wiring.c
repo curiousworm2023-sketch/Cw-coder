@@ -88,7 +88,7 @@ static const PinInfo _pins[] = {
     { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D11 RD0/OC1 -- LED
 };
 #define PIN_COUNT 12
-#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__)
+#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 },   // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 },   // D1  RB1/AN1
@@ -216,7 +216,7 @@ static const PinInfo _pins[] = {
     { &TRISG, &LATG, &PORTG, 9, NO_ADC },  // D67 RG9
 };
 #define PIN_COUNT 68
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 },   // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 },   // D1  RB1/AN1
@@ -468,7 +468,7 @@ void analogWrite(uint8_t pin, uint8_t duty) {
         default:
             return;
     }
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6010__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__) || defined(__dsPIC30F6010__)
     // 8 PWM channels: OC1-OC8 on RD0-RD7.
     switch (pin) {
         case RD0: OC1RS = duty; OC1R = duty; OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110; TRISDbits.TRISD0 = 0; break;
@@ -724,7 +724,7 @@ static void _spi_begin(void) {
     TRISBbits.TRISB6 = 0; // RB6 = SCK1 output (master)
     TRISBbits.TRISB4 = 0; // RB4 = SDO1 output
     TRISBbits.TRISB5 = 1; // RB5 = SDI1 input
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6010__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6010__)
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
     TRISFbits.TRISF8 = 0; // RF8 = SDO1 output
     TRISFbits.TRISF7 = 1; // RF7 = SDI1 input
@@ -786,7 +786,7 @@ static void _wire_begin(void) {
 #if defined(__dsPIC30F2011__) || defined(__dsPIC30F3012__)
     TRISBbits.TRISB5 = 1; // RB5 = SDA
     TRISBbits.TRISB4 = 1; // RB4 = SCL
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6010__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__) || defined(__dsPIC30F6010__)
     TRISGbits.TRISG3 = 1; // RG3 = SDA
     TRISGbits.TRISG2 = 1; // RG2 = SCL
 #else

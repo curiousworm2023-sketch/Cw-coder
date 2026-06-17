@@ -15,10 +15,10 @@ _FGS(GWRP_OFF & GSS_OFF);                                          // this part 
 #else
 _FGS(GWRP_OFF & CODE_PROT_OFF);                                    // no write protect / code protect
 #endif
-#elif defined(__dsPIC30F6010__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F5011__)
+#elif defined(__dsPIC30F6010__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F6012__) || defined(__dsPIC30F6013__)
 // Have the PRI oscillator-source bit but no PWMxL_ACT_HI/PWMxH_ACT_HI/RST_IOPIN
-// motor-PWM config bits (6010 names its PWM active-level bit RST_PWMPIN; 6014 and
-// 5011 have no motor PWM at all), so use the plain FBORPOR.
+// motor-PWM config bits (6010 names its PWM active-level bit RST_PWMPIN; 5011/6011/
+// 6012/6013/6014 have no motor PWM at all), so use the plain FBORPOR.
 _FOSC(XT & PRI & CSW_FSCM_OFF);                                    // external crystal, no PLL, clock switch/monitor off
 _FWDT(WDT_OFF);                                                    // watchdog timer disabled
 _FBORPOR(PWRT_OFF & PBOR_OFF & MCLR_EN);                           // power-up timer off, BOR off, MCLR enabled

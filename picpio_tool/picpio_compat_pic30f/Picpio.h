@@ -257,7 +257,7 @@ typedef bool     boolean;
 #define RC15 D10
 #define RD0  D11
 
-#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__)
+#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__)
 // ── Arduino pin numbers -> dsPIC30F6011A / dsPIC30F6012A (64-pin) ────────────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D20 = RC1,RC2,RC13,RC14,RC15
@@ -557,7 +557,7 @@ typedef bool     boolean;
 #define RG8  D66
 #define RG9  D67
 
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__)
 // ── Arduino pin numbers -> dsPIC30F6014A / dsPIC30F6013A (64/80-pin, PORTA-G) ─
 // D0-D15  = RB0-RB15 (also A0-A15 = AN0-AN15, all analog-capable)
 // D16-D31 = RD0-RD15 (D16-D23 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D16/RD0)
