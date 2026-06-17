@@ -263,7 +263,7 @@ static void _serial2_begin(uint32_t baud) {
     RC2STA  = 0b10010000;    // SPEN=1, CREN=1
     RC2IE   = 1;
 }
-static void _serial2_write(uint8_t b)      { while (!TX2STAbits.TRMT); TX2REG = b; }
+static void _serial2_write(uint8_t b)      { while (!TX2STAbits.TRMT) { } TX2REG = b; }
 static void _serial2_print_s(const char *s){ while (*s) _serial2_write((uint8_t)*s++); }
 static void _serial2_print_i(int32_t n)    { char buf[12]; sprintf(buf, "%ld", (long)n); _serial2_print_s(buf); }
 static void _serial2_print_f(float f, uint8_t dec) {

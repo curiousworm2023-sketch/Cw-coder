@@ -10,6 +10,11 @@
 #if defined(_18F24K40) || defined(_18F25K40) || defined(_18F26K40) || defined(_18F27K40) || \
     defined(_18F45K40) || defined(_18F46K40) || defined(_18F47K40)
 #pragma config DEBUG   = OFF
+// Spell out the remaining K40 config words so XC8 doesn't warn "missing config
+// word / using default" — these values match the safe factory defaults.
+#pragma config CSWEN = ON, FCMEN = ON, CLKOUTEN = OFF          // CONFIG1H
+#pragma config WRT0 = OFF, WRT1 = OFF, WRT2 = OFF, WRT3 = OFF  // CONFIG4L — no
+#pragma config WRT4 = OFF, WRT5 = OFF, WRT6 = OFF, WRT7 = OFF  //   flash write-protect
 #endif
 #pragma config XINST   = OFF
 #pragma config WDTCPS  = WDTCPS_31
