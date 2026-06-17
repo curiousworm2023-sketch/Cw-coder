@@ -22,7 +22,7 @@
 #define PICPIO_HAS_PORTDE 1
 #endif
 
-// ── Arduino types ─────────────────────────────────────────────────────────────
+// ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
 typedef bool     boolean;
@@ -34,7 +34,7 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-// ── Arduino pin numbers → PIC18F K40/Q10 family ──────────────────────────────
+// ── PICPIO pin numbers → PIC18F K40/Q10 family ──────────────────────────────
 // D0–D7  = RC0–RC7   (D0=RC0 … D7=RC7)
 // D8–D13 = RB0–RB5   (D13 = RB5, the "LED" pin)
 // A0–A5  = RA0–RA5
@@ -130,7 +130,7 @@ typedef bool     boolean;
 #define constrain(x,lo,hi) ((x)<(lo)?(lo):(x)>(hi)?(hi):(x))
 #define map(x,fl,fh,tl,th) ((long)(x-fl)*(th-tl)/(fh-fl)+tl)
 #define sq(x)     ((x)*(x))
-#undef round   // drop math.h round macro so this Arduino-style one wins (no redefinition warning)
+#undef round   // drop math.h round macro so this round macro wins (no redefinition warning)
 #define round(x)  ((long)((x)+0.5f))
 #define bitRead(v,b)        (((v)>>(b))&1)
 #define bitSet(v,b)         ((v)|=(1<<(b)))
@@ -153,7 +153,7 @@ void        delayMicroseconds(uint32_t us);
 uint32_t    millis(void);
 uint32_t    micros(void);
 
-// ── Serial (function-pointer struct — works in C, syntax = Arduino C++) ───────
+// ── Serial (function-pointer struct — works in C, method-call syntax) ───────
 typedef struct {
     void    (*begin)(uint32_t baud);
     void    (*end)(void);
@@ -239,7 +239,7 @@ extern SPIClass_t SPI;  // SCK=RC3, SDI=RC4, SDO=RC5
 #define noInterrupts()  (GIE = 0)
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
-void arduino_init(void);
+void picpio_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void init(void);   // runs once at boot   (define this; `setup` still works)
@@ -270,7 +270,7 @@ void run(void);    // runs forever        (define this; `loop` still works)
 #define sys_delay_us   delayMicroseconds
 #define sys_millis     millis
 #define sys_micros     micros
-#define sys_init       arduino_init
+#define sys_init       picpio_init
 #define sys_irq_on()   interrupts()
 #define sys_irq_off()  noInterrupts()
 // Peripherals (objects keep their .begin/.read/.write/... methods)

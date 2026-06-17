@@ -48,7 +48,7 @@ _FGS(GWRP_OFF & CODE_PROT_OFF);                                    // no write p
 #include "Picpio.h"
 
 int main(void) {
-    arduino_init();
+    picpio_init();
     init();
     while (1) {
         run();

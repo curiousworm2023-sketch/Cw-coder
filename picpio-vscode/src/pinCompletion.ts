@@ -35,7 +35,7 @@ function items(list: { name: string; detail: string }[]): vscode.CompletionItem[
     });
 }
 
-/** Registers a completion provider for the Arduino-compat GPIO API:
+/** Registers a completion provider for the PICPIO GPIO API:
  * native RAx/RBx/RCx pin names as the first argument of pinMode/digitalWrite/
  * digitalRead/analogRead/analogWrite, HIGH/LOW as digitalWrite's second
  * argument, and OUTPUT/INPUT/INPUT_PULLUP as pinMode's second argument. */

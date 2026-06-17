@@ -73,7 +73,7 @@ export const MCU_LIST: McuChoice[] = [
 
 export const PROGRAMMER_LIST = ['PICKit3', 'PICKit4', 'PICKit5', 'ICD4', 'ICD5', 'Snap', 'PKoB'];
 export const FRAMEWORK_LIST  = [
-    { label:'arduino',    description:'Arduino-style API — setup()/loop(), digitalWrite(), Wire, Serial' },
+    { label:'arduino',    description:'PICPIO API — init()/run(), gpio_write(), uart1/i2c1/spi1 (classic Arduino names also work)' },
     { label:'bare-metal', description:'Direct XC8/XC16/XC32 register access' },
 ];
 

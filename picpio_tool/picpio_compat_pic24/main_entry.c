@@ -9,7 +9,7 @@ _CONFIG1(JTAGEN_OFF & GCP_OFF & GWRP_OFF & FWDTEN_OFF & ICS_PGx2);        // JTA
 #include "Picpio.h"
 
 int main(void) {
-    arduino_init();
+    picpio_init();
     init();
     while (1) {
         run();

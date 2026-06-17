@@ -108,8 +108,8 @@ void __interrupt() ISR(void) {
     }
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
 #if defined(_16F628A)
     CMCON = 0x07;  // disable comparators so RA0-RA3 are plain digital I/O
 #else

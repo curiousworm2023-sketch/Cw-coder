@@ -29,7 +29,7 @@
 #define PICPIO_SMALL_RAM 1
 #endif
 
-// ── Arduino types ─────────────────────────────────────────────────────────────
+// ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
 typedef bool     boolean;
@@ -41,7 +41,7 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-// ── Arduino pin numbers → classic PIC16F8xxA family ──────────────────────────
+// ── PICPIO pin numbers → classic PIC16F8xxA family ──────────────────────────
 #if defined(_16F628A)
 // PIC16F628A is an 18-pin chip with only PORTA and PORTB (no PORTC/D/E).
 // With FOSC=HS @ 20MHz, RA6/RA7 are OSC2/OSC1 and RA5 is MCLR (input-only),
@@ -63,7 +63,7 @@ typedef bool     boolean;
 #define A4   12
 #define LED_BUILTIN  D5
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -111,7 +111,7 @@ typedef bool     boolean;
 #define A5   19
 #define LED_BUILTIN  D13
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RC0  D0
 #define RC1  D1
@@ -174,7 +174,7 @@ typedef bool     boolean;
 #define constrain(x,lo,hi) ((x)<(lo)?(lo):(x)>(hi)?(hi):(x))
 #define map(x,fl,fh,tl,th) ((long)(x-fl)*(th-tl)/(fh-fl)+tl)
 #define sq(x)     ((x)*(x))
-#undef round   // drop math.h round macro so this Arduino-style one wins (no redefinition warning)
+#undef round   // drop math.h round macro so this round macro wins (no redefinition warning)
 #define round(x)  ((long)((x)+0.5f))
 #define bitRead(v,b)        (((v)>>(b))&1)
 #define bitSet(v,b)         ((v)|=(1<<(b)))
@@ -197,7 +197,7 @@ void        delayMicroseconds(uint32_t us);
 uint32_t    millis(void);
 uint32_t    micros(void);
 
-// ── Serial (function-pointer struct — works in C, syntax = Arduino C++) ───────
+// ── Serial (function-pointer struct — works in C, method-call syntax) ───────
 typedef struct {
     void    (*begin)(uint32_t baud);
     void    (*end)(void);
@@ -299,7 +299,7 @@ extern SPIClass_t SPI2;
 #define noInterrupts()  (INTCONbits.GIE = 0)
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
-void arduino_init(void);
+void picpio_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void init(void);   // runs once at boot   (define this; `setup` still works)
@@ -330,7 +330,7 @@ void run(void);    // runs forever        (define this; `loop` still works)
 #define sys_delay_us   delayMicroseconds
 #define sys_millis     millis
 #define sys_micros     micros
-#define sys_init       arduino_init
+#define sys_init       picpio_init
 // Peripherals (objects keep their .begin/.read/.write/... methods)
 #define uart1          Serial
 #define uart2          Serial2

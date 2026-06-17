@@ -1,5 +1,5 @@
 // Runs transpiled sketch code (see transpile.ts) inside a vm sandbox that
-// mimics the Arduino-compat API surface, emitting JSON events for pin
+// mimics the PICPIO API surface, emitting JSON events for pin
 // changes, PWM, Serial and I2C/SPI traffic. Runs setup() once, then loop()
 // repeatedly on a real-time interval. delay()/delayMicroseconds() advance a
 // virtual clock AND really pause (1:1 with real time, matching hardware) so

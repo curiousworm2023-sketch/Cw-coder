@@ -13,7 +13,7 @@
 #  define _XTAL_FREQ 32000000UL
 #endif
 
-// ── Arduino types ─────────────────────────────────────────────────────────────
+// ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
 typedef bool     boolean;
@@ -26,7 +26,7 @@ typedef bool     boolean;
 #define LOW            0
 
 #if defined(_16F1826) || defined(_16F1827)
-// ── Arduino pin numbers → PIC16F1826/1827 (18-pin enhanced midrange) ─────────
+// ── PICPIO pin numbers → PIC16F1826/1827 (18-pin enhanced midrange) ─────────
 // D0–D7  = RB0–RB7
 // D8–D10 = RA2–RA4 (AN2-AN4)
 // D11    = RA5 (MCLR-shared, input-only, no ADC, MCLRE=OFF)
@@ -34,7 +34,7 @@ typedef bool     boolean;
 // D13    = RA7 (OSC1-shared, LED pin)
 // A0–A1  = RA0, RA1 (AN0-AN1)
 // Serial RX/TX, I2C, and SPI are relocated via APFCON0/APFCON1 in
-// arduino_init() so they land on separate pins with no sharing:
+// picpio_init() so they land on separate pins with no sharing:
 //   RXDTSEL=1 -> Serial RX = RB2 (D2)
 //   TXCKSEL=1 -> Serial TX = RB5 (D5)
 //   SDO1SEL=1 -> SPI SDO1  = RA6 (D12)
@@ -57,7 +57,7 @@ typedef bool     boolean;
 #define A1   15
 #define LED_BUILTIN  D13
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1   // I2C SDA1/SPI SDI1 (fixed)
@@ -78,7 +78,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(_16F1823) || defined(_16F1824) || defined(_16F1825)
-// ── Arduino pin numbers → PIC16F1823/1824/1825 (14-pin enhanced midrange) ────
+// ── PICPIO pin numbers → PIC16F1823/1824/1825 (14-pin enhanced midrange) ────
 // D0–D5  = RC0–RC5
 // D6–D11 = RA0–RA5
 // D9     = RA3 (MCLR-shared, input-only, no ADC, MCLRE=OFF)
@@ -87,7 +87,7 @@ typedef bool     boolean;
 // Every ADC channel (AN0-AN7) already has a Dn macro, so no separate A0..An.
 // This family has a single APFCON0 alternate-pin-function register (no
 // APFCON1-equivalent bits used here). Serial RX is relocated via
-// arduino_init() so Serial, I2C and SPI don't share pins:
+// picpio_init() so Serial, I2C and SPI don't share pins:
 //   RXDTSEL=1 -> Serial RX = RA1 (D7)
 // Serial TX (RC4/D4), SPI SDO1 (RC2/D2) and SS (RC3/D3) stay at their
 // power-on defaults. I2C SDA1/SCL1 and SPI SDI1/SCK1 are fixed at RC1/RC0
@@ -106,7 +106,7 @@ typedef bool     boolean;
 #define D11  11
 #define LED_BUILTIN  D11
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RC0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RC0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RC0  D0   // I2C SCL1/SPI SCK1 (fixed)
 #define RC1  D1   // I2C SDA1/SPI SDI1 (fixed)
@@ -123,7 +123,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #else
-// ── Arduino pin numbers → PIC16F1829 (20-pin enhanced midrange) ──────────────
+// ── PICPIO pin numbers → PIC16F1829 (20-pin enhanced midrange) ──────────────
 // D0–D7  = RC0–RC7
 // D8–D11 = RB4–RB7
 // D12    = RA3 (input-only, no output driver, no ADC)
@@ -149,7 +149,7 @@ typedef bool     boolean;
 #define A3   17
 #define LED_BUILTIN  D13
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RC0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RC0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RC0  D0
 #define RC1  D1
@@ -184,7 +184,7 @@ typedef bool     boolean;
 #define constrain(x,lo,hi) ((x)<(lo)?(lo):(x)>(hi)?(hi):(x))
 #define map(x,fl,fh,tl,th) ((long)(x-fl)*(th-tl)/(fh-fl)+tl)
 #define sq(x)     ((x)*(x))
-#undef round   // drop math.h round macro so this Arduino-style one wins (no redefinition warning)
+#undef round   // drop math.h round macro so this round macro wins (no redefinition warning)
 #define round(x)  ((long)((x)+0.5f))
 #define bitRead(v,b)        (((v)>>(b))&1)
 #define bitSet(v,b)         ((v)|=(1<<(b)))
@@ -211,7 +211,7 @@ void        delayMicroseconds(uint32_t us);
 uint32_t    millis(void);
 uint32_t    micros(void);
 
-// ── Serial (function-pointer struct — works in C, syntax = Arduino C++) ───────
+// ── Serial (function-pointer struct — works in C, method-call syntax) ───────
 #ifdef _16F1823
 // PIC16F1823 has only 128 bytes of RAM — print_i/print_f (and the sprintf-
 // based _dbuf they pull in, ~32 bytes) don't fit alongside Serial's other
@@ -327,7 +327,7 @@ extern SPIClass_t SPI;
 #define noInterrupts()  (INTCONbits.GIE = 0)
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
-void arduino_init(void);
+void picpio_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void init(void);   // runs once at boot   (define this; `setup` still works)
@@ -358,7 +358,7 @@ void run(void);    // runs forever        (define this; `loop` still works)
 #define sys_delay_us   delayMicroseconds
 #define sys_millis     millis
 #define sys_micros     micros
-#define sys_init       arduino_init
+#define sys_init       picpio_init
 // Peripherals (objects keep their .begin/.read/.write/... methods)
 #define uart1          Serial
 #define uart2          Serial2

@@ -1,4 +1,4 @@
-// Best-effort transpiler: converts a common subset of Arduino-flavoured C/C++
+// Best-effort transpiler: converts a common subset of PICPIO C/C++
 // (as used in PICPIO's picpio_compat sketches) into plain JavaScript that can
 // run inside a Node vm sandbox for live simulation.
 //

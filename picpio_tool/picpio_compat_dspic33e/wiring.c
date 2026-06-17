@@ -142,8 +142,8 @@ static void _pps_setup(void) {
     __builtin_write_OSCCONL(OSCCON | 0x40); // lock (set IOLOCK)
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
     // All analog-capable pins default to analog on reset -- force digital.
     // (dsPIC33E uses per-port ANSELx, not the single AD1PCFG of PIC24F.)
     ANSELA = 0x0000;

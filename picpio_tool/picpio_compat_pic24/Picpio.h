@@ -25,7 +25,7 @@
 // clash -- sketches still write `SPI.transfer(...)` as normal.
 #define SPI SPI_dev
 
-// ── Arduino types ─────────────────────────────────────────────────────────────
+// ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
 typedef bool     boolean;
@@ -37,7 +37,7 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-// ── Arduino pin numbers -> PIC24FJ128GA010 (85 GPIO pins, PORTA-PORTG) ────────
+// ── PICPIO pin numbers -> PIC24FJ128GA010 (85 GPIO pins, PORTA-PORTG) ────────
 // D0-D11  = RA0-RA7, RA9, RA10, RA14, RA15 (PORTA, 12 bits)
 //   D2=RA2 (SCL2), D3=RA3 (SDA2) -- I2C2 pins, not wired to a HAL object.
 // D12-D27 = RB0-RB15 (PORTB, 16 bits) -- also A0-A15 = AN0-AN15 (full 16-ch ADC)
@@ -164,7 +164,7 @@ typedef bool     boolean;
 
 #define LED_BUILTIN  D36
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RG2, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RG2, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RA0  D0
 #define RA1  D1
@@ -271,7 +271,7 @@ typedef bool     boolean;
 #define constrain(x,lo,hi) ((x)<(lo)?(lo):(x)>(hi)?(hi):(x))
 #define map(x,fl,fh,tl,th) ((long)(x-fl)*(th-tl)/(fh-fl)+tl)
 #define sq(x)     ((x)*(x))
-#undef round   // drop math.h round macro so this Arduino-style one wins (no redefinition warning)
+#undef round   // drop math.h round macro so this round macro wins (no redefinition warning)
 #define round(x)  ((long)((x)+0.5f))
 #define bitRead(v,b)        (((v)>>(b))&1)
 #define bitSet(v,b)         ((v)|=(1<<(b)))
@@ -294,7 +294,7 @@ void        delayMicroseconds(uint32_t us);
 uint32_t    millis(void);
 uint32_t    micros(void);
 
-// ── Serial (function-pointer struct — works in C, syntax = Arduino C++) ───────
+// ── Serial (function-pointer struct — works in C, method-call syntax) ───────
 typedef struct {
     void    (*begin)(uint32_t baud);
     void    (*end)(void);
@@ -382,7 +382,7 @@ extern SPIClass_t SPI; // SPI1 (SCK1=RF6/D68, SDI1=RF7/D69, SDO1=RF8/D70)
 #define noInterrupts()  (__builtin_disable_interrupts())
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
-void arduino_init(void);
+void picpio_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void init(void);   // runs once at boot   (define this; `setup` still works)
@@ -413,7 +413,7 @@ void run(void);    // runs forever        (define this; `loop` still works)
 #define sys_delay_us   delayMicroseconds
 #define sys_millis     millis
 #define sys_micros     micros
-#define sys_init       arduino_init
+#define sys_init       picpio_init
 // Peripherals (objects keep their .begin/.read/.write/... methods)
 #define uart1          Serial
 #define uart2          Serial2

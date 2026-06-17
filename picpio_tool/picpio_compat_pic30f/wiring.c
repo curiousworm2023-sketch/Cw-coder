@@ -489,8 +489,8 @@ void __attribute__((interrupt, auto_psv)) _T1Interrupt(void) {
     _millis_count++;
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
     ADPCFG = 0xFFFF;       // all AN-capable pins start as digital I/O
     ADCON1 = 0x0000;       // SSRC=000 (SAMP-controlled), FORM=00 (integer)
     ADCON2 = 0x0000;

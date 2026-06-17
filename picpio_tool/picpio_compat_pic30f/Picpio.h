@@ -20,7 +20,7 @@
 #include <libpic30.h>
 
 // <xc.h> (p30F4011.h) defines a typedef named "SPI" for the generic SPI
-// module SFR struct. Rename our Arduino-style SPI object to avoid the symbol
+// module SFR struct. Rename our SPI object to avoid the symbol
 // clash -- sketches still write `SPI.transfer(...)` as normal.
 #define SPI SPI_dev
 
@@ -41,7 +41,7 @@
 #  define PICPIO_TINY_FLASH
 #endif
 
-// ── Arduino types ─────────────────────────────────────────────────────────────
+// ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
 typedef bool     boolean;
@@ -54,7 +54,7 @@ typedef bool     boolean;
 #define LOW            0
 
 #if defined(__dsPIC30F3013__) || defined(__dsPIC30F2012__)
-// ── Arduino pin numbers -> dsPIC30F3013 / dsPIC30F2012 (28-pin) ──────────────
+// ── PICPIO pin numbers -> dsPIC30F3013 / dsPIC30F2012 (28-pin) ──────────────
 // Identical pinout; the 2012 just has no UART2 (so its RF4/RF5 are plain GPIO,
 // not U2RX/U2TX) and smaller flash. No PORTA/PORTE on either.
 // D0-D9   = RB0-RB9   (also A0-A9 = AN0-AN9, all analog-capable)
@@ -99,7 +99,7 @@ typedef bool     boolean;
 #define A9   D9
 #define LED_BUILTIN  D8
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -124,7 +124,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F4013__) || defined(__dsPIC30F3014__)
-// ── Arduino pin numbers -> dsPIC30F4013 / dsPIC30F3014 (40/44-pin GP) ────────
+// ── PICPIO pin numbers -> dsPIC30F4013 / dsPIC30F3014 (40/44-pin GP) ────────
 // Identical pinout on both; the only difference is analogWrite/PWM channels:
 // 4013 has OC1-OC4 on RD0-RD3, 3014 has only OC1/OC2 on RD0/RD1.
 // D0-D12  = RB0-RB12 (also A0-A12 = AN0-AN12, all analog-capable)
@@ -182,7 +182,7 @@ typedef bool     boolean;
 #define A12  D12
 #define LED_BUILTIN  D16
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -217,7 +217,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F2011__) || defined(__dsPIC30F3012__)
-// ── Arduino pin numbers -> dsPIC30F2011 (18-pin, no PORTE/PORTF) ─────────────
+// ── PICPIO pin numbers -> dsPIC30F2011 (18-pin, no PORTE/PORTF) ─────────────
 // All peripheral I/O is on PORTB on this chip (there is no PORTF):
 // D0-D7  = RB0-RB7 (also A0-A7 = AN0-AN7)
 //   D4=RB4 (U1TX/SDO1/SCL), D5=RB5 (U1RX/SDI1/SDA), D6=RB6 (SCK1),
@@ -247,7 +247,7 @@ typedef bool     boolean;
 #define A7   D7
 #define LED_BUILTIN  D11
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -264,7 +264,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__)
-// ── Arduino pin numbers -> dsPIC30F6011A / dsPIC30F6012A (64-pin) ────────────
+// ── PICPIO pin numbers -> dsPIC30F6011A / dsPIC30F6012A (64-pin) ────────────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D20 = RC1,RC2,RC13,RC14,RC15
 // D21-D32 = RD0-RD11 (D21-D28 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D21/RD0)
@@ -344,7 +344,7 @@ typedef bool     boolean;
 #define A15  D15
 #define LED_BUILTIN  D21
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -401,7 +401,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F6010__)
-// ── Arduino pin numbers -> dsPIC30F6010 (80-pin, PORTA-G, motor-control) ─────
+// ── PICPIO pin numbers -> dsPIC30F6010 (80-pin, PORTA-G, motor-control) ─────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D19 = RA9,RA10,RA14,RA15      D20-D24 = RC1,RC3,RC13,RC14,RC15
 // D25-D40 = RD0-RD15 (D25-D32 = OC1-OC8 PWM; LED=D25/RD0)
@@ -495,7 +495,7 @@ typedef bool     boolean;
 #define A15  D15
 #define LED_BUILTIN  D25
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -568,7 +568,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F5013__)
-// ── Arduino pin numbers -> dsPIC30F6014A / dsPIC30F6013A (64/80-pin, PORTA-G) ─
+// ── PICPIO pin numbers -> dsPIC30F6014A / dsPIC30F6013A (64/80-pin, PORTA-G) ─
 // D0-D15  = RB0-RB15 (also A0-A15 = AN0-AN15, all analog-capable)
 // D16-D31 = RD0-RD15 (D16-D23 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D16/RD0)
 // D32-D40 = RF0-RF8
@@ -667,7 +667,7 @@ typedef bool     boolean;
 #define A15  D15
 #define LED_BUILTIN  D16
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -740,7 +740,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__) && !defined(__dsPIC30F3010__) && !defined(__dsPIC30F5015__) && !defined(__dsPIC30F5016__) && !defined(__dsPIC30F6015__)
-// ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
+// ── PICPIO pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)
 // D9-D11  = RC13-RC15 (only 3 PORTC bits exist on this chip)
 // D12-D15 = RD0-RD3   (OC1-OC4 -- PWM-capable, analogWrite targets; LED_BUILTIN=D12/RD0)
@@ -791,7 +791,7 @@ typedef bool     boolean;
 #define A8   D8
 #define LED_BUILTIN  D12
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -826,7 +826,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F5015__) || defined(__dsPIC30F6015__)
-// ── Arduino pin numbers -> dsPIC30F5015 / dsPIC30F6015 (64-pin, motor-control,
+// ── PICPIO pin numbers -> dsPIC30F5015 / dsPIC30F6015 (64-pin, motor-control,
 //    PORTE) ─ identical pin map; 6015 additionally has UART2 (RF4/RF5) and
 //    OC5-OC8 on RD4-RD7 (5015 only has OC1-4 and no UART2). ─────────────────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
@@ -905,7 +905,7 @@ typedef bool     boolean;
 #define A15  D15
 #define LED_BUILTIN  D19
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -962,7 +962,7 @@ typedef bool     boolean;
 #endif // PICPIO_PIN_ALIASES
 
 #elif defined(__dsPIC30F5016__)
-// ── Arduino pin numbers -> dsPIC30F5016 (80-pin, motor-control, has PORTE) ───
+// ── PICPIO pin numbers -> dsPIC30F5016 (80-pin, motor-control, has PORTE) ───
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D19 = RA9,RA10,RA14,RA15   D20-D24 = RC1,RC3,RC13-RC15
 // D25-D40 = RD0-RD15 (D25-D28 = OC1-OC4 PWM; LED=D25/RD0)
@@ -1056,7 +1056,7 @@ typedef bool     boolean;
 #define A15  D15
 #define LED_BUILTIN  D25
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -1130,7 +1130,7 @@ typedef bool     boolean;
 
 #else // __dsPIC30F2010__ / __dsPIC30F4012__ (pin-identical; 4012 just has more flash + no Serial2 quirk handled elsewhere)
 
-// ── Arduino pin numbers -> dsPIC30F2010 / dsPIC30F4012 (28-pin, no PORTA) ────
+// ── PICPIO pin numbers -> dsPIC30F2010 / dsPIC30F4012 (28-pin, no PORTA) ────
 // D0-D5  = RB0-RB5  (also A0-A5 = AN0-AN5, all analog-capable)
 // D6-D8  = RC13-RC15 (only 3 PORTC bits exist on this chip)
 // D9-D10 = RD0-RD1  (OC1/OC2 -- PWM-capable, analogWrite targets; LED_BUILTIN=D9/RD0)
@@ -1168,7 +1168,7 @@ typedef bool     boolean;
 #define A5   D5
 #define LED_BUILTIN  D9
 
-// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+// ── Native port-pin names (use these directly, e.g. gpio_write(RB0, GPIO_HIGH)) ──
 #ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RB0  D0
 #define RB1  D1
@@ -1206,7 +1206,7 @@ typedef bool     boolean;
 #define constrain(x,lo,hi) ((x)<(lo)?(lo):(x)>(hi)?(hi):(x))
 #define map(x,fl,fh,tl,th) ((long)(x-fl)*(th-tl)/(fh-fl)+tl)
 #define sq(x)     ((x)*(x))
-#undef round   // drop math.h round macro so this Arduino-style one wins (no redefinition warning)
+#undef round   // drop math.h round macro so this round macro wins (no redefinition warning)
 #define round(x)  ((long)((x)+0.5f))
 #define bitRead(v,b)        (((v)>>(b))&1)
 #define bitSet(v,b)         ((v)|=(1<<(b)))
@@ -1229,7 +1229,7 @@ void        delayMicroseconds(uint32_t us);
 uint32_t    millis(void);
 uint32_t    micros(void);
 
-// ── Serial (function-pointer struct — works in C, syntax = Arduino C++) ───────
+// ── Serial (function-pointer struct — works in C, method-call syntax) ───────
 typedef struct {
     void    (*begin)(uint32_t baud);
     void    (*end)(void);
@@ -1319,7 +1319,7 @@ extern SPIClass_t SPI; // SPI1 SCK=RF6, SDI=RF2, SDO=RF3 (4011-class)
 #define noInterrupts()  (__builtin_disable_interrupts())
 
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
-void arduino_init(void);
+void picpio_init(void);
 
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void init(void);   // runs once at boot   (define this; `setup` still works)
@@ -1350,7 +1350,7 @@ void run(void);    // runs forever        (define this; `loop` still works)
 #define sys_delay_us   delayMicroseconds
 #define sys_millis     millis
 #define sys_micros     micros
-#define sys_init       arduino_init
+#define sys_init       picpio_init
 // Peripherals (objects keep their .begin/.read/.write/... methods)
 #define uart1          Serial
 #define uart2          Serial2

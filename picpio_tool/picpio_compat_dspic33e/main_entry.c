@@ -13,7 +13,7 @@ _FICD(ICS_PGD2 & JTAGEN_OFF);                                    // PGEC2/PGED2 
 #include "Picpio.h"
 
 int main(void) {
-    arduino_init();
+    picpio_init();
     init();
     while (1) {
         run();

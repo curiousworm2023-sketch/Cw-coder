@@ -86,8 +86,8 @@ void __interrupt(high_priority) ISR_High(void) {
     }
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
     ANSELA = 0x00; ANSELB = 0x00; ANSELC = 0x00;
     WPUB   = 0x00;
 #ifdef PICPIO_HAS_PORTDE

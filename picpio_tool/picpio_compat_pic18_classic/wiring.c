@@ -4,7 +4,7 @@
 // ── Pin map ───────────────────────────────────────────────────────────────────
 // Classic PIC18F4550/452/2550 have LATx (latch) registers like later PIC18
 // families, but no ANSELx/WPUx — analog/digital selection is via ADCON1's
-// PCFG bits (handled in analogRead/arduino_init) and PORTB pull-ups are
+// PCFG bits (handled in analogRead/picpio_init) and PORTB pull-ups are
 // enabled globally via INTCON2<RBPU>.
 typedef struct {
     volatile unsigned char *tris;
@@ -83,8 +83,8 @@ void __interrupt() ISR(void) {
     }
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
     ADCON1 = 0x0F; // PCFG=1111: all analog-capable pins start as digital I/O
 #if !defined(_18F452)
     ADCON2 = 0xBE; // ADFM=1 (right justify), ACQT=111 (20 TAD), ADCS=110 (Fosc/64)

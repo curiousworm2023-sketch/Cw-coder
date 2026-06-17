@@ -31,7 +31,7 @@ const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ─── LIB REGISTRY ────────────────────────────────────────────────────────────
 // Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
-// (struct + function API) written against the PICPIO Arduino-compatible HAL.
+// (struct + function API) written against the PICPIO HAL.
 const BUNDLED_LIBS = [
     'PID', 'PIDTune', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
     'dht22','ds18b20','servo','encoder',
@@ -983,7 +983,7 @@ function cmdErase() {
 
 // ─── LIB ─────────────────────────────────────────────────────────────────────
 // Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
-// (struct + function API) written against the PICPIO Arduino-compatible HAL.
+// (struct + function API) written against the PICPIO HAL.
 // BUNDLED_LIBS and LIB_SNIPPETS are declared near the top of this file
 // (before the CLI dispatch switch) since cmdLib runs synchronously from there.
 
@@ -1241,7 +1241,7 @@ function downloadAndExtract(url, libDir, name) {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // ─── REFERENCE.md GENERATOR ──────────────────────────────────────────────────
 // Builds a per-project REFERENCE.md from the selected MCU's HAL header: the full
-// pin map (Arduino number <-> native port pin <-> analog channel), the available
+// pin map (pin number <-> native port pin <-> analog channel), the available
 // PICPIO API, and copy-paste usage. Everything except the API prose is derived by
 // lightly preprocessing the HAL's Picpio.h with the device macro the real compiler
 // predefines, so the table always matches what actually compiles for that chip.
@@ -1403,7 +1403,7 @@ function buildReferenceMd(meta) {
     p(`| Toolchain | ${isXC16 ? 'XC16 (16-bit)' : 'XC8 (8-bit)'} |`, '');
 
     if (!halDir) {
-        p('> ⚠️ No PICPIO Arduino-compatibility HAL exists for this MCU yet, so the pin map and',
+        p('> ⚠️ No PICPIO HAL exists for this MCU yet, so the pin map and',
           '> API helpers below are unavailable. You can still build bare-metal projects against',
           '> `<xc.h>` directly (`framework = bare-metal` in `picpio.ini`).', '');
         return L.join('\n');
@@ -1413,21 +1413,21 @@ function buildReferenceMd(meta) {
 
     // ── Pin map ──
     p('## Pin Map', '');
-    p('Any of these names are interchangeable in `pinMode` / `digitalWrite` / `digitalRead`:',
-      `the Arduino number (\`D5\`), the native port pin (\`RC2\`), or — for analog-capable pins —`,
+    p('Any of these names are interchangeable in `gpio_mode` / `gpio_write` / `gpio_read`:',
+      `the pin number (\`D5\`), the native port pin (\`RC2\`), or — for analog-capable pins —`,
       `the analog name (\`A0\`). This chip exposes **${h.dPins.length} digital pins** and **${h.aPins.length} analog channels**.`, '');
-    p('| Arduino | Native pin | Analog | Notes |', '|---|---|---|---|');
+    p('| Pin # | Native pin | Analog | Notes |', '|---|---|---|---|');
     // One row per distinct pin value: prefer the D-name; include analog-only pins
     // (e.g. A0..A5 with no D alias on 28-pin parts) so the ADC channels are listed too.
     const dVals = new Set(h.dPins.map(d => h.resolve(d)));
-    const rows = h.dPins.map(d => ({ v: h.resolve(d), arduino: d }));
-    for (const a of h.aPins) { const v = h.resolve(a); if (!dVals.has(v)) rows.push({ v, arduino: a }); }
+    const rows = h.dPins.map(d => ({ v: h.resolve(d), pin: d }));
+    for (const a of h.aPins) { const v = h.resolve(a); if (!dVals.has(v)) rows.push({ v, pin: a }); }
     rows.sort((x, y) => x.v - y.v);
     for (const r of rows) {
         const notes = (h.ledVal != null && r.v === h.ledVal) ? 'LED_BUILTIN' : '';
         const nat = h.nativeByVal[r.v] ? '`' + h.nativeByVal[r.v] + '`' : '';
         const ana = h.analogByVal[r.v] ? '`' + h.analogByVal[r.v] + '`' : '';
-        p(`| \`${r.arduino}\` | ${nat} | ${ana} | ${notes} |`);
+        p(`| \`${r.pin}\` | ${nat} | ${ana} | ${notes} |`);
     }
     p('');
 
@@ -1445,7 +1445,7 @@ function buildReferenceMd(meta) {
     p(`| PWM | \`analogWrite(pin, duty)\` | ${h.analogWriteNote || 'CCP/OC output pins'} |`, '');
 
     // ── Peripheral pin map ──
-    // Lets the user see which physical pin (and Arduino name) each peripheral
+    // Lets the user see which physical pin (and pin number) each peripheral
     // signal lands on. Parsed from "SIG=Rxx" tokens in the peripheral notes
     // (e.g. `extern TwoWire_t Wire; // SCL=RC3, SDA=RC4`). Peripherals whose
     // note carries no such tokens are simply skipped.
@@ -1467,8 +1467,8 @@ function buildReferenceMd(meta) {
     }
     if (pinRows.length) {
         p('## Peripheral Pins', '');
-        p('Which physical pin — and its Arduino name — each peripheral signal uses on this chip:', '');
-        p('| Peripheral | Signal | Pin | Arduino name |', '|---|---|---|---|');
+        p('Which physical pin — and its pin number — each peripheral signal uses on this chip:', '');
+        p('| Peripheral | Signal | Pin | Pin # |', '|---|---|---|---|');
         for (const r of pinRows) p(`| ${r.label} | ${r.sig} | \`${r.pin}\` | ${r.ard ? '`' + r.ard + '`' : ''} |`);
         // dsPIC30F (and the multi-device PIC16 HAL) share one peripheral-pin note
         // across many parts whose pins differ; flag that the Pin Map above is the

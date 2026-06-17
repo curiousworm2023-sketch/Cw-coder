@@ -1,4 +1,4 @@
-// Best-effort static analysis of an Arduino-flavoured sketch: looks at
+// Best-effort static analysis of an PICPIO sketch: looks at
 // pinMode/digitalRead/digitalWrite/analogRead calls and #include'd display
 // libraries to figure out what hardware the sketch is driving, so the
 // simulator can auto-place and auto-wire matching circuit parts.

@@ -5,7 +5,7 @@
 // PIC16F1829/1826/1827/1823/1824/1825 are enhanced midrange (have LATx/
 // ANSELx/WPUx like K40) but have NO PPS — peripherals are on fixed pins
 // (1826/1827 have a split APFCON0/APFCON1 register; 1823/1824/1825 have a
-// single APFCON0 register with the same bit layout — see arduino_init()) —
+// single APFCON0 register with the same bit layout — see picpio_init()) —
 // and the ADC selects channels via ADCON0.CHS<4:0> (no ADPCH/PCFG).
 typedef struct {
     volatile unsigned char *tris;
@@ -122,8 +122,8 @@ void __interrupt() ISR(void) {
     }
 }
 
-// ── arduino_init ──────────────────────────────────────────────────────────────
-void arduino_init(void) {
+// ── picpio_init ──────────────────────────────────────────────────────────────
+void picpio_init(void) {
     // 32MHz: 8MHz HFINTOSC (IRCF=1110) x 4 software PLL (SPLLEN=1)
     OSCCON = 0xF0;
 
