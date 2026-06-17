@@ -20,6 +20,7 @@ const REGISTRY = [
     { name:'AT24C256',      desc:'32KB I2C EEPROM with page write & polling',    tags:['storage','i2c']     },
     { name:'Keypad',        desc:'Matrix keypad driver (4x4 and 3x4)',           tags:['input']             },
     { name:'PID',           desc:'PID controller with anti-windup',              tags:['control']           },
+    { name:'PIDTune',       desc:'Serial auto-tuning handler for the Auto PID Tuning panel', tags:['control'] },
     { name:'MPU6050',       desc:'6-axis IMU accelerometer+gyro over I2C',       tags:['sensor','i2c']      },
     { name:'BMP280',        desc:'Barometric pressure and temperature sensor',   tags:['sensor','i2c','spi']},
     { name:'ADS1115',       desc:'16-bit 4-channel I2C ADC',                     tags:['sensor','i2c']      },

@@ -32,7 +32,8 @@
       { "command": "picpio.insertUSART",   "title": "+ USART",               "category": "PICPIO", "icon": "$(radio-tower)" },
       { "command": "picpio.insertI2C",     "title": "+ I2C",                 "category": "PICPIO", "icon": "$(sync)" },
       { "command": "picpio.insertPWM",     "title": "+ PWM",                 "category": "PICPIO", "icon": "$(zap)" },
-      { "command": "picpio.simulate",      "title": "Simulate",              "category": "PICPIO", "icon": "$(pulse)" }
+      { "command": "picpio.simulate",      "title": "Simulate",              "category": "PICPIO", "icon": "$(pulse)" },
+      { "command": "picpio.pidTune",       "title": "Auto PID Tuning",       "category": "PICPIO", "icon": "$(settings-gear)" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -58,7 +59,8 @@
         { "command": "picpio.insertUSART",   "when": "picpio.isActive && picpio.isArduino", "group": "picpio@7" },
         { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@8" },
         { "command": "picpio.insertPWM",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@9" },
-        { "command": "picpio.simulate",      "when": "picpio.isActive && picpio.isArduino", "group": "picpio@10" }
+        { "command": "picpio.simulate",      "when": "picpio.isActive && picpio.isArduino", "group": "picpio@10" },
+        { "command": "picpio.pidTune",       "when": "picpio.isActive && picpio.isArduino", "group": "picpio@11" }
       ],
       "view/title": [
         { "command": "picpio.refresh", "when": "view == picpioTasks",    "group": "navigation" },
@@ -73,7 +75,8 @@
       { "command": "picpio.build",         "key": "ctrl+alt+b" },
       { "command": "picpio.upload",        "key": "ctrl+alt+u" },
       { "command": "picpio.cleanBuild",    "key": "ctrl+alt+r" },
-      { "command": "picpio.serialMonitor", "key": "ctrl+alt+s" }
+      { "command": "picpio.serialMonitor", "key": "ctrl+alt+s" },
+      { "command": "picpio.pidTune",       "key": "ctrl+alt+t" }
     ],
     "configuration": {
       "title": "PICPIO",

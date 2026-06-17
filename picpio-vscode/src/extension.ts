@@ -12,6 +12,7 @@ import { disposeSerialMonitorServer } from './serialMonitorServer';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
+import { PidTunePanel } from './pidTunePanel';
 import { registerPinCompletion } from './pinCompletion';
 import { dfpFamilyFor, halVariantFor } from './newProject';
 
@@ -165,6 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 { label: '$(sync)           + I2C',   description: 'Insert I2C snippet',   action: () => insertPeripheralWithPins('i2c') },
                 { label: '$(zap)            + PWM',   description: 'Insert PWM snippet',   action: () => insertPeripheralSnippet('pwm') },
                 { label: '$(pulse)          Simulate',description: 'Run live simulation',  action: () => runSimulation(context) },
+                { label: '$(settings-gear)  Auto PID Tuning', description: 'Relay/Ziegler-Nichols auto-tune', action: () => PidTunePanel.createOrShow(context) },
             );
         }
 
@@ -181,6 +183,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reg('picpio.insertI2C',     () => insertPeripheralWithPins('i2c'));
     reg('picpio.insertPWM',     () => insertPeripheralSnippet('pwm'));
     reg('picpio.simulate',      () => runSimulation(context));
+    reg('picpio.pidTune',       () => PidTunePanel.createOrShow(context));
     reg('picpio.refresh',       () => refreshAll());
 
     // PlatformIO Core CLI — opens a named terminal

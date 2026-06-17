@@ -6,9 +6,9 @@ import * as http   from 'http';
 import * as path   from 'path';
 import { readConfig } from './iniParser';
 
-const BAUD_RATES = ['300','1200','2400','4800','9600','19200','38400','57600','115200','230400'];
+export const BAUD_RATES = ['300','1200','2400','4800','9600','19200','38400','57600','115200','230400'];
 
-function getAvailablePorts(): string[] {
+export function getAvailablePorts(): string[] {
     try {
         const out = cp.execSync(
             'powershell -NoProfile -Command "[System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object"',
@@ -136,6 +136,13 @@ function ensureScript(): string {
     scriptPath = path.join(os.tmpdir(), `picpio-serial-monitor-${process.pid}.ps1`);
     fs.writeFileSync(scriptPath, MONITOR_SCRIPT, 'utf8');
     return scriptPath;
+}
+
+// Exposes the PowerShell serial-bridge script path so other panels (e.g. the
+// Auto PID Tuning panel) can spawn their own bridge child process reusing the
+// same PICPIO_CONNECTED / PICPIO_DATA / PICPIO_SEND framing.
+export function ensureMonitorScript(): string {
+    return ensureScript();
 }
 
 function connect(sessionId: string, port: string, baud: string): void {

@@ -33,7 +33,7 @@ const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
 // (struct + function API) written against the PICPIO Arduino-compatible HAL.
 const BUNDLED_LIBS = [
-    'PID', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
+    'PID', 'PIDTune', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
     'dht22','ds18b20','servo','encoder',
     'wire','spi','hardwareserial','at24c256','keypad','mpu6050','bmp280'
 ];
@@ -57,6 +57,23 @@ const LIB_SNIPPETS = {
             'pidInput = analogRead(A0);',
             'PID_compute(&pid);',
             'analogWrite(D5, (uint8_t)pidOutput);',
+        ],
+    },
+    // Auto-tuning companion for PID. Adds the serial protocol the VS Code
+    // "Auto PID Tuning" panel drives (relay test + live gain changes). Assumes
+    // the PID library scaffold is present (pid / pidInput / pidOutput /
+    // pidSetpoint). PIDTune_service() streams telemetry + parses host commands;
+    // keep your own PID_compute() — it no-ops while the tuner holds RELAY mode.
+    PIDTune: {
+        include: '#include "PIDTune.h"',
+        globals: [
+            'PIDTune_t pidtune;',
+        ],
+        setup: [
+            'PIDTune_init(&pidtune, &pid, &pidInput, &pidOutput, &pidSetpoint);',
+        ],
+        loop: [
+            'PIDTune_service(&pidtune);  // host auto-tuner: telemetry + live gain/relay control',
         ],
     },
     PCF8575: {
