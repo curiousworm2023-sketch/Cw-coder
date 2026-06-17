@@ -250,8 +250,143 @@ typedef bool     boolean;
 #define RC15 D10
 #define RD0  D11
 
-#elif defined(__dsPIC30F6014A__)
-// ── Arduino pin numbers -> dsPIC30F6014A (64/80-pin, PORTA-G, ~68 I/O) ───────
+#elif defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__)
+// ── Arduino pin numbers -> dsPIC30F6011A / dsPIC30F6012A (64-pin) ────────────
+// D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
+// D16-D20 = RC1,RC2,RC13,RC14,RC15
+// D21-D32 = RD0-RD11 (D21-D28 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D21/RD0)
+// D33-D39 = RF0-RF6
+//   D35=RF2 (U1RX/SDI1), D36=RF3 (U1TX/SDO1), D37=RF4 (U2RX), D38=RF5 (U2TX),
+//   D39=RF6 (SCK1) -- SPI1 data shares RF2/RF3 with UART1 (like the 4011);
+//   I2C is on separate pins (RG2/RG3).
+// D40-D51 = RG0,RG1,RG2,RG3,RG6,RG7,RG8,RG9,RG12,RG13,RG14,RG15
+//   D42=RG2 (SCL), D43=RG3 (SDA); RG6-RG9 = SPI2 (GPIO here).
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8
+#define D9   9
+#define D10  10
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16
+#define D17  17
+#define D18  18
+#define D19  19
+#define D20  20
+#define D21  21   // RD0 / OC1 -- LED pin
+#define D22  22   // RD1 / OC2
+#define D23  23   // RD2 / OC3
+#define D24  24   // RD3 / OC4
+#define D25  25   // RD4 / OC5
+#define D26  26   // RD5 / OC6
+#define D27  27   // RD6 / OC7
+#define D28  28   // RD7 / OC8
+#define D29  29
+#define D30  30
+#define D31  31
+#define D32  32
+#define D33  33
+#define D34  34
+#define D35  35
+#define D36  36
+#define D37  37
+#define D38  38
+#define D39  39
+#define D40  40
+#define D41  41
+#define D42  42
+#define D43  43
+#define D44  44
+#define D45  45
+#define D46  46
+#define D47  47
+#define D48  48
+#define D49  49
+#define D50  50
+#define D51  51
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define A8   D8
+#define A9   D9
+#define A10  D10
+#define A11  D11
+#define A12  D12
+#define A13  D13
+#define A14  D14
+#define A15  D15
+#define LED_BUILTIN  D21
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RB8  D8
+#define RB9  D9
+#define RB10 D10
+#define RB11 D11
+#define RB12 D12
+#define RB13 D13
+#define RB14 D14
+#define RB15 D15
+#define RC1  D16
+#define RC2  D17
+#define RC13 D18
+#define RC14 D19
+#define RC15 D20
+#define RD0  D21
+#define RD1  D22
+#define RD2  D23
+#define RD3  D24
+#define RD4  D25
+#define RD5  D26
+#define RD6  D27
+#define RD7  D28
+#define RD8  D29
+#define RD9  D30
+#define RD10 D31
+#define RD11 D32
+#define RF0  D33
+#define RF1  D34
+#define RF2  D35
+#define RF3  D36
+#define RF4  D37
+#define RF5  D38
+#define RF6  D39
+#define RG0  D40
+#define RG1  D41
+#define RG2  D42
+#define RG3  D43
+#define RG6  D44
+#define RG7  D45
+#define RG8  D46
+#define RG9  D47
+#define RG12 D48
+#define RG13 D49
+#define RG14 D50
+#define RG15 D51
+
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__)
+// ── Arduino pin numbers -> dsPIC30F6014A / dsPIC30F6013A (64/80-pin, PORTA-G) ─
 // D0-D15  = RB0-RB15 (also A0-A15 = AN0-AN15, all analog-capable)
 // D16-D31 = RD0-RD15 (D16-D23 = OC1-OC8 -- 8 PWM analogWrite targets; LED=D16/RD0)
 // D32-D40 = RF0-RF8
