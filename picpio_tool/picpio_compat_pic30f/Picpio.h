@@ -102,11 +102,13 @@ typedef bool     boolean;
 #define RF5  D18
 #define RF6  D19
 
-#elif defined(__dsPIC30F4013__)
-// ── Arduino pin numbers -> dsPIC30F4013 (40/44-pin general-purpose) ──────────
+#elif defined(__dsPIC30F4013__) || defined(__dsPIC30F3014__)
+// ── Arduino pin numbers -> dsPIC30F4013 / dsPIC30F3014 (40/44-pin GP) ────────
+// Identical pinout on both; the only difference is analogWrite/PWM channels:
+// 4013 has OC1-OC4 on RD0-RD3, 3014 has only OC1/OC2 on RD0/RD1.
 // D0-D12  = RB0-RB12 (also A0-A12 = AN0-AN12, all analog-capable)
 // D13-D15 = RC13-RC15
-// D16-D19 = RD0-RD3  (OC1-OC4 -- PWM-capable analogWrite targets; LED_BUILTIN=D16/RD0)
+// D16-D19 = RD0-RD3  (OC PWM analogWrite targets; LED_BUILTIN=D16/RD0)
 // D20-D21 = RD8-RD9  (IC1/INT1, IC2/INT2)
 // D22-D28 = RF0-RF6
 //   D24=RF2 (U1RX/SDI1/SDA), D25=RF3 (U1TX/SDO1/SCL), D26=RF4 (U2RX),

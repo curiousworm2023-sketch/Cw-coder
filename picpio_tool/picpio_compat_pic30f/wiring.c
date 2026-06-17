@@ -38,7 +38,7 @@ static const PinInfo _pins[] = {
     { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D19 RF6 -- SCK1
 };
 #define PIN_COUNT 20
-#elif defined(__dsPIC30F4013__)
+#elif defined(__dsPIC30F4013__) || defined(__dsPIC30F3014__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 },  // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 },  // D1  RB1/AN1
@@ -216,6 +216,22 @@ void analogWrite(uint8_t pin, uint8_t duty) {
             OC2RS = duty; OC2R = duty;
             OC2CONbits.OCTSEL = 0; OC2CONbits.OCM = 0b110;
             TRISBbits.TRISB9 = 0;
+            break;
+        default:
+            return;
+    }
+#elif defined(__dsPIC30F3014__)
+    // Same pinout as 4013 but only OC1/OC2 (no OC3/OC4 module), on RD0/RD1.
+    switch (pin) {
+        case RD0:
+            OC1RS = duty; OC1R = duty;
+            OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110;
+            TRISDbits.TRISD0 = 0;
+            break;
+        case RD1:
+            OC2RS = duty; OC2R = duty;
+            OC2CONbits.OCTSEL = 0; OC2CONbits.OCM = 0b110;
+            TRISDbits.TRISD1 = 0;
             break;
         default:
             return;
