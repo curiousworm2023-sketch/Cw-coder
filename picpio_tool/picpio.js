@@ -1435,12 +1435,12 @@ function buildReferenceMd(meta) {
     p('## On-Chip Peripherals', '');
     p('| Peripheral | Object / call | Pins |', '|---|---|---|');
     const prow = (label, obj, info) => { if (info.present) p(`| ${label} | \`${obj}\` | ${info.note || '—'} |`); };
-    prow('UART-1', 'Serial', h.serial);
-    prow('UART-2', 'Serial2', h.serial2);
-    prow('I2C-1', 'Wire', h.wire);
-    prow('I2C-2', 'Wire2', h.wire2);
-    prow('SPI-1', 'SPI', h.spi);
-    prow('SPI-2', 'SPI2', h.spi2);
+    prow('UART-1', 'uart1', h.serial);
+    prow('UART-2', 'uart2', h.serial2);
+    prow('I2C-1', 'i2c1', h.wire);
+    prow('I2C-2', 'i2c2', h.wire2);
+    prow('SPI-1', 'spi1', h.spi);
+    prow('SPI-2', 'spi2', h.spi2);
     if (h.hasADC) p(`| ADC | \`analogRead(pin)\` | ${h.analogReadNote || ('A0..A' + (h.aPins.length - 1))} |`);
     p(`| PWM | \`analogWrite(pin, duty)\` | ${h.analogWriteNote || 'CCP/OC output pins'} |`, '');
 
@@ -1481,38 +1481,44 @@ function buildReferenceMd(meta) {
 
     // ── API + usage ──
     p('## API & Usage', '');
-    p('Everything below is available after `#include <Picpio.h>`. A sketch uses the Arduino shape —',
-      '`setup()` runs once, `loop()` runs forever:', '');
+    p('Everything below is available after `#include <Picpio.h>`. The names use PICPIO\'s',
+      'subsystem prefixes (`gpio_`, `adc_`, `pwm_`, `sys_`, `uart1`/`i2c1`/`spi1`). A sketch',
+      'has the usual shape — `setup()` runs once, `loop()` runs forever:', '');
     p('```c', '#include <Picpio.h>', '',
-      'void setup() {', '    pinMode(LED_BUILTIN, OUTPUT);', '}', '',
-      'void loop() {', '    digitalWrite(LED_BUILTIN, HIGH);', '    delay(500);',
-      '    digitalWrite(LED_BUILTIN, LOW);', '    delay(500);', '}', '```', '');
+      'void setup() {', '    gpio_mode(BUILTIN_LED, GPIO_OUT);', '}', '',
+      'void loop() {', '    gpio_write(BUILTIN_LED, GPIO_HIGH);', '    sys_delay(500);',
+      '    gpio_write(BUILTIN_LED, GPIO_LOW);', '    sys_delay(500);', '}', '```', '');
+    p('> The classic Arduino names (`digitalWrite`, `Serial`, `HIGH`, `delay`, …) remain',
+      '> available as aliases, so existing Arduino sketches still compile unchanged.', '');
 
     p('### Digital I/O', '');
     p('```c',
-      'pinMode(D5, OUTPUT);          // OUTPUT | INPUT | INPUT_PULLUP',
-      'digitalWrite(D5, HIGH);       // HIGH | LOW',
-      'int s = digitalRead(D6);      // 0 or 1',
-      '```', '');
+      'gpio_mode(D5, GPIO_OUT);      // GPIO_OUT | GPIO_IN | GPIO_PULLUP',
+      'gpio_write(D5, GPIO_HIGH);    // GPIO_HIGH | GPIO_LOW',
+      'int s = gpio_read(D6);        // 0 or 1',
+      '```',
+      '> Use the `Dn` pin numbers (the Pin Map shows which physical pin each is). The native',
+      '> `RC2`-style names are opt-in — `#define PICPIO_PIN_ALIASES` before the include to use',
+      '> them (off by default because they shadow the chip\'s register-bit symbols).', '');
 
     if (h.hasADC) {
         p('### Analog Input (ADC)', '');
         p('```c',
-          'int v = analogRead(A0);       // 10-bit, 0..1023',
+          'int v = adc_read(A0);         // 10-bit, 0..1023',
           '```', '');
     }
     p('### PWM Output', '');
     p('```c',
-      'analogWrite(LED_BUILTIN, 128); // 8-bit duty 0..255 — pin must be PWM-capable',
-      '                               // (see the PWM row in On-Chip Peripherals)',
+      'pwm_write(BUILTIN_LED, 128);  // 8-bit duty 0..255 — pin must be PWM-capable',
+      '                              // (see the PWM row in On-Chip Peripherals)',
       '```', '');
 
     p('### Timing', '');
     p('```c',
-      'delay(500);                   // block ms',
-      'delayMicroseconds(50);        // block us',
-      'uint32_t t  = millis();       // ms since boot',
-      'uint32_t us = micros();       // us since boot',
+      'sys_delay(500);               // block ms',
+      'sys_delay_us(50);             // block us',
+      'uint32_t t  = sys_millis();   // ms since boot',
+      'uint32_t us = sys_micros();   // us since boot',
       '```', '');
 
     const serialUsage = (obj) => {
@@ -1527,11 +1533,11 @@ function buildReferenceMd(meta) {
           `}`,
           '```', '',
           `> Use the typed \`${obj}.print_i\` / \`print_f\` / \`print_s\` (and \`println_*\`) methods for`,
-          `> numbers. Avoid the type-generic \`Serial_print(x)\` / \`Serial_println(x)\` \`_Generic\` macros —`,
+          `> numbers. Avoid the type-generic \`${obj}_print(x)\` / \`${obj}_println(x)\` \`_Generic\` macros —`,
           `> they do not compile reliably on this toolchain.`, '');
     };
-    if (h.serial.present) { p('### Serial (UART)' + (h.serial.note ? ' — ' + h.serial.note : ''), ''); serialUsage('Serial'); }
-    if (h.serial2.present) { p('### Serial2 (second UART)' + (h.serial2.note ? ' — ' + h.serial2.note : ''), ''); serialUsage('Serial2'); }
+    if (h.serial.present) { p('### UART-1 (`uart1`)' + (h.serial.note ? ' — ' + h.serial.note : ''), ''); serialUsage('uart1'); }
+    if (h.serial2.present) { p('### UART-2 (`uart2`)' + (h.serial2.note ? ' — ' + h.serial2.note : ''), ''); serialUsage('uart2'); }
 
     const wireUsage = (obj) => {
         p('```c',
@@ -1543,22 +1549,24 @@ function buildReferenceMd(meta) {
           `while (${obj}.available()) { int b = ${obj}.read(); }`,
           '```', '');
     };
-    if (h.wire.present)  { p('### I2C (Wire)' + (h.wire.note ? ' — ' + h.wire.note : ''), ''); wireUsage('Wire'); }
-    if (h.wire2.present) { p('### I2C #2 (Wire2)' + (h.wire2.note ? ' — ' + h.wire2.note : ''), ''); wireUsage('Wire2'); }
+    if (h.wire.present)  { p('### I2C-1 (`i2c1`)' + (h.wire.note ? ' — ' + h.wire.note : ''), ''); wireUsage('i2c1'); }
+    if (h.wire2.present) { p('### I2C-2 (`i2c2`)' + (h.wire2.note ? ' — ' + h.wire2.note : ''), ''); wireUsage('i2c2'); }
     if (h.spi.present) {
-        p('### SPI' + (h.spi.note ? ' — ' + h.spi.note : ''), '');
+        p('### SPI-1 (`spi1`)' + (h.spi.note ? ' — ' + h.spi.note : ''), '');
         p('```c',
-          'SPI.begin();',
-          'SPI.setBitOrder(MSBFIRST);    // MSBFIRST | LSBFIRST',
-          'SPI.setDataMode(SPI_MODE0);   // SPI_MODE0..3',
-          'SPI.setClockDivider(SPI_CLOCK_DIV4);',
-          'uint8_t in = SPI.transfer(0xA5);',
+          'spi1.begin();',
+          'spi1.setBitOrder(SPI_MSB);    // SPI_MSB | SPI_LSB',
+          'spi1.setDataMode(SPI_MODE0);  // SPI_MODE0..3',
+          'spi1.setClockDivider(SPI_CLOCK_DIV4);',
+          'uint8_t in = spi1.transfer(0xA5);',
           '```', '');
     }
 
-    p('### Helper macros', '');
-    p('`HIGH` `LOW` `INPUT` `OUTPUT` `INPUT_PULLUP` `LED_BUILTIN`, plus Arduino math/bit helpers:',
-      '`min` `max` `abs` `constrain` `map` `sq` `bitRead` `bitSet` `bitClear` `bitWrite` `bit` `lowByte` `highByte`.', '');
+    p('### Names & helpers', '');
+    p('Constants: `GPIO_IN` `GPIO_OUT` `GPIO_PULLUP` `GPIO_HIGH` `GPIO_LOW` `BUILTIN_LED`,',
+      '`SPI_MSB` `SPI_LSB` `SPI_MODE0..3` `SPI_CLOCK_DIV*`. Bit/byte helpers: `bit_read` `bit_set`',
+      '`bit_clr` `bit_write` `byte_lo` `byte_hi`. The Arduino equivalents (`HIGH`, `bitRead`, `min`,',
+      '`max`, …) are kept as aliases for compatibility.', '');
 
     p('---', `_Generated by PICPIO. Pin/peripheral data parsed from \`${halVariantFor(mcu)}/Picpio.h\`._`);
     return L.join('\n');

@@ -1,3 +1,4 @@
+#define PICPIO_PIN_ALIASES   // HAL internals reference the native Rxx pin names
 #include "Picpio.h"
 
 // ── Pin map ───────────────────────────────────────────────────────────────────

@@ -64,6 +64,7 @@ typedef bool     boolean;
 #define LED_BUILTIN  D13
 
 // ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#ifdef PICPIO_PIN_ALIASES   // native Rxx names shadow the chip's register bits; opt in to use them (else use Dn numbers)
 #define RC0  D0
 #define RC1  D1
 #define RC2  D2
@@ -84,6 +85,7 @@ typedef bool     boolean;
 #define RA3  A3
 #define RA4  A4
 #define RA5  A5
+#endif // PICPIO_PIN_ALIASES
 
 #ifdef PICPIO_HAS_PORTDE
 #define D14  20
@@ -247,5 +249,48 @@ void arduino_init(void);
 // ── User-defined (sketch) ─────────────────────────────────────────────────────
 void setup(void);
 void loop(void);
+
+// ════════════════════════════════════════════════════════════════════════════
+// PICPIO native API — subsystem-prefixed names (the preferred/canonical names).
+// The Arduino-style names above stay available so existing sketches and the
+// bundled libraries keep compiling; new code should use the names below.
+// ════════════════════════════════════════════════════════════════════════════
+// GPIO (digital)
+#define gpio_mode      pinMode
+#define gpio_write     digitalWrite
+#define gpio_read      digitalRead
+#define GPIO_IN        INPUT
+#define GPIO_OUT       OUTPUT
+#define GPIO_PULLUP    INPUT_PULLUP
+#define GPIO_HIGH      HIGH
+#define GPIO_LOW       LOW
+#define BUILTIN_LED    LED_BUILTIN
+// ADC / PWM
+#define adc_read       analogRead
+#define pwm_write      analogWrite
+// System / timing
+#define sys_delay      delay
+#define sys_delay_us   delayMicroseconds
+#define sys_millis     millis
+#define sys_micros     micros
+#define sys_init       arduino_init
+// Peripherals (objects keep their .begin/.read/.write/... methods)
+#define uart1          Serial
+#define uart2          Serial2
+#define i2c1           Wire
+#define i2c2           Wire2
+#define spi1           SPI
+#define uart1_print    Serial_print
+#define uart1_println  Serial_println
+// SPI constants
+#define SPI_MSB        MSBFIRST
+#define SPI_LSB        LSBFIRST
+// Bit / byte helpers
+#define bit_read       bitRead
+#define bit_set        bitSet
+#define bit_clr        bitClear
+#define bit_write      bitWrite
+#define byte_lo        lowByte
+#define byte_hi        highByte
 
 #endif // PICPIO_H
