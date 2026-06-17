@@ -23,6 +23,13 @@ _FOSC(XT & PRI & CSW_FSCM_OFF);                                    // external c
 _FWDT(WDT_OFF);                                                    // watchdog timer disabled
 _FBORPOR(PWRT_OFF & PBOR_OFF & MCLR_EN);                           // power-up timer off, BOR off, MCLR enabled
 _FGS(GWRP_OFF & CODE_PROT_OFF);                                    // no write protect / code protect
+#elif defined(__dsPIC30F5015__) || defined(__dsPIC30F5016__)
+// No PRI oscillator-source bit (XT alone selects the primary oscillator), but
+// these ARE motor-control parts with the PWMxL/PWMxH/RST_IOPIN config bits.
+_FOSC(XT & CSW_FSCM_OFF);                                          // external crystal, no PLL, clock switch/monitor off
+_FWDT(WDT_OFF);                                                    // watchdog timer disabled
+_FBORPOR(PWRT_OFF & PBOR_OFF & MCLR_EN & PWMxL_ACT_HI & PWMxH_ACT_HI & RST_IOPIN); // power-up timer off, BOR off, MCLR enabled
+_FGS(GWRP_OFF & GCP_CODE_PROT_OFF);                               // no write protect / code protect (5015/5016 name it GCP_CODE_PROT_OFF)
 #else
 _FOSC(XT & PRI & CSW_FSCM_OFF);                                    // external crystal, no PLL, clock switch/monitor off
 _FWDT(WDT_OFF);                                                    // watchdog timer disabled

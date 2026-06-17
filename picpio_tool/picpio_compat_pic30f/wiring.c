@@ -322,6 +322,138 @@ static const PinInfo _pins[] = {
     { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D29 RF6 -- SCK1
 };
 #define PIN_COUNT 30
+#elif defined(__dsPIC30F5015__)
+// dsPIC30F5015 (64-pin, motor-control): B0-15(AN0-15), C13-15, D0-11, E0-7,
+// F0-6, G2-3/G6-9. OC1-4 on RD0-3, no UART2.
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 }, // D2  RB2/AN2 -- SS1
+    { &TRISB, &LATB, &PORTB, 3, 3 }, // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 }, // D4  RB4/AN4
+    { &TRISB, &LATB, &PORTB, 5, 5 }, // D5  RB5/AN5
+    { &TRISB, &LATB, &PORTB, 6, 6 }, // D6  RB6/AN6
+    { &TRISB, &LATB, &PORTB, 7, 7 }, // D7  RB7/AN7
+    { &TRISB, &LATB, &PORTB, 8, 8 }, // D8  RB8/AN8
+    { &TRISB, &LATB, &PORTB, 9, 9 }, // D9  RB9/AN9
+    { &TRISB, &LATB, &PORTB, 10, 10 }, // D10  RB10/AN10
+    { &TRISB, &LATB, &PORTB, 11, 11 }, // D11  RB11/AN11
+    { &TRISB, &LATB, &PORTB, 12, 12 }, // D12  RB12/AN12
+    { &TRISB, &LATB, &PORTB, 13, 13 }, // D13  RB13/AN13
+    { &TRISB, &LATB, &PORTB, 14, 14 }, // D14  RB14/AN14
+    { &TRISB, &LATB, &PORTB, 15, 15 }, // D15  RB15/AN15
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D16  RC13
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D17  RC14
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D18  RC15
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D19  RD0 -- OC1
+    { &TRISD, &LATD, &PORTD, 1, NO_ADC }, // D20  RD1 -- OC2
+    { &TRISD, &LATD, &PORTD, 2, NO_ADC }, // D21  RD2 -- OC3
+    { &TRISD, &LATD, &PORTD, 3, NO_ADC }, // D22  RD3 -- OC4
+    { &TRISD, &LATD, &PORTD, 4, NO_ADC }, // D23  RD4
+    { &TRISD, &LATD, &PORTD, 5, NO_ADC }, // D24  RD5
+    { &TRISD, &LATD, &PORTD, 6, NO_ADC }, // D25  RD6
+    { &TRISD, &LATD, &PORTD, 7, NO_ADC }, // D26  RD7
+    { &TRISD, &LATD, &PORTD, 8, NO_ADC }, // D27  RD8
+    { &TRISD, &LATD, &PORTD, 9, NO_ADC }, // D28  RD9
+    { &TRISD, &LATD, &PORTD, 10, NO_ADC }, // D29  RD10
+    { &TRISD, &LATD, &PORTD, 11, NO_ADC }, // D30  RD11
+    { &TRISE, &LATE, &PORTE, 0, NO_ADC }, // D31  RE0
+    { &TRISE, &LATE, &PORTE, 1, NO_ADC }, // D32  RE1
+    { &TRISE, &LATE, &PORTE, 2, NO_ADC }, // D33  RE2
+    { &TRISE, &LATE, &PORTE, 3, NO_ADC }, // D34  RE3
+    { &TRISE, &LATE, &PORTE, 4, NO_ADC }, // D35  RE4
+    { &TRISE, &LATE, &PORTE, 5, NO_ADC }, // D36  RE5
+    { &TRISE, &LATE, &PORTE, 6, NO_ADC }, // D37  RE6
+    { &TRISE, &LATE, &PORTE, 7, NO_ADC }, // D38  RE7
+    { &TRISF, &LATF, &PORTF, 0, NO_ADC }, // D39  RF0
+    { &TRISF, &LATF, &PORTF, 1, NO_ADC }, // D40  RF1
+    { &TRISF, &LATF, &PORTF, 2, NO_ADC }, // D41  RF2 -- U1RX/SDI1
+    { &TRISF, &LATF, &PORTF, 3, NO_ADC }, // D42  RF3 -- U1TX/SDO1
+    { &TRISF, &LATF, &PORTF, 4, NO_ADC }, // D43  RF4
+    { &TRISF, &LATF, &PORTF, 5, NO_ADC }, // D44  RF5
+    { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D45  RF6 -- SCK1
+    { &TRISG, &LATG, &PORTG, 2, NO_ADC }, // D46  RG2 -- SCL
+    { &TRISG, &LATG, &PORTG, 3, NO_ADC }, // D47  RG3 -- SDA
+    { &TRISG, &LATG, &PORTG, 6, NO_ADC }, // D48  RG6 -- SCK2
+    { &TRISG, &LATG, &PORTG, 7, NO_ADC }, // D49  RG7 -- SDI2
+    { &TRISG, &LATG, &PORTG, 8, NO_ADC }, // D50  RG8 -- SDO2
+    { &TRISG, &LATG, &PORTG, 9, NO_ADC }, // D51  RG9 -- SS2
+};
+#define PIN_COUNT 52
+#elif defined(__dsPIC30F5016__)
+// dsPIC30F5016 (80-pin, motor-control): B0-15(AN0-15), A9/A10/A14/A15,
+// C1/C3/C13-15, D0-15, E0-9, F0-8, G0-3/G6-9. OC1-4 on RD0-3, no UART2.
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 }, // D2  RB2/AN2 -- SS1
+    { &TRISB, &LATB, &PORTB, 3, 3 }, // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 }, // D4  RB4/AN4
+    { &TRISB, &LATB, &PORTB, 5, 5 }, // D5  RB5/AN5
+    { &TRISB, &LATB, &PORTB, 6, 6 }, // D6  RB6/AN6
+    { &TRISB, &LATB, &PORTB, 7, 7 }, // D7  RB7/AN7
+    { &TRISB, &LATB, &PORTB, 8, 8 }, // D8  RB8/AN8
+    { &TRISB, &LATB, &PORTB, 9, 9 }, // D9  RB9/AN9
+    { &TRISB, &LATB, &PORTB, 10, 10 }, // D10  RB10/AN10
+    { &TRISB, &LATB, &PORTB, 11, 11 }, // D11  RB11/AN11
+    { &TRISB, &LATB, &PORTB, 12, 12 }, // D12  RB12/AN12
+    { &TRISB, &LATB, &PORTB, 13, 13 }, // D13  RB13/AN13
+    { &TRISB, &LATB, &PORTB, 14, 14 }, // D14  RB14/AN14
+    { &TRISB, &LATB, &PORTB, 15, 15 }, // D15  RB15/AN15
+    { &TRISA, &LATA, &PORTA, 9, NO_ADC }, // D16  RA9
+    { &TRISA, &LATA, &PORTA, 10, NO_ADC }, // D17  RA10
+    { &TRISA, &LATA, &PORTA, 14, NO_ADC }, // D18  RA14
+    { &TRISA, &LATA, &PORTA, 15, NO_ADC }, // D19  RA15
+    { &TRISC, &LATC, &PORTC, 1, NO_ADC }, // D20  RC1
+    { &TRISC, &LATC, &PORTC, 3, NO_ADC }, // D21  RC3
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D22  RC13
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D23  RC14
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D24  RC15
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D25  RD0 -- OC1
+    { &TRISD, &LATD, &PORTD, 1, NO_ADC }, // D26  RD1 -- OC2
+    { &TRISD, &LATD, &PORTD, 2, NO_ADC }, // D27  RD2 -- OC3
+    { &TRISD, &LATD, &PORTD, 3, NO_ADC }, // D28  RD3 -- OC4
+    { &TRISD, &LATD, &PORTD, 4, NO_ADC }, // D29  RD4
+    { &TRISD, &LATD, &PORTD, 5, NO_ADC }, // D30  RD5
+    { &TRISD, &LATD, &PORTD, 6, NO_ADC }, // D31  RD6
+    { &TRISD, &LATD, &PORTD, 7, NO_ADC }, // D32  RD7
+    { &TRISD, &LATD, &PORTD, 8, NO_ADC }, // D33  RD8
+    { &TRISD, &LATD, &PORTD, 9, NO_ADC }, // D34  RD9
+    { &TRISD, &LATD, &PORTD, 10, NO_ADC }, // D35  RD10
+    { &TRISD, &LATD, &PORTD, 11, NO_ADC }, // D36  RD11
+    { &TRISD, &LATD, &PORTD, 12, NO_ADC }, // D37  RD12
+    { &TRISD, &LATD, &PORTD, 13, NO_ADC }, // D38  RD13
+    { &TRISD, &LATD, &PORTD, 14, NO_ADC }, // D39  RD14
+    { &TRISD, &LATD, &PORTD, 15, NO_ADC }, // D40  RD15
+    { &TRISE, &LATE, &PORTE, 0, NO_ADC }, // D41  RE0
+    { &TRISE, &LATE, &PORTE, 1, NO_ADC }, // D42  RE1
+    { &TRISE, &LATE, &PORTE, 2, NO_ADC }, // D43  RE2
+    { &TRISE, &LATE, &PORTE, 3, NO_ADC }, // D44  RE3
+    { &TRISE, &LATE, &PORTE, 4, NO_ADC }, // D45  RE4
+    { &TRISE, &LATE, &PORTE, 5, NO_ADC }, // D46  RE5
+    { &TRISE, &LATE, &PORTE, 6, NO_ADC }, // D47  RE6
+    { &TRISE, &LATE, &PORTE, 7, NO_ADC }, // D48  RE7
+    { &TRISE, &LATE, &PORTE, 8, NO_ADC }, // D49  RE8
+    { &TRISE, &LATE, &PORTE, 9, NO_ADC }, // D50  RE9
+    { &TRISF, &LATF, &PORTF, 0, NO_ADC }, // D51  RF0
+    { &TRISF, &LATF, &PORTF, 1, NO_ADC }, // D52  RF1
+    { &TRISF, &LATF, &PORTF, 2, NO_ADC }, // D53  RF2 -- U1RX
+    { &TRISF, &LATF, &PORTF, 3, NO_ADC }, // D54  RF3 -- U1TX
+    { &TRISF, &LATF, &PORTF, 4, NO_ADC }, // D55  RF4
+    { &TRISF, &LATF, &PORTF, 5, NO_ADC }, // D56  RF5
+    { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D57  RF6 -- SCK1
+    { &TRISF, &LATF, &PORTF, 7, NO_ADC }, // D58  RF7 -- SDI1
+    { &TRISF, &LATF, &PORTF, 8, NO_ADC }, // D59  RF8 -- SDO1
+    { &TRISG, &LATG, &PORTG, 0, NO_ADC }, // D60  RG0
+    { &TRISG, &LATG, &PORTG, 1, NO_ADC }, // D61  RG1
+    { &TRISG, &LATG, &PORTG, 2, NO_ADC }, // D62  RG2 -- SCL
+    { &TRISG, &LATG, &PORTG, 3, NO_ADC }, // D63  RG3 -- SDA
+    { &TRISG, &LATG, &PORTG, 6, NO_ADC }, // D64  RG6 -- SCK2
+    { &TRISG, &LATG, &PORTG, 7, NO_ADC }, // D65  RG7 -- SDI2
+    { &TRISG, &LATG, &PORTG, 8, NO_ADC }, // D66  RG8 -- SDO2
+    { &TRISG, &LATG, &PORTG, 9, NO_ADC }, // D67  RG9 -- SS2
+};
+#define PIN_COUNT 68
 #else // __dsPIC30F2010__
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
@@ -724,7 +856,7 @@ static void _spi_begin(void) {
     TRISBbits.TRISB6 = 0; // RB6 = SCK1 output (master)
     TRISBbits.TRISB4 = 0; // RB4 = SDO1 output
     TRISBbits.TRISB5 = 1; // RB5 = SDI1 input
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6010__) || defined(__dsPIC30F5013__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6010__) || defined(__dsPIC30F5013__) || defined(__dsPIC30F5016__)
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
     TRISFbits.TRISF8 = 0; // RF8 = SDO1 output
     TRISFbits.TRISF7 = 1; // RF7 = SDI1 input
@@ -786,7 +918,7 @@ static void _wire_begin(void) {
 #if defined(__dsPIC30F2011__) || defined(__dsPIC30F3012__)
     TRISBbits.TRISB5 = 1; // RB5 = SDA
     TRISBbits.TRISB4 = 1; // RB4 = SCL
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__) || defined(__dsPIC30F6010__) || defined(__dsPIC30F5013__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6014__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6013__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6011__) || defined(__dsPIC30F5011__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6012__) || defined(__dsPIC30F6010__) || defined(__dsPIC30F5013__) || defined(__dsPIC30F5015__) || defined(__dsPIC30F5016__)
     TRISGbits.TRISG3 = 1; // RG3 = SDA
     TRISGbits.TRISG2 = 1; // RG2 = SCL
 #else

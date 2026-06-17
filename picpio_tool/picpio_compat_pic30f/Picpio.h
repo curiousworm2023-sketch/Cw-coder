@@ -30,7 +30,7 @@
 // wiring.c is used instead). Keyed on the specific device so the same HAL
 // serves the whole dsPIC30F line.
 // Parts with no second UART (no Serial2).
-#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__) || defined(__dsPIC30F3012__)
+#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__) || defined(__dsPIC30F3012__) || defined(__dsPIC30F5015__) || defined(__dsPIC30F5016__)
 #  define PICPIO_NO_UART2
 #endif
 // Parts whose flash is too small for sprintf's float support (use the
@@ -810,6 +810,303 @@ typedef bool     boolean;
 #define RF4  D27
 #define RF5  D28
 #define RF6  D29
+
+#elif defined(__dsPIC30F5015__)
+// ── Arduino pin numbers -> dsPIC30F5015 (64-pin, motor-control, has PORTE) ───
+// D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
+// D16-D18 = RC13-RC15      D19-D30 = RD0-RD11 (D19-D22 = OC1-OC4 PWM; LED=D19/RD0)
+// D31-D38 = RE0-RE7        D39-D45 = RF0-RF6
+//   D41=RF2 (U1RX/SDI1), D42=RF3 (U1TX/SDO1), D45=RF6 (SCK1) -- SPI1 data shares
+//   RF2/RF3 with UART1 (like the 4011); no UART2 on this part.
+// D46-D51 = RG2,RG3,RG6-RG9  (D46=RG2=SCL, D47=RG3=SDA; RG6-9 = SPI2, GPIO here)
+#define D0   0
+#define D1   1
+#define D2   2   // RB2 SS1
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8
+#define D9   9
+#define D10  10
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16
+#define D17  17
+#define D18  18
+#define D19  19   // RD0 OC1 -- LED pin
+#define D20  20   // RD1 OC2
+#define D21  21   // RD2 OC3
+#define D22  22   // RD3 OC4
+#define D23  23
+#define D24  24
+#define D25  25
+#define D26  26
+#define D27  27
+#define D28  28
+#define D29  29
+#define D30  30
+#define D31  31
+#define D32  32
+#define D33  33
+#define D34  34
+#define D35  35
+#define D36  36
+#define D37  37
+#define D38  38
+#define D39  39
+#define D40  40
+#define D41  41   // RF2 U1RX/SDI1
+#define D42  42   // RF3 U1TX/SDO1
+#define D43  43
+#define D44  44
+#define D45  45   // RF6 SCK1
+#define D46  46   // RG2 SCL
+#define D47  47   // RG3 SDA
+#define D48  48   // RG6 SCK2
+#define D49  49   // RG7 SDI2
+#define D50  50   // RG8 SDO2
+#define D51  51   // RG9 SS2
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define A8   D8
+#define A9   D9
+#define A10  D10
+#define A11  D11
+#define A12  D12
+#define A13  D13
+#define A14  D14
+#define A15  D15
+#define LED_BUILTIN  D19
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RB8  D8
+#define RB9  D9
+#define RB10 D10
+#define RB11 D11
+#define RB12 D12
+#define RB13 D13
+#define RB14 D14
+#define RB15 D15
+#define RC13 D16
+#define RC14 D17
+#define RC15 D18
+#define RD0  D19
+#define RD1  D20
+#define RD2  D21
+#define RD3  D22
+#define RD4  D23
+#define RD5  D24
+#define RD6  D25
+#define RD7  D26
+#define RD8  D27
+#define RD9  D28
+#define RD10 D29
+#define RD11 D30
+#define RE0  D31
+#define RE1  D32
+#define RE2  D33
+#define RE3  D34
+#define RE4  D35
+#define RE5  D36
+#define RE6  D37
+#define RE7  D38
+#define RF0  D39
+#define RF1  D40
+#define RF2  D41
+#define RF3  D42
+#define RF4  D43
+#define RF5  D44
+#define RF6  D45
+#define RG2  D46
+#define RG3  D47
+#define RG6  D48
+#define RG7  D49
+#define RG8  D50
+#define RG9  D51
+
+#elif defined(__dsPIC30F5016__)
+// ── Arduino pin numbers -> dsPIC30F5016 (80-pin, motor-control, has PORTE) ───
+// D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
+// D16-D19 = RA9,RA10,RA14,RA15   D20-D24 = RC1,RC3,RC13-RC15
+// D25-D40 = RD0-RD15 (D25-D28 = OC1-OC4 PWM; LED=D25/RD0)
+// D41-D50 = RE0-RE9        D51-D59 = RF0-RF8
+//   D53=RF2 (U1RX), D54=RF3 (U1TX), D57=RF6 (SCK1), D58=RF7 (SDI1), D59=RF8 (SDO1);
+//   no UART2 on this part. I2C on RG2/RG3.
+// D60-D67 = RG0,RG1,RG2,RG3,RG6-RG9  (D62=RG2=SCL, D63=RG3=SDA; RG6-9 = SPI2, GPIO)
+#define D0   0
+#define D1   1
+#define D2   2   // RB2 SS1
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8
+#define D9   9
+#define D10  10
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16
+#define D17  17
+#define D18  18
+#define D19  19
+#define D20  20
+#define D21  21
+#define D22  22
+#define D23  23
+#define D24  24
+#define D25  25   // RD0 OC1 -- LED pin
+#define D26  26   // RD1 OC2
+#define D27  27   // RD2 OC3
+#define D28  28   // RD3 OC4
+#define D29  29
+#define D30  30
+#define D31  31
+#define D32  32
+#define D33  33
+#define D34  34
+#define D35  35
+#define D36  36
+#define D37  37
+#define D38  38
+#define D39  39
+#define D40  40
+#define D41  41
+#define D42  42
+#define D43  43
+#define D44  44
+#define D45  45
+#define D46  46
+#define D47  47
+#define D48  48
+#define D49  49
+#define D50  50
+#define D51  51
+#define D52  52
+#define D53  53   // RF2 U1RX
+#define D54  54   // RF3 U1TX
+#define D55  55
+#define D56  56
+#define D57  57   // RF6 SCK1
+#define D58  58   // RF7 SDI1
+#define D59  59   // RF8 SDO1
+#define D60  60
+#define D61  61
+#define D62  62   // RG2 SCL
+#define D63  63   // RG3 SDA
+#define D64  64   // RG6 SCK2
+#define D65  65   // RG7 SDI2
+#define D66  66   // RG8 SDO2
+#define D67  67   // RG9 SS2
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define A8   D8
+#define A9   D9
+#define A10  D10
+#define A11  D11
+#define A12  D12
+#define A13  D13
+#define A14  D14
+#define A15  D15
+#define LED_BUILTIN  D25
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RB8  D8
+#define RB9  D9
+#define RB10 D10
+#define RB11 D11
+#define RB12 D12
+#define RB13 D13
+#define RB14 D14
+#define RB15 D15
+#define RA9  D16
+#define RA10 D17
+#define RA14 D18
+#define RA15 D19
+#define RC1  D20
+#define RC3  D21
+#define RC13 D22
+#define RC14 D23
+#define RC15 D24
+#define RD0  D25
+#define RD1  D26
+#define RD2  D27
+#define RD3  D28
+#define RD4  D29
+#define RD5  D30
+#define RD6  D31
+#define RD7  D32
+#define RD8  D33
+#define RD9  D34
+#define RD10 D35
+#define RD11 D36
+#define RD12 D37
+#define RD13 D38
+#define RD14 D39
+#define RD15 D40
+#define RE0  D41
+#define RE1  D42
+#define RE2  D43
+#define RE3  D44
+#define RE4  D45
+#define RE5  D46
+#define RE6  D47
+#define RE7  D48
+#define RE8  D49
+#define RE9  D50
+#define RF0  D51
+#define RF1  D52
+#define RF2  D53
+#define RF3  D54
+#define RF4  D55
+#define RF5  D56
+#define RF6  D57
+#define RF7  D58
+#define RF8  D59
+#define RG0  D60
+#define RG1  D61
+#define RG2  D62
+#define RG3  D63
+#define RG6  D64
+#define RG7  D65
+#define RG8  D66
+#define RG9  D67
 
 #else // __dsPIC30F2010__ / __dsPIC30F4012__ (pin-identical; 4012 just has more flash + no Serial2 quirk handled elsewhere)
 
