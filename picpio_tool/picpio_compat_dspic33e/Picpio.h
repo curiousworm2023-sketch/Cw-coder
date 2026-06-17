@@ -21,7 +21,7 @@
 #include <libpic30.h>
 
 // <xc.h> (p33EP512MU810.h) defines a typedef named "SPI" for the generic SPI
-// module SFR struct. Rename our Arduino-style SPI object to avoid the symbol
+// module SFR struct. Rename our SPI object to avoid the symbol
 // clash -- sketches still write `SPI.transfer(...)` as normal.
 #define SPI SPI_dev
 
@@ -391,8 +391,9 @@ void run(void);    // runs forever        (define this; `loop` still works)
 
 // ════════════════════════════════════════════════════════════════════════════
 // PICPIO native API — subsystem-prefixed names (the preferred/canonical names).
-// The Arduino-style names above stay available so existing sketches and the
-// bundled libraries keep compiling; new code should use the names below.
+// The classic Arduino-compatible names above remain available as aliases so
+// existing sketches and the bundled libraries keep compiling; new code should
+// use the PICPIO names below.
 // ════════════════════════════════════════════════════════════════════════════
 // GPIO (digital)
 #define gpio_mode      pinMode

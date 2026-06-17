@@ -337,8 +337,9 @@ void run(void);    // runs forever        (define this; `loop` still works)
 
 // ════════════════════════════════════════════════════════════════════════════
 // PICPIO native API — subsystem-prefixed names (the preferred/canonical names).
-// The Arduino-style names above stay available so existing sketches and the
-// bundled libraries keep compiling; new code should use the names below.
+// The classic Arduino-compatible names above remain available as aliases so
+// existing sketches and the bundled libraries keep compiling; new code should
+// use the PICPIO names below.
 // ════════════════════════════════════════════════════════════════════════════
 // GPIO (digital)
 #define gpio_mode      pinMode
