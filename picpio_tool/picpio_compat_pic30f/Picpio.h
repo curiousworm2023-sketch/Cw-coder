@@ -36,7 +36,73 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-#ifndef __dsPIC30F2010__
+#if defined(__dsPIC30F3013__)
+// ── Arduino pin numbers -> dsPIC30F3013 (28-pin, no PORTA/PORTE on this chip) ─
+// D0-D9   = RB0-RB9   (also A0-A9 = AN0-AN9, all analog-capable)
+//   D8=RB8 (AN8/OC1) and D9=RB9 (AN9/OC2) are the two analogWrite/PWM pins --
+//   note PWM is on PORTB here, not PORTD as on the 4011/2010.
+// D10-D12 = RC13-RC15 (only 3 PORTC bits exist on this chip)
+// D13-D14 = RD8-RD9   (IC1/INT1, IC2/INT2)
+// D15-D19 = RF2-RF6
+//   D15=RF2 (U1RX/SDI1/SDA), D16=RF3 (U1TX/SDO1/SCL), D17=RF4 (U2RX),
+//   D18=RF5 (U2TX), D19=RF6 (SCK1) -- RF2/RF3 are shared between UART1,
+//   SPI1 and I2C (fixed, non-PPS pins): don't use Serial, SPI and Wire at
+//   the same time on real hardware.
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8    // RB8 / AN8 / OC1 -- LED pin (PWM-capable)
+#define D9   9    // RB9 / AN9 / OC2 (PWM-capable)
+#define D10  10
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16
+#define D17  17
+#define D18  18
+#define D19  19
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define A8   D8
+#define A9   D9
+#define LED_BUILTIN  D8
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RB8  D8
+#define RB9  D9
+#define RC13 D10
+#define RC14 D11
+#define RC15 D12
+#define RD8  D13
+#define RD9  D14
+#define RF2  D15
+#define RF3  D16
+#define RF4  D17
+#define RF5  D18
+#define RF6  D19
+
+#elif !defined(__dsPIC30F2010__)
 // ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)
 // D9-D11  = RC13-RC15 (only 3 PORTC bits exist on this chip)
