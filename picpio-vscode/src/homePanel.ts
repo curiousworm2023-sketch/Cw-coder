@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readConfig, listInstalledLibs, formatClock } from './iniParser';
+import { readConfig, listInstalledLibs, formatClock, isPicpioFramework } from './iniParser';
 import { SNIPPETS } from './peripheralInsert';
 import * as fs   from 'fs';
 import * as path from 'path';
@@ -204,7 +204,7 @@ export class HomePanel {
             <button class="pbtn orange" onclick="send('monitor')">&#128268; Monitor</button>
             <button class="pbtn gray"   onclick="send('clean')">&#128465; Clean</button>
           </div>
-          ${cfg.framework === 'arduino' ? `
+          ${isPicpioFramework(cfg.framework) ? `
           <div class="periph-row">
             ${peripheralControl('spi',   '+ SPI')}
             ${peripheralControl('usart', '+ USART')}

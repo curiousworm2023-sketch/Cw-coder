@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readConfig } from './iniParser';
+import { readConfig, isPicpioFramework } from './iniParser';
 
 // ── Node types ────────────────────────────────────────────────────────────────
 export class EnvNode extends vscode.TreeItem {
@@ -88,7 +88,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
                 new TaskNode('Clean',              'clean',    'trash'),
             ];
 
-            if (fw === 'arduino') {
+            if (isPicpioFramework(fw)) {
                 children.push(new GroupNode('Peripherals', [
                     new PeripheralNode('+ SPI',   'spi',   'circuit-board'),
                     new PeripheralNode('+ USART', 'usart', 'radio-tower'),

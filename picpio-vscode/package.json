@@ -55,12 +55,12 @@
         { "command": "picpio.clean",         "when": "picpio.isActive", "group": "picpio@3" },
         { "command": "picpio.cleanBuild",    "when": "picpio.isActive", "group": "picpio@4" },
         { "command": "picpio.serialMonitor", "when": "picpio.isActive", "group": "picpio@5" },
-        { "command": "picpio.insertSPI",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@6" },
-        { "command": "picpio.insertUSART",   "when": "picpio.isActive && picpio.isArduino", "group": "picpio@7" },
-        { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@8" },
-        { "command": "picpio.insertPWM",     "when": "picpio.isActive && picpio.isArduino", "group": "picpio@9" },
-        { "command": "picpio.simulate",      "when": "picpio.isActive && picpio.isArduino", "group": "picpio@10" },
-        { "command": "picpio.pidTune",       "when": "picpio.isActive && picpio.isArduino", "group": "picpio@11" }
+        { "command": "picpio.insertSPI",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@6" },
+        { "command": "picpio.insertUSART",   "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@7" },
+        { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@8" },
+        { "command": "picpio.insertPWM",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@9" },
+        { "command": "picpio.simulate",      "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@10" },
+        { "command": "picpio.pidTune",       "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@11" }
       ],
       "view/title": [
         { "command": "picpio.refresh", "when": "view == picpioTasks",    "group": "navigation" },

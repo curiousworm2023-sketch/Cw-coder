@@ -3,6 +3,7 @@ import * as path   from 'path';
 import * as fs     from 'fs';
 import * as cp     from 'child_process';
 import { runRaw }  from './terminal';
+import { isPicpioFramework } from './iniParser';
 
 export interface McuChoice {
     label:       string;
@@ -73,7 +74,7 @@ export const MCU_LIST: McuChoice[] = [
 
 export const PROGRAMMER_LIST = ['PICKit3', 'PICKit4', 'PICKit5', 'ICD4', 'ICD5', 'Snap', 'PKoB'];
 export const FRAMEWORK_LIST  = [
-    { label:'arduino',    description:'PICPIO API — init()/run(), gpio_write(), uart1/i2c1/spi1 (classic Arduino names also work)' },
+    { label:'picpio',     description:'PICPIO API — init()/run(), gpio_write(), uart1/i2c1/spi1 (classic Arduino names also work)' },
     { label:'bare-metal', description:'Direct XC8/XC16/XC32 register access' },
 ];
 
@@ -197,20 +198,20 @@ function scaffoldProject(opts: {
     ].join('\n'));
 
     // Starter main file
-    if (framework === 'arduino') {
-        fs.writeFileSync(path.join(projectDir, 'src', 'main.cpp'), [
+    if (isPicpioFramework(framework)) {
+        fs.writeFileSync(path.join(projectDir, 'src', 'main.c'), [
             '#include <Picpio.h>',
             '',
-            'void setup() {',
-            '    Serial.begin(115200);',
-            `    pinMode(13, OUTPUT);  // LED`,
+            'void init() {                 // runs once at boot',
+            '    uart1.begin(115200);',
+            '    gpio_mode(BUILTIN_LED, GPIO_OUT);',
             '}',
             '',
-            'void loop() {',
-            '    digitalWrite(13, HIGH);',
-            '    delay(500);',
-            '    digitalWrite(13, LOW);',
-            '    delay(500);',
+            'void run() {                  // runs forever',
+            '    gpio_write(BUILTIN_LED, GPIO_HIGH);',
+            '    sys_delay(500);',
+            '    gpio_write(BUILTIN_LED, GPIO_LOW);',
+            '    sys_delay(500);',
             '}',
         ].join('\n'));
     } else {
@@ -330,7 +331,7 @@ export async function createProject(opts: CreateProjectOptions): Promise<CreateP
 
     if (isPicpioInstalled()) {
         // picpio.exe is available — let it scaffold the project
-        const fwFlag = framework === 'arduino' ? '--framework arduino' : '';
+        const fwFlag = isPicpioFramework(framework) ? '--framework picpio' : '';
         runRaw(
             `picpio init --name ${name} --mcu ${mcu} --family ${mcuData.family} ` +
             `--programmer ${programmer} --clock ${mcuData.clock} ${fwFlag} --output "${projectDir}"`

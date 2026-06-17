@@ -10,7 +10,7 @@ import { ProjectWizardPanel }   from './projectWizardPanel';
 import { openSerialMonitor }    from './serialMonitor';
 import { disposeSerialMonitorServer } from './serialMonitorServer';
 import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
-import { readConfig } from './iniParser';
+import { readConfig, isPicpioFramework } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
 import { PidTunePanel } from './pidTunePanel';
 import { registerPinCompletion } from './pinCompletion';
@@ -134,7 +134,7 @@ export function activate(context: vscode.ExtensionContext): void {
         projectProv.refresh();
         libsProv.refresh();
         if (HomePanel.current) HomePanel.createOrShow(context);
-        vscode.commands.executeCommand('setContext', 'picpio.isArduino', readConfig()?.framework === 'arduino');
+        vscode.commands.executeCommand('setContext', 'picpio.isPicpio', isPicpioFramework(readConfig()?.framework));
     };
 
     // ── Commands ──────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export function activate(context: vscode.ExtensionContext): void {
             { label: '$(terminal)       Open CLI',       description: '',           action: () => getTerminal().show(false) },
         ];
 
-        if (readConfig()?.framework === 'arduino') {
+        if (isPicpioFramework(readConfig()?.framework)) {
             tasks.push(
                 { label: '$(circuit-board)  + SPI',   description: 'Insert SPI snippet',   action: () => insertPeripheralWithPins('spi') },
                 { label: '$(radio-tower)    + USART', description: 'Insert USART snippet', action: () => insertPeripheralWithPins('usart') },
@@ -251,7 +251,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     vscode.commands.executeCommand('setContext', 'picpio.isActive', true);
-    vscode.commands.executeCommand('setContext', 'picpio.isArduino', readConfig()?.framework === 'arduino');
+    vscode.commands.executeCommand('setContext', 'picpio.isPicpio', isPicpioFramework(readConfig()?.framework));
     vscode.window.setStatusBarMessage('$(chip) PICPIO ready', 3000);
 }
 

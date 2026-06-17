@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs   from 'fs';
 import * as path from 'path';
 import { Worker } from 'worker_threads';
-import { readConfig } from './iniParser';
+import { readConfig, isPicpioFramework } from './iniParser';
 import { transpileSketch } from './sim/transpile';
 import { detectComponents, detectPeripheralPins } from './sim/detectComponents';
 import { SimulatorPanel, renderSimulatorHtml } from './simulatorPanel';
@@ -51,8 +51,8 @@ export function runSimulation(context: vscode.ExtensionContext): void {
     }
 
     const cfg = readConfig();
-    if (cfg && cfg.framework !== 'arduino') {
-        vscode.window.showWarningMessage('PICPIO Simulator currently supports framework = arduino projects only.');
+    if (cfg && !isPicpioFramework(cfg.framework)) {
+        vscode.window.showWarningMessage('PICPIO Simulator currently supports framework = picpio projects only.');
         return;
     }
 

@@ -426,6 +426,10 @@ function dfpFamilyFor(mcu) {
 }
 
 // Picks the HAL ("picpio_compat*") variant for a given MCU.
+// The "picpio" framework selects the Arduino-style HAL (vs "bare-metal").
+// 'arduino' is accepted as a legacy alias so older picpio.ini files still work.
+function isPicpioFw(fw) { const f = (fw || '').toLowerCase(); return f === 'picpio' || f === 'arduino'; }
+
 function halVariantFor(mcu) {
     const u = (mcu || '').toUpperCase();
     if (u.match(/PIC16F1/)) return 'picpio_compat_pic16f1';
@@ -595,8 +599,8 @@ function collectSources(cfg) {
     const incDir = path.join(root, 'include');
     if (fs.existsSync(incDir)) includes.push(incDir);
 
-    // picpio_compat/ (tool-level, if framework = arduino)
-    if ((cfg.framework || '').toLowerCase() === 'arduino' && fs.existsSync(acDir)) {
+    // picpio_compat/ (tool-level, if framework = picpio)
+    if (isPicpioFw(cfg.framework) && fs.existsSync(acDir)) {
         scanDir(acDir, sources, tempFiles);
         includes.push(acDir);
     }
@@ -1043,7 +1047,7 @@ function scaffoldMainUsage(dirEntry, count) {
     if (!snippet) return;
 
     const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
-    if (!cfg || (cfg.framework || '').toLowerCase() !== 'arduino') return;
+    if (!cfg || !isPicpioFw(cfg.framework)) return;
 
     const mainFile = path.join(process.cwd(), cfg.src_dir || 'src', 'main.cpp');
     if (!fs.existsSync(mainFile)) return;
@@ -1606,7 +1610,7 @@ function cmdInit(args) {
         `mcu        = ${mcu}`,
         `family     = ${family}`,
         `clock_hz   = ${clock}`,
-        `framework  = ${fw}`,
+        `framework  = ${isPicpioFw(fw) ? 'picpio' : fw}`,
         '',
         '[build]',
         `src_dir    = src`,
@@ -1622,23 +1626,23 @@ function cmdInit(args) {
         `installed  =`,
     ].join('\n'));
 
-    const mainFile = fw === 'arduino'
-        ? path.join(outDir, 'src', 'main.cpp')
+    const mainFile = isPicpioFw(fw)
+        ? path.join(outDir, 'src', 'main.c')
         : path.join(outDir, 'src', 'main.c');
 
-    const mainContent = fw === 'arduino' ? [
+    const mainContent = isPicpioFw(fw) ? [
         '#include <Picpio.h>',
         '',
-        'void setup() {',
-        '    Serial.begin(115200);',
-        '    pinMode(13, OUTPUT);',
+        'void init() {                 // runs once at boot',
+        '    uart1.begin(115200);',
+        '    gpio_mode(BUILTIN_LED, GPIO_OUT);',
         '}',
         '',
-        'void loop() {',
-        '    digitalWrite(13, HIGH);',
-        '    delay(500);',
-        '    digitalWrite(13, LOW);',
-        '    delay(500);',
+        'void run() {                  // runs forever',
+        '    gpio_write(BUILTIN_LED, GPIO_HIGH);',
+        '    sys_delay(500);',
+        '    gpio_write(BUILTIN_LED, GPIO_LOW);',
+        '    sys_delay(500);',
         '}',
     ].join('\n') : [
         `// ${name} - PIC ${mcu}`,

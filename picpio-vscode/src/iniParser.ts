@@ -58,6 +58,13 @@ function parseIni(text: string): Record<string, string> {
     return result;
 }
 
+// The "picpio" framework selects the PICPIO HAL (vs "bare-metal").
+// 'arduino' is accepted as a legacy alias so older picpio.ini files still work.
+export function isPicpioFramework(fw: string | undefined): boolean {
+    const f = (fw || '').toLowerCase();
+    return f === 'picpio' || f === 'arduino';
+}
+
 export function formatClock(hz: string): string {
     const n = parseInt(hz || '0');
     if (!n) return '?';

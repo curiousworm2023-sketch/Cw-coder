@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs     from 'fs';
 import * as path   from 'path';
-import { readConfig } from './iniParser';
+import { readConfig, isPicpioFramework } from './iniParser';
 
 interface PinOption {
     label:      string;
@@ -122,8 +122,8 @@ export async function insertPeripheralSnippet(kind: string, pinIndex?: number): 
     }
 
     const cfg = readConfig();
-    if (cfg && cfg.framework !== 'arduino') {
-        vscode.window.showWarningMessage(`${snip.label} snippets require framework = arduino in picpio.ini`);
+    if (cfg && !isPicpioFramework(cfg.framework)) {
+        vscode.window.showWarningMessage(`${snip.label} snippets require framework = picpio in picpio.ini`);
         return;
     }
 
