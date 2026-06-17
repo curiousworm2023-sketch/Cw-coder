@@ -24,6 +24,16 @@
 // clash -- sketches still write `SPI.transfer(...)` as normal.
 #define SPI SPI_dev
 
+// ── Per-part feature flags ────────────────────────────────────────────────────
+// Small SMPS/general-purpose parts that lack a second UART and whose flash is
+// too small for sprintf's float support (the lightweight float printer in
+// wiring.c is used instead). Keyed on the specific device so the same HAL
+// serves the whole dsPIC30F line.
+#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__)
+#  define PICPIO_NO_UART2
+#  define PICPIO_TINY_FLASH
+#endif
+
 // ── Arduino types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
@@ -36,18 +46,20 @@ typedef bool     boolean;
 #define HIGH           1
 #define LOW            0
 
-#if defined(__dsPIC30F3013__)
-// ── Arduino pin numbers -> dsPIC30F3013 (28-pin, no PORTA/PORTE on this chip) ─
+#if defined(__dsPIC30F3013__) || defined(__dsPIC30F2012__)
+// ── Arduino pin numbers -> dsPIC30F3013 / dsPIC30F2012 (28-pin) ──────────────
+// Identical pinout; the 2012 just has no UART2 (so its RF4/RF5 are plain GPIO,
+// not U2RX/U2TX) and smaller flash. No PORTA/PORTE on either.
 // D0-D9   = RB0-RB9   (also A0-A9 = AN0-AN9, all analog-capable)
 //   D8=RB8 (AN8/OC1) and D9=RB9 (AN9/OC2) are the two analogWrite/PWM pins --
 //   note PWM is on PORTB here, not PORTD as on the 4011/2010.
 // D10-D12 = RC13-RC15 (only 3 PORTC bits exist on this chip)
 // D13-D14 = RD8-RD9   (IC1/INT1, IC2/INT2)
 // D15-D19 = RF2-RF6
-//   D15=RF2 (U1RX/SDI1/SDA), D16=RF3 (U1TX/SDO1/SCL), D17=RF4 (U2RX),
-//   D18=RF5 (U2TX), D19=RF6 (SCK1) -- RF2/RF3 are shared between UART1,
-//   SPI1 and I2C (fixed, non-PPS pins): don't use Serial, SPI and Wire at
-//   the same time on real hardware.
+//   D15=RF2 (U1RX/SDI1/SDA), D16=RF3 (U1TX/SDO1/SCL), D17=RF4 (U2RX on 3013),
+//   D18=RF5 (U2TX on 3013), D19=RF6 (SCK1) -- RF2/RF3 are shared between
+//   UART1, SPI1 and I2C (fixed, non-PPS pins): don't use Serial, SPI and Wire
+//   at the same time on real hardware.
 #define D0   0
 #define D1   1
 #define D2   2
@@ -394,7 +406,7 @@ typedef struct {
 } HardwareSerial_t;
 
 extern HardwareSerial_t Serial;   // UART1 (RF3=TX, RF2=RX)
-#ifndef __dsPIC30F2010__
+#ifndef PICPIO_NO_UART2
 extern HardwareSerial_t Serial2;  // UART2 (RF5=TX, RF4=RX) — real hardware module
 #endif
 

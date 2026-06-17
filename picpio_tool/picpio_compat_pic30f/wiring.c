@@ -14,7 +14,7 @@ typedef struct {
 
 #define NO_ADC -1
 
-#if defined(__dsPIC30F3013__)
+#if defined(__dsPIC30F3013__) || defined(__dsPIC30F2012__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
@@ -204,8 +204,8 @@ int analogRead(uint8_t pin) {
 
 // ── PWM (OC1-OC4 on D12-D15 [4011] / OC1-OC2 on D9-D10 [2010], driven by Timer2) ──
 void analogWrite(uint8_t pin, uint8_t duty) {
-#if defined(__dsPIC30F3013__)
-    // OC1/OC2 output on RB8/RB9 (PORTB) on this chip, not PORTD.
+#if defined(__dsPIC30F3013__) || defined(__dsPIC30F2012__)
+    // OC1/OC2 output on RB8/RB9 (PORTB) on these chips, not PORTD.
     switch (pin) {
         case D8:
             OC1RS = duty; OC1R = duty;
@@ -328,7 +328,7 @@ static void _serial_print_i(int32_t n) {
     while (i) _serial_write((uint8_t)buf[--i]);
 }
 
-#ifndef __dsPIC30F2010__
+#ifndef PICPIO_TINY_FLASH
 static void _serial_print_f(float f, uint8_t dec) {
     char buf[20];
     if      (dec == 0) sprintf(buf, "%ld",  (long)f);
@@ -338,8 +338,8 @@ static void _serial_print_f(float f, uint8_t dec) {
     _serial_print_s(buf);
 }
 #else
-// No-sprintf float print -- on this chip's tiny (~4K word) flash, pulling in
-// sprintf's float support overflows program memory (see
+// No-sprintf float print -- on the small-flash parts (2010/2011/2012), pulling
+// in sprintf's float support overflows program memory (see
 // [[picpio_dspic30f_xc16_quirks]]).
 static void _serial_print_f(float f, uint8_t dec) {
     if (f < 0) { _serial_write('-'); f = -f; }
@@ -392,7 +392,7 @@ void _serial_println_f_def(float f)  { _serial_println_f(f, 2); }
 void _serial_print_d_def(double d)   { _serial_print_f((float)d, 2); }
 void _serial_println_d_def(double d) { _serial_println_f((float)d, 2); }
 
-#ifndef __dsPIC30F2010__
+#ifndef PICPIO_NO_UART2
 // ── Serial2 (UART2, real hardware module -- RF5=TX, RF4=RX) ─────────────────
 static void _serial2_begin(uint32_t baud) {
     TRISFbits.TRISF4 = 1; // RF4 = U2RX input
@@ -463,7 +463,7 @@ HardwareSerial_t Serial2 = {
     .read      = _serial2_read,
     .flush     = _serial2_flush,
 };
-#endif // __dsPIC30F2010__
+#endif // PICPIO_NO_UART2
 
 // ── SPI (SPI1, SDO1=RF3, SDI1=RF2; SCK1=RF6 on 4011 / RE8 on 2010) ───────────
 // NOTE: SDI1/SDO1 share pins with U1RX/U1TX and SDA/SCL -- don't use SPI
