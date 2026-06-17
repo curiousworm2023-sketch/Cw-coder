@@ -210,7 +210,7 @@ typedef struct {
     void    (*flush)(void);
 } HardwareSerial_t;
 
-extern HardwareSerial_t Serial;
+extern HardwareSerial_t Serial;   // USART TX=RC6, RX=RC7
 
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)
@@ -246,7 +246,7 @@ typedef struct {
     int     (*read)(void);
 } TwoWire_t;
 
-extern TwoWire_t Wire;
+extern TwoWire_t Wire;  // I2C SCL=RC3, SDA=RC4
 
 // ── SPI (function-pointer struct) ─────────────────────────────────────────────
 typedef struct {
@@ -258,7 +258,7 @@ typedef struct {
     void    (*setClockDivider)(uint8_t div);
 } SPIClass_t;
 
-extern SPIClass_t SPI;
+extern SPIClass_t SPI;  // SPI SCK=RC3, SDI=RC4, SDO=RC5
 
 // ── Second-instance protocols (software/bit-banged) ──────────────────────────
 // The PIC16F877A has only ONE hardware USART and ONE MSSP module, so these

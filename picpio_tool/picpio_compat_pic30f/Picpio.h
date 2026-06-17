@@ -1226,9 +1226,9 @@ typedef struct {
     void    (*flush)(void);
 } HardwareSerial_t;
 
-extern HardwareSerial_t Serial;   // UART1 (RF3=TX, RF2=RX)
+extern HardwareSerial_t Serial;   // UART1 TX=RF3, RX=RF2
 #ifndef PICPIO_NO_UART2
-extern HardwareSerial_t Serial2;  // UART2 (RF5=TX, RF4=RX) — real hardware module
+extern HardwareSerial_t Serial2;  // UART2 TX=RF5, RX=RF4 — real hardware module
 #endif
 
 // Overload-like print macro (C11 _Generic)
@@ -1265,7 +1265,7 @@ typedef struct {
     int     (*read)(void);
 } TwoWire_t;
 
-extern TwoWire_t Wire; // I2C module (SCL=RF3, SDA=RF2 -- D26/D25 on 4011, D19/D18 on 2010)
+extern TwoWire_t Wire; // I2C SCL=RF3, SDA=RF2 (4011-class; bigger parts use RG2/RG3)
 
 // ── SPI (function-pointer struct) ─────────────────────────────────────────────
 typedef struct {
@@ -1277,7 +1277,7 @@ typedef struct {
     void    (*setClockDivider)(uint8_t div);
 } SPIClass_t;
 
-extern SPIClass_t SPI; // SPI1 (SDO=RF3, SDI=RF2 -- D26/D25 on 4011, D19/D18 on 2010; SCK=RF6/D29 on 4011, SCK=RE8/D17 on 2010)
+extern SPIClass_t SPI; // SPI1 SCK=RF6, SDI=RF2, SDO=RF3 (4011-class)
 
 #define MSBFIRST 1
 #define LSBFIRST 0

@@ -309,8 +309,8 @@ typedef struct {
     void    (*flush)(void);
 } HardwareSerial_t;
 
-extern HardwareSerial_t Serial;   // UART1 (RF3=TX/D65, RF2=RX/D64)
-extern HardwareSerial_t Serial2;  // UART2 (RF5=TX/D67, RF4=RX/D66)
+extern HardwareSerial_t Serial;   // UART1 TX=RF3, RX=RF2
+extern HardwareSerial_t Serial2;  // UART2 TX=RF5, RX=RF4
 
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)

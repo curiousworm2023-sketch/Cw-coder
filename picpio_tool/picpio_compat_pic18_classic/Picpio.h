@@ -162,7 +162,7 @@ typedef struct {
     void    (*flush)(void);
 } HardwareSerial_t;
 
-extern HardwareSerial_t Serial;
+extern HardwareSerial_t Serial;   // USART TX=RC6, RX=RC7
 
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)
@@ -198,7 +198,7 @@ typedef struct {
     int     (*read)(void);
 } TwoWire_t;
 
-extern TwoWire_t Wire;
+extern TwoWire_t Wire;  // I2C SCL=RC3, SDA=RC4
 
 // ── SPI (function-pointer struct) ─────────────────────────────────────────────
 typedef struct {
@@ -210,7 +210,7 @@ typedef struct {
     void    (*setClockDivider)(uint8_t div);
 } SPIClass_t;
 
-extern SPIClass_t SPI;
+extern SPIClass_t SPI;  // SPI SCK=RC3, SDI=RC4, SDO=RC5
 
 // ── Second-instance protocols (software/bit-banged) ──────────────────────────
 // PIC18F4550/452/2550 have only ONE hardware EUSART and ONE MSSP module, so
@@ -219,7 +219,7 @@ extern SPIClass_t SPI;
 //   Wire2   : software I2C  — SCL2=RB0 (D8), SDA2=RB1 (D9) (needs external pull-ups)
 //   SPI2    : software SPI  — SCK2=RB2 (D10), MOSI2=RB3 (D11), MISO2=RB4 (D12)
 //             (no fixed CS — drive any free pin manually with digitalWrite)
-extern HardwareSerial_t Serial2;
+extern HardwareSerial_t Serial2;  // soft-UART TX=RC0, RX=RC1
 extern TwoWire_t Wire2;
 extern SPIClass_t SPI2;
 

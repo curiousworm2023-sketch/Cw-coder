@@ -1470,6 +1470,12 @@ function buildReferenceMd(meta) {
         p('Which physical pin — and its Arduino name — each peripheral signal uses on this chip:', '');
         p('| Peripheral | Signal | Pin | Arduino name |', '|---|---|---|---|');
         for (const r of pinRows) p(`| ${r.label} | ${r.sig} | \`${r.pin}\` | ${r.ard ? '`' + r.ard + '`' : ''} |`);
+        // dsPIC30F (and the multi-device PIC16 HAL) share one peripheral-pin note
+        // across many parts whose pins differ; flag that the Pin Map above is the
+        // authoritative per-MCU source.
+        if (/DSPIC30F/i.test(mcu) || halVariantFor(mcu) === 'picpio_compat_pic16') {
+            p('', '_This HAL serves several devices whose peripheral pins differ; the table shows the family\'s reference part. The Pin Map above is authoritative for your exact MCU._');
+        }
         p('');
     }
 
