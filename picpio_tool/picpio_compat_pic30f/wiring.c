@@ -144,6 +144,78 @@ static const PinInfo _pins[] = {
     { &TRISG, &LATG, &PORTG, 15, NO_ADC }, // D51 RG15
 };
 #define PIN_COUNT 52
+#elif defined(__dsPIC30F6010__)
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 }, // D2  RB2/AN2 -- SS1
+    { &TRISB, &LATB, &PORTB, 3, 3 }, // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 }, // D4  RB4/AN4
+    { &TRISB, &LATB, &PORTB, 5, 5 }, // D5  RB5/AN5
+    { &TRISB, &LATB, &PORTB, 6, 6 }, // D6  RB6/AN6
+    { &TRISB, &LATB, &PORTB, 7, 7 }, // D7  RB7/AN7
+    { &TRISB, &LATB, &PORTB, 8, 8 }, // D8  RB8/AN8
+    { &TRISB, &LATB, &PORTB, 9, 9 }, // D9  RB9/AN9
+    { &TRISB, &LATB, &PORTB, 10, 10 }, // D10 RB10/AN10
+    { &TRISB, &LATB, &PORTB, 11, 11 }, // D11 RB11/AN11
+    { &TRISB, &LATB, &PORTB, 12, 12 }, // D12 RB12/AN12
+    { &TRISB, &LATB, &PORTB, 13, 13 }, // D13 RB13/AN13
+    { &TRISB, &LATB, &PORTB, 14, 14 }, // D14 RB14/AN14
+    { &TRISB, &LATB, &PORTB, 15, 15 }, // D15 RB15/AN15
+    { &TRISA, &LATA, &PORTA, 9, NO_ADC },  // D16 RA9
+    { &TRISA, &LATA, &PORTA, 10, NO_ADC }, // D17 RA10
+    { &TRISA, &LATA, &PORTA, 14, NO_ADC }, // D18 RA14
+    { &TRISA, &LATA, &PORTA, 15, NO_ADC }, // D19 RA15
+    { &TRISC, &LATC, &PORTC, 1, NO_ADC },  // D20 RC1
+    { &TRISC, &LATC, &PORTC, 3, NO_ADC },  // D21 RC3
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D22 RC13
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D23 RC14
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D24 RC15
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC },  // D25 RD0 -- OC1 -- LED
+    { &TRISD, &LATD, &PORTD, 1, NO_ADC },  // D26 RD1 -- OC2
+    { &TRISD, &LATD, &PORTD, 2, NO_ADC },  // D27 RD2 -- OC3
+    { &TRISD, &LATD, &PORTD, 3, NO_ADC },  // D28 RD3 -- OC4
+    { &TRISD, &LATD, &PORTD, 4, NO_ADC },  // D29 RD4 -- OC5
+    { &TRISD, &LATD, &PORTD, 5, NO_ADC },  // D30 RD5 -- OC6
+    { &TRISD, &LATD, &PORTD, 6, NO_ADC },  // D31 RD6 -- OC7
+    { &TRISD, &LATD, &PORTD, 7, NO_ADC },  // D32 RD7 -- OC8
+    { &TRISD, &LATD, &PORTD, 8, NO_ADC },  // D33 RD8
+    { &TRISD, &LATD, &PORTD, 9, NO_ADC },  // D34 RD9
+    { &TRISD, &LATD, &PORTD, 10, NO_ADC }, // D35 RD10
+    { &TRISD, &LATD, &PORTD, 11, NO_ADC }, // D36 RD11
+    { &TRISD, &LATD, &PORTD, 12, NO_ADC }, // D37 RD12
+    { &TRISD, &LATD, &PORTD, 13, NO_ADC }, // D38 RD13
+    { &TRISD, &LATD, &PORTD, 14, NO_ADC }, // D39 RD14
+    { &TRISD, &LATD, &PORTD, 15, NO_ADC }, // D40 RD15
+    { &TRISE, &LATE, &PORTE, 0, NO_ADC },  // D41 RE0
+    { &TRISE, &LATE, &PORTE, 1, NO_ADC },  // D42 RE1
+    { &TRISE, &LATE, &PORTE, 2, NO_ADC },  // D43 RE2
+    { &TRISE, &LATE, &PORTE, 3, NO_ADC },  // D44 RE3
+    { &TRISE, &LATE, &PORTE, 4, NO_ADC },  // D45 RE4
+    { &TRISE, &LATE, &PORTE, 5, NO_ADC },  // D46 RE5
+    { &TRISE, &LATE, &PORTE, 6, NO_ADC },  // D47 RE6
+    { &TRISE, &LATE, &PORTE, 7, NO_ADC },  // D48 RE7
+    { &TRISE, &LATE, &PORTE, 8, NO_ADC },  // D49 RE8
+    { &TRISE, &LATE, &PORTE, 9, NO_ADC },  // D50 RE9
+    { &TRISF, &LATF, &PORTF, 0, NO_ADC },  // D51 RF0
+    { &TRISF, &LATF, &PORTF, 1, NO_ADC },  // D52 RF1
+    { &TRISF, &LATF, &PORTF, 2, NO_ADC },  // D53 RF2 -- U1RX/SDI1
+    { &TRISF, &LATF, &PORTF, 3, NO_ADC },  // D54 RF3 -- U1TX/SDO1
+    { &TRISF, &LATF, &PORTF, 4, NO_ADC },  // D55 RF4 -- U2RX
+    { &TRISF, &LATF, &PORTF, 5, NO_ADC },  // D56 RF5 -- U2TX
+    { &TRISF, &LATF, &PORTF, 6, NO_ADC },  // D57 RF6 -- SCK1
+    { &TRISF, &LATF, &PORTF, 7, NO_ADC },  // D58 RF7 -- SDI1
+    { &TRISF, &LATF, &PORTF, 8, NO_ADC },  // D59 RF8 -- SDO1
+    { &TRISG, &LATG, &PORTG, 0, NO_ADC },  // D60 RG0
+    { &TRISG, &LATG, &PORTG, 1, NO_ADC },  // D61 RG1
+    { &TRISG, &LATG, &PORTG, 2, NO_ADC },  // D62 RG2 -- SCL
+    { &TRISG, &LATG, &PORTG, 3, NO_ADC },  // D63 RG3 -- SDA
+    { &TRISG, &LATG, &PORTG, 6, NO_ADC },  // D64 RG6
+    { &TRISG, &LATG, &PORTG, 7, NO_ADC },  // D65 RG7
+    { &TRISG, &LATG, &PORTG, 8, NO_ADC },  // D66 RG8
+    { &TRISG, &LATG, &PORTG, 9, NO_ADC },  // D67 RG9
+};
+#define PIN_COUNT 68
 #elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 },   // D0  RB0/AN0
@@ -216,7 +288,7 @@ static const PinInfo _pins[] = {
     { &TRISA, &LATA, &PORTA, 15, NO_ADC }, // D67 RA15
 };
 #define PIN_COUNT 68
-#elif !defined(__dsPIC30F2010__)
+#elif !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
     { &TRISB, &LATB, &PORTB, 1, 1 }, // D1  RB1/AN1
@@ -396,7 +468,7 @@ void analogWrite(uint8_t pin, uint8_t duty) {
         default:
             return;
     }
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6010__)
     // 8 PWM channels: OC1-OC8 on RD0-RD7.
     switch (pin) {
         case RD0: OC1RS = duty; OC1R = duty; OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110; TRISDbits.TRISD0 = 0; break;
@@ -410,7 +482,7 @@ void analogWrite(uint8_t pin, uint8_t duty) {
         default:
             return;
     }
-#elif !defined(__dsPIC30F2010__)
+#elif !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__)
     // 4011 and 4013 both put OC1-OC4 on RD0-RD3 (the RDx macros resolve to the
     // right Dn per chip), so this one branch serves both.
     switch (pin) {
@@ -652,15 +724,15 @@ static void _spi_begin(void) {
     TRISBbits.TRISB6 = 0; // RB6 = SCK1 output (master)
     TRISBbits.TRISB4 = 0; // RB4 = SDO1 output
     TRISBbits.TRISB5 = 1; // RB5 = SDI1 input
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6010__)
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
     TRISFbits.TRISF8 = 0; // RF8 = SDO1 output
     TRISFbits.TRISF7 = 1; // RF7 = SDI1 input
 #else
-#ifndef __dsPIC30F2010__
+#if !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__)
     TRISFbits.TRISF6 = 0; // RF6 = SCK1 output (master)
 #else
-    TRISEbits.TRISE8 = 0; // RE8 = SCK1 output (master)
+    TRISEbits.TRISE8 = 0; // RE8 = SCK1 output (master, 2010/4012)
 #endif
     TRISFbits.TRISF3 = 0; // RF3 = SDO1 output
     TRISFbits.TRISF2 = 1; // RF2 = SDI1 input
@@ -714,7 +786,7 @@ static void _wire_begin(void) {
 #if defined(__dsPIC30F2011__)
     TRISBbits.TRISB5 = 1; // RB5 = SDA
     TRISBbits.TRISB4 = 1; // RB4 = SCL
-#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__)
+#elif defined(__dsPIC30F6014A__) || defined(__dsPIC30F6013A__) || defined(__dsPIC30F6011A__) || defined(__dsPIC30F6012A__) || defined(__dsPIC30F6010__)
     TRISGbits.TRISG3 = 1; // RG3 = SDA
     TRISGbits.TRISG2 = 1; // RG2 = SCL
 #else
