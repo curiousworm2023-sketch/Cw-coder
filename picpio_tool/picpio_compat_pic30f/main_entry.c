@@ -3,7 +3,7 @@
 // dsPIC30F configuration words.
 // XC16 v2.10 has no #pragma config database for dsPIC30F -- use the
 // (deprecated but functional) _FOSC/_FWDT/_FBORPOR/_FGS macros instead.
-#if defined(__dsPIC30F3013__) || defined(__dsPIC30F4013__) || defined(__dsPIC30F3014__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F2011__)
+#if defined(__dsPIC30F3013__) || defined(__dsPIC30F4013__) || defined(__dsPIC30F3014__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F6014A__)
 // General-purpose parts: FOSC has no separate PRI bit (XT selects the primary
 // oscillator on its own) and there is no motor-control PWM, so the
 // PWMxL/PWMxH/RST_IOPIN config bits don't exist on these chips.
