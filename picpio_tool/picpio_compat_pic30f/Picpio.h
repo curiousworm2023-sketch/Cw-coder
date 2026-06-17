@@ -102,6 +102,95 @@ typedef bool     boolean;
 #define RF5  D18
 #define RF6  D19
 
+#elif defined(__dsPIC30F4013__)
+// ── Arduino pin numbers -> dsPIC30F4013 (40/44-pin general-purpose) ──────────
+// D0-D12  = RB0-RB12 (also A0-A12 = AN0-AN12, all analog-capable)
+// D13-D15 = RC13-RC15
+// D16-D19 = RD0-RD3  (OC1-OC4 -- PWM-capable analogWrite targets; LED_BUILTIN=D16/RD0)
+// D20-D21 = RD8-RD9  (IC1/INT1, IC2/INT2)
+// D22-D28 = RF0-RF6
+//   D24=RF2 (U1RX/SDI1/SDA), D25=RF3 (U1TX/SDO1/SCL), D26=RF4 (U2RX),
+//   D27=RF5 (U2TX), D28=RF6 (SCK1) -- RF2/RF3 are shared between UART1,
+//   SPI1 and I2C (fixed, non-PPS pins): don't use Serial, SPI and Wire at
+//   the same time on real hardware.
+// D29     = RA11 (only PORTA bit bonded out on this chip)
+#define D0   0
+#define D1   1
+#define D2   2
+#define D3   3
+#define D4   4
+#define D5   5
+#define D6   6
+#define D7   7
+#define D8   8
+#define D9   9
+#define D10  10
+#define D11  11
+#define D12  12
+#define D13  13
+#define D14  14
+#define D15  15
+#define D16  16   // RD0 / OC1 -- LED pin
+#define D17  17   // RD1 / OC2
+#define D18  18   // RD2 / OC3
+#define D19  19   // RD3 / OC4
+#define D20  20
+#define D21  21
+#define D22  22
+#define D23  23
+#define D24  24
+#define D25  25
+#define D26  26
+#define D27  27
+#define D28  28
+#define D29  29
+#define A0   D0
+#define A1   D1
+#define A2   D2
+#define A3   D3
+#define A4   D4
+#define A5   D5
+#define A6   D6
+#define A7   D7
+#define A8   D8
+#define A9   D9
+#define A10  D10
+#define A11  D11
+#define A12  D12
+#define LED_BUILTIN  D16
+
+// ── Native port-pin names (use these directly, e.g. digitalWrite(RB0, HIGH)) ──
+#define RB0  D0
+#define RB1  D1
+#define RB2  D2
+#define RB3  D3
+#define RB4  D4
+#define RB5  D5
+#define RB6  D6
+#define RB7  D7
+#define RB8  D8
+#define RB9  D9
+#define RB10 D10
+#define RB11 D11
+#define RB12 D12
+#define RC13 D13
+#define RC14 D14
+#define RC15 D15
+#define RD0  D16
+#define RD1  D17
+#define RD2  D18
+#define RD3  D19
+#define RD8  D20
+#define RD9  D21
+#define RF0  D22
+#define RF1  D23
+#define RF2  D24
+#define RF3  D25
+#define RF4  D26
+#define RF5  D27
+#define RF6  D28
+#define RA11 D29
+
 #elif !defined(__dsPIC30F2010__)
 // ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)

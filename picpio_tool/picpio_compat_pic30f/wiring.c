@@ -38,6 +38,40 @@ static const PinInfo _pins[] = {
     { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D19 RF6 -- SCK1
 };
 #define PIN_COUNT 20
+#elif defined(__dsPIC30F4013__)
+static const PinInfo _pins[] = {
+    { &TRISB, &LATB, &PORTB, 0, 0 },  // D0  RB0/AN0
+    { &TRISB, &LATB, &PORTB, 1, 1 },  // D1  RB1/AN1
+    { &TRISB, &LATB, &PORTB, 2, 2 },  // D2  RB2/AN2
+    { &TRISB, &LATB, &PORTB, 3, 3 },  // D3  RB3/AN3
+    { &TRISB, &LATB, &PORTB, 4, 4 },  // D4  RB4/AN4
+    { &TRISB, &LATB, &PORTB, 5, 5 },  // D5  RB5/AN5
+    { &TRISB, &LATB, &PORTB, 6, 6 },  // D6  RB6/AN6
+    { &TRISB, &LATB, &PORTB, 7, 7 },  // D7  RB7/AN7
+    { &TRISB, &LATB, &PORTB, 8, 8 },  // D8  RB8/AN8
+    { &TRISB, &LATB, &PORTB, 9, 9 },  // D9  RB9/AN9
+    { &TRISB, &LATB, &PORTB, 10, 10 }, // D10 RB10/AN10
+    { &TRISB, &LATB, &PORTB, 11, 11 }, // D11 RB11/AN11
+    { &TRISB, &LATB, &PORTB, 12, 12 }, // D12 RB12/AN12
+    { &TRISC, &LATC, &PORTC, 13, NO_ADC }, // D13 RC13 (CN1)
+    { &TRISC, &LATC, &PORTC, 14, NO_ADC }, // D14 RC14 (CN0/T1CK)
+    { &TRISC, &LATC, &PORTC, 15, NO_ADC }, // D15 RC15 (SOSCO)
+    { &TRISD, &LATD, &PORTD, 0, NO_ADC }, // D16 RD0/OC1 -- LED
+    { &TRISD, &LATD, &PORTD, 1, NO_ADC }, // D17 RD1/OC2
+    { &TRISD, &LATD, &PORTD, 2, NO_ADC }, // D18 RD2/OC3
+    { &TRISD, &LATD, &PORTD, 3, NO_ADC }, // D19 RD3/OC4
+    { &TRISD, &LATD, &PORTD, 8, NO_ADC }, // D20 RD8 (IC1/INT1)
+    { &TRISD, &LATD, &PORTD, 9, NO_ADC }, // D21 RD9 (IC2/INT2)
+    { &TRISF, &LATF, &PORTF, 0, NO_ADC }, // D22 RF0
+    { &TRISF, &LATF, &PORTF, 1, NO_ADC }, // D23 RF1
+    { &TRISF, &LATF, &PORTF, 2, NO_ADC }, // D24 RF2 -- U1RX/SDI1/SDA
+    { &TRISF, &LATF, &PORTF, 3, NO_ADC }, // D25 RF3 -- U1TX/SDO1/SCL
+    { &TRISF, &LATF, &PORTF, 4, NO_ADC }, // D26 RF4 -- U2RX
+    { &TRISF, &LATF, &PORTF, 5, NO_ADC }, // D27 RF5 -- U2TX
+    { &TRISF, &LATF, &PORTF, 6, NO_ADC }, // D28 RF6 -- SCK1
+    { &TRISA, &LATA, &PORTA, 11, NO_ADC }, // D29 RA11
+};
+#define PIN_COUNT 30
 #elif !defined(__dsPIC30F2010__)
 static const PinInfo _pins[] = {
     { &TRISB, &LATB, &PORTB, 0, 0 }, // D0  RB0/AN0
@@ -187,23 +221,25 @@ void analogWrite(uint8_t pin, uint8_t duty) {
             return;
     }
 #elif !defined(__dsPIC30F2010__)
+    // 4011 and 4013 both put OC1-OC4 on RD0-RD3 (the RDx macros resolve to the
+    // right Dn per chip), so this one branch serves both.
     switch (pin) {
-        case D12:
+        case RD0:
             OC1RS = duty; OC1R = duty;
             OC1CONbits.OCTSEL = 0; OC1CONbits.OCM = 0b110;
             TRISDbits.TRISD0 = 0;
             break;
-        case D13:
+        case RD1:
             OC2RS = duty; OC2R = duty;
             OC2CONbits.OCTSEL = 0; OC2CONbits.OCM = 0b110;
             TRISDbits.TRISD1 = 0;
             break;
-        case D14:
+        case RD2:
             OC3RS = duty; OC3R = duty;
             OC3CONbits.OCTSEL = 0; OC3CONbits.OCM = 0b110;
             TRISDbits.TRISD2 = 0;
             break;
-        case D15:
+        case RD3:
             OC4RS = duty; OC4R = duty;
             OC4CONbits.OCTSEL = 0; OC4CONbits.OCM = 0b110;
             TRISDbits.TRISD3 = 0;

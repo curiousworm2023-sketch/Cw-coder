@@ -44,6 +44,7 @@ export const MCU_LIST: McuChoice[] = [
     { label:'dsPIC30F4011',     description:'28KB / 30MIPS / 16-bit dsPIC, UART+SPI+I2C+PWM', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC30F2010',     description:'12KB / 30MIPS / 16-bit dsPIC, 28-pin, UART+SPI+I2C+2xPWM', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC30F3013',     description:'24KB / 30MIPS / 16-bit dsPIC, 28-pin, UART x2 + SPI + I2C + 2xPWM, 7.3728MHz XT', family:'dsPIC', clock:'7372800' },
+    { label:'dsPIC30F4013',     description:'48KB / 30MIPS / 16-bit dsPIC, 40/44-pin, 12-bit ADC, UART x2 + SPI + I2C + 4xPWM, 7.3728MHz XT', family:'dsPIC', clock:'7372800' },
     { label:'dsPIC33EP512MU810',description:'512KB / 16-bit dsPIC33E (PPS), UART x2 + SPI + I2C + 4xPWM, 7.3728MHz XT', family:'dsPIC', clock:'7372800' },
     { label:'PIC32MX360F512L',  description:'512KB / 80MHz / 32-bit MIPS',              family:'PIC32', clock:'80000000'  },
     { label:'PIC32MZ2048EFH144',description:'2MB / 200MHz / MIPS M-Class + FPU',        family:'PIC32', clock:'200000000' },
