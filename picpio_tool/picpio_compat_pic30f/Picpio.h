@@ -30,7 +30,7 @@
 // wiring.c is used instead). Keyed on the specific device so the same HAL
 // serves the whole dsPIC30F line.
 // Parts with no second UART (no Serial2).
-#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__) || defined(__dsPIC30F3012__) || defined(__dsPIC30F5015__) || defined(__dsPIC30F5016__)
+#if defined(__dsPIC30F2010__) || defined(__dsPIC30F2011__) || defined(__dsPIC30F2012__) || defined(__dsPIC30F4012__) || defined(__dsPIC30F3012__) || defined(__dsPIC30F5015__) || defined(__dsPIC30F5016__) || defined(__dsPIC30F3010__)
 #  define PICPIO_NO_UART2
 #endif
 // Parts whose flash is too small for sprintf's float support (use the
@@ -727,7 +727,7 @@ typedef bool     boolean;
 #define RA14 D66
 #define RA15 D67
 
-#elif !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__)
+#elif !defined(__dsPIC30F2010__) && !defined(__dsPIC30F4012__) && !defined(__dsPIC30F3010__) && !defined(__dsPIC30F5015__) && !defined(__dsPIC30F5016__) && !defined(__dsPIC30F6015__)
 // ── Arduino pin numbers -> dsPIC30F4011 (no PORTA on this chip) ──────────────
 // D0-D8   = RB0-RB8   (also A0-A8 = AN0-AN8, all analog-capable)
 // D9-D11  = RC13-RC15 (only 3 PORTC bits exist on this chip)
@@ -811,8 +811,10 @@ typedef bool     boolean;
 #define RF5  D28
 #define RF6  D29
 
-#elif defined(__dsPIC30F5015__)
-// ── Arduino pin numbers -> dsPIC30F5015 (64-pin, motor-control, has PORTE) ───
+#elif defined(__dsPIC30F5015__) || defined(__dsPIC30F6015__)
+// ── Arduino pin numbers -> dsPIC30F5015 / dsPIC30F6015 (64-pin, motor-control,
+//    PORTE) ─ identical pin map; 6015 additionally has UART2 (RF4/RF5) and
+//    OC5-OC8 on RD4-RD7 (5015 only has OC1-4 and no UART2). ─────────────────
 // D0-D15  = RB0-RB15 (A0-A15 = AN0-AN15, 16-ch ADC; RB2 also SS1)
 // D16-D18 = RC13-RC15      D19-D30 = RD0-RD11 (D19-D22 = OC1-OC4 PWM; LED=D19/RD0)
 // D31-D38 = RE0-RE7        D39-D45 = RF0-RF6
