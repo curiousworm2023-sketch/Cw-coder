@@ -33,7 +33,8 @@ const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
 // (struct + function API) written against the PICPIO HAL.
 const BUNDLED_LIBS = [
-    'PID', 'PIDTune', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595', 'BME280',
+    'PID', 'PIDTune', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
+    'BME280', 'SHT31', 'MCP23017', 'MCP4725', 'DS3231',
     'dht22','ds18b20','servo','encoder',
     'wire','spi','hardwareserial','at24c256','keypad','mpu6050','bmp280'
 ];
