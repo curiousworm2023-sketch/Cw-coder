@@ -13,7 +13,7 @@ $XC8_URL    = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/Pr
 # now serves this only behind its browser "filehandler" (direct download 403s),
 # so the auto-download usually fails and the script falls back to a manual link.
 $XC16_URL   = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc16-v2.10-full-install-windows-x64-installer.exe'
-$XC16_PAGE  = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc16'
+$XC16_PAGE  = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc16#downloads'
 # XC32 = PIC32 (32-bit). Direct download works.
 $XC32_URL   = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc32-v4.35-full-install-windows-x64-installer.exe'
 # Pinned to v6.00 -- newer MPLAB X IPE releases (6.20+) dropped PICkit3 support,
@@ -145,11 +145,13 @@ if (Test-XC16Installed) {
         if (Test-XC16Installed) { Write-Info "XC16 installed." }
         else { Write-Warn "XC16 install did not complete. Get it at: $XC16_PAGE" }
     } catch {
-        # Microchip serves XC16 only behind its browser filehandler, so the
-        # direct download commonly fails -- point the user at the download page.
-        Write-Warn "Auto-download failed (Microchip serves XC16 via a browser only)."
-        Write-Warn "Install it manually (needed only for PIC24/dsPIC projects):"
-        Write-Warn "  $XC16_PAGE"
+        # Microchip serves XC16 only behind its browser filehandler (a direct
+        # download 403s), so open the download page in the user's browser to
+        # download + run the installer manually. Needed only for PIC24/dsPIC.
+        Write-Warn "XC16 can't be auto-downloaded (Microchip serves it via a browser only)."
+        Write-Warn "Opening the XC16 download page -- click 'Windows', then run the installer."
+        Write-Warn "(Only needed for PIC24/dsPIC projects; skip it otherwise.)"
+        try { Start-Process $XC16_PAGE } catch { Write-Warn "  $XC16_PAGE" }
     }
 }
 
