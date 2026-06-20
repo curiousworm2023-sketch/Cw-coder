@@ -1,0 +1,4 @@
+{
+  "families": ["PIC18"],
+  "note": "Bit-bang timing uses PIC18 LATx registers tuned for Fosc=64MHz; not portable to other families as-is."
+}
