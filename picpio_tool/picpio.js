@@ -870,7 +870,7 @@ LCD_HC595: {
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 // Single source of truth for the tool version. `picpio update` re-runs the
 // GitHub installer, so bump this when publishing so users can tell old vs new.
-const PICPIO_VERSION = '1.4.1';
+const PICPIO_VERSION = '1.4.2';
 // Where `picpio update` pulls the latest installer from.
 const PICPIO_INSTALL_URL = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/install.ps1';
 // Where `picpio update --check` reads the latest published version from (the

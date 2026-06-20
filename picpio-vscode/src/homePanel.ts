@@ -3,31 +3,97 @@ import { readConfig, listInstalledLibs, formatClock, isPicpioFramework } from '.
 import { SNIPPETS } from './peripheralInsert';
 import * as fs   from 'fs';
 import * as path from 'path';
+import * as cp   from 'child_process';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 interface RecentProject { path: string; name: string; mcu: string; lastOpened: number; hidden?: boolean; }
 
+// Descriptions/tags for known bundled libraries. METADATA ONLY -- the list of
+// libraries actually shown is discovered at runtime from `picpio lib search`
+// (which scans the real picpio_tool/libraries/<Name>/ folders), so the Home
+// panel always reflects what's truly installable. Libraries without an entry
+// here get a generic description.
 const REGISTRY = [
-    { name:'DHT22',         desc:'Humidity & temperature sensor (AM2302)',       tags:['sensor','1-wire']   },
-    { name:'DS18B20',       desc:'Dallas 1-Wire temperature sensor',             tags:['sensor','1-wire']   },
     { name:'SSD1306',       desc:'128x64/128x32 OLED display over I2C',          tags:['display','i2c']     },
     { name:'LiquidCrystal_I2C', desc:'Character LCD over PCF8574 I2C backpack',  tags:['display','i2c']     },
-    { name:'Servo',         desc:'RC servo motor via Timer1',                    tags:['motor','pwm']       },
-    { name:'Encoder',       desc:'Quadrature encoder with 4x decode via IOC',    tags:['input']             },
-    { name:'Wire',          desc:'I2C master with streaming bulk transfer',      tags:['comms','i2c']       },
-    { name:'SPI',           desc:'SPI master library',                           tags:['comms','spi']       },
-    { name:'HardwareSerial',desc:'UART with interrupt-driven RX ring buffer',    tags:['comms','uart']      },
-    { name:'AT24C256',      desc:'32KB I2C EEPROM with page write & polling',    tags:['storage','i2c']     },
-    { name:'Keypad',        desc:'Matrix keypad driver (4x4 and 3x4)',           tags:['input']             },
+    { name:'LCD_HC595',     desc:'Character LCD via 74HC595 shift register',     tags:['display']           },
+    { name:'ILI9341',       desc:'240x320 TFT LCD over SPI',                     tags:['display','spi']     },
+    { name:'XPT2046',       desc:'Resistive touchscreen controller (SPI)',       tags:['input','spi']       },
+    { name:'DWIN',          desc:'DWIN DGUS smart serial display',               tags:['display','uart']    },
+    { name:'LVGL',          desc:'LVGL embedded graphics library',               tags:['display','gui']     },
     { name:'PID',           desc:'PID controller with anti-windup',              tags:['control']           },
     { name:'PIDTune',       desc:'Serial auto-tuning handler for the Auto PID Tuning panel', tags:['control'] },
-    { name:'MPU6050',       desc:'6-axis IMU accelerometer+gyro over I2C',       tags:['sensor','i2c']      },
-    { name:'BMP280',        desc:'Barometric pressure and temperature sensor',   tags:['sensor','i2c','spi']},
+    { name:'BME280',        desc:'Temperature, pressure & humidity (I2C)',       tags:['sensor','i2c']      },
+    { name:'BMP280',        desc:'Barometric pressure & temperature (I2C)',      tags:['sensor','i2c']      },
+    { name:'AHT10',         desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'AHT20',         desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'HTU21DF',       desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'SI7021',        desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'SHT31',         desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'SHT4x',         desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'HDC1000',       desc:'Temperature & humidity sensor (I2C)',          tags:['sensor','i2c']      },
+    { name:'TMP117',        desc:'High-accuracy temperature sensor (I2C)',       tags:['sensor','i2c']      },
+    { name:'MCP9808',       desc:'+/-0.25C temperature sensor (I2C)',            tags:['sensor','i2c']      },
+    { name:'LPS22',         desc:'Barometric pressure sensor (I2C)',             tags:['sensor','i2c']      },
+    { name:'VEML7700',      desc:'Ambient light sensor (I2C)',                   tags:['sensor','light','i2c']},
+    { name:'TSL2591',       desc:'High-dynamic-range light sensor (I2C)',        tags:['sensor','light','i2c']},
+    { name:'TCS34725',      desc:'RGB color sensor (I2C)',                       tags:['sensor','color','i2c']},
+    { name:'MPU6050',       desc:'6-axis IMU - accel + gyro (I2C)',              tags:['sensor','imu','i2c']},
+    { name:'INA219',        desc:'High-side current / power monitor (I2C)',      tags:['sensor','power','i2c']},
+    { name:'INA260',        desc:'Current / power monitor, integrated shunt (I2C)', tags:['sensor','power','i2c']},
     { name:'ADS1115',       desc:'16-bit 4-channel I2C ADC',                     tags:['sensor','i2c']      },
     { name:'ADS1219',       desc:'24-bit 4-channel I2C ADC',                     tags:['sensor','i2c']      },
+    { name:'MCP4725',       desc:'12-bit I2C DAC',                               tags:['dac','i2c']         },
+    { name:'PCF8591',       desc:'8-bit I2C ADC (4ch) + DAC',                    tags:['adc','dac','i2c']   },
     { name:'PCF8575',       desc:'16-channel I2C GPIO expander',                 tags:['io','i2c']          },
-    { name:'LCD_HC595',     desc:'Character LCD via 74HC595 shift register',     tags:['display']           },
+    { name:'MCP23017',      desc:'16-channel I2C GPIO expander',                 tags:['io','i2c']          },
+    { name:'MCP23008',      desc:'8-channel I2C GPIO expander',                  tags:['io','i2c']          },
+    { name:'TCA9548A',      desc:'1-to-8 I2C multiplexer',                       tags:['io','i2c']          },
+    { name:'DS3231',        desc:'High-accuracy I2C real-time clock',            tags:['rtc','i2c']         },
+    { name:'DS1307',        desc:'I2C real-time clock',                          tags:['rtc','i2c']         },
 ];
+
+const REGISTRY_BY_NAME = new Map(REGISTRY.map(e => [e.name.toLowerCase(), e]));
+
+interface HomeLibCompat { ok: boolean; reasons: string[]; note: string; }
+
+function homeExe(): string {
+    return vscode.workspace.getConfiguration('picpio').get<string>('executablePath', 'picpio');
+}
+function homeCwd(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+// Real, installable libraries (scanned by the CLI). Falls back to the known
+// names if the CLI can't be run, so the panel is never empty.
+function homeAvailableLibs(): string[] {
+    try {
+        const out = cp.execSync(`${homeExe()} lib search`, { encoding: 'utf8', timeout: 5000, cwd: homeCwd() });
+        const names = out.split('\n')
+            .filter(l => /^\s+\S/.test(l) && !l.includes('[PICPIO]'))
+            .map(l => l.trim()).filter(Boolean);
+        if (names.length) return names;
+    } catch { /* fall through */ }
+    return REGISTRY.map(e => e.name);
+}
+
+function homeLibMeta(name: string): { name: string; desc: string; tags: string[] } {
+    return REGISTRY_BY_NAME.get(name.toLowerCase())
+        ?? { name, desc: 'Bundled PICPIO library', tags: ['bundled'] };
+}
+
+// Per-library MCU compatibility for the current project (one CLI call).
+function homeCompatMap(): Map<string, HomeLibCompat> {
+    const m = new Map<string, HomeLibCompat>();
+    try {
+        const out = cp.execSync(`${homeExe()} lib check --json`, { encoding: 'utf8', timeout: 5000, cwd: homeCwd() });
+        const json = out.slice(out.indexOf('['), out.lastIndexOf(']') + 1);
+        for (const e of JSON.parse(json) as Array<HomeLibCompat & { name: string }>) {
+            m.set(e.name.toLowerCase(), { ok: e.ok, reasons: e.reasons || [], note: e.note || '' });
+        }
+    } catch { /* no compat info */ }
+    return m;
+}
 
 const BOARDS = [
     { mcu:'PIC18F27K40',       family:'PIC18', flash:'128KB', ram:'3.7KB', speed:'64MHz',  notes:'PPS | ADCC | Recommended' },
@@ -127,8 +193,19 @@ export class HomePanel {
             case 'cli':          vscode.commands.executeCommand('picpio.openCli');       break;
             case 'install':
                 if (msg.name) {
-                    vscode.commands.executeCommand('picpio.runTask', `lib add ${msg.name}`);
-                    setTimeout(() => this._update(), 3000);
+                    if (msg.force) {
+                        vscode.window.showWarningMessage(
+                            `${msg.name} may not be compatible with this MCU. Install anyway?`,
+                            { modal: true }, 'Install anyway',
+                        ).then(pick => {
+                            if (pick !== 'Install anyway') return;
+                            vscode.commands.executeCommand('picpio.runTask', `lib add ${msg.name} --force`);
+                            setTimeout(() => this._update(), 3000);
+                        });
+                    } else {
+                        vscode.commands.executeCommand('picpio.runTask', `lib add ${msg.name}`);
+                        setTimeout(() => this._update(), 3000);
+                    }
                 }
                 break;
             case 'remove':
@@ -219,15 +296,25 @@ export class HomePanel {
         </div>`;
 
         // ── Library rows ──────────────────────────────────────────────────────
-        const libRows = REGISTRY.map(lib => {
+        // The list is the real installable set (scanned by the CLI); REGISTRY is
+        // only used for descriptions/tags.
+        const homeCompat = homeCompatMap();
+        const libRows = homeAvailableLibs().map(homeLibMeta).map(lib => {
             const on  = installed.has(lib.name.toLowerCase());
+            const c   = homeCompat.get(lib.name.toLowerCase());
+            const bad = !on && c && !c.ok;
             const btn = on
                 ? `<button class="lib-action red"   onclick="send('remove','${lib.name}')">Remove</button>`
+                : bad
+                ? `<button class="lib-action amber" onclick="send('install','${lib.name}',true)" title="May not run on this MCU">&#9888; Install anyway</button>`
                 : `<button class="lib-action green" onclick="send('install','${lib.name}')">Install</button>`;
+            const warn = bad
+                ? `<div class="lib-incompat">&#9888; ${[...c!.reasons, c!.note].filter(Boolean).join(' - ')}</div>`
+                : '';
             return `
             <tr class="${on ? 'installed' : ''}">
-              <td><span class="lib-name">${lib.name}</span>${on ? ' <span class="badge">INSTALLED</span>' : ''}</td>
-              <td>${lib.desc}</td>
+              <td><span class="lib-name">${lib.name}</span>${on ? ' <span class="badge">INSTALLED</span>' : bad ? ' <span class="badge" style="background:#3a2a12;border-color:#e2b340;color:#e2b340">N/A</span>' : ''}</td>
+              <td>${lib.desc}${warn}</td>
               <td>${lib.tags.map(t => `<span class="tag">${t}</span>`).join('')}</td>
               <td>${btn}</td>
             </tr>`;
@@ -358,7 +445,9 @@ body{background:var(--bg);color:var(--text);font:13px/1.5 'Segoe UI',-apple-syst
 .lib-action.green{background:var(--green);color:#000}
 .lib-action.blue{background:var(--blue);color:#000}
 .lib-action.red{background:transparent;border:1px solid var(--red);color:var(--red)}
+.lib-action.amber{background:#4a3a12;border:1px solid #e2b340;color:#e2b340}
 .lib-action:hover{filter:brightness(1.2)}
+.lib-incompat{margin-top:4px;font-size:11px;color:#e2b340}
 
 /* BOARDS */
 .boards-wrap{padding:0}
@@ -534,7 +623,7 @@ body{background:var(--bg);color:var(--text);font:13px/1.5 'Segoe UI',-apple-syst
 
 <script>
 const vscode = acquireVsCodeApi();
-function send(cmd, arg) { vscode.postMessage({ command: cmd, name: arg, path: arg }); }
+function send(cmd, arg, force) { vscode.postMessage({ command: cmd, name: arg, path: arg, force: !!force }); }
 
 function sendPeriph(kind) {
   const sel = document.getElementById('pin-' + kind);
