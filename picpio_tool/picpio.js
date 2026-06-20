@@ -870,15 +870,24 @@ LCD_HC595: {
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 // Single source of truth for the tool version. `picpio update` re-runs the
 // GitHub installer, so bump this when publishing so users can tell old vs new.
-const PICPIO_VERSION = '1.4.0';
+const PICPIO_VERSION = '1.4.1';
 // Where `picpio update` pulls the latest installer from.
 const PICPIO_INSTALL_URL = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/install.ps1';
+// Where `picpio update --check` reads the latest published version from (the
+// PICPIO_VERSION line in the repo's picpio.js). Declared up here (not down by
+// cmdUpdate) because the CLI switch runs before that point -- a const defined
+// later would be in its temporal dead zone when `update` dispatches.
+const PICPIO_LATEST_URL = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/picpio_tool/picpio.js';
 
 const args = process.argv.slice(2);
 const cmd  = args[0];
 
 if (!cmd || cmd === '--help' || cmd === '-h') { printHelp(); process.exit(0); }
 if (cmd === '--version' || cmd === '-v') { console.log(`picpio ${PICPIO_VERSION}`); process.exit(0); }
+
+// One-line "update available" notice (from cache only, no network) on normal
+// commands. Skipped for `update`/`version` so their output stays clean.
+if (cmd !== 'update' && cmd !== 'version') { maybeNotifyUpdate(); }
 
 switch (cmd) {
     case 'build':   cmdBuild(args.slice(1));  break;
@@ -892,7 +901,7 @@ switch (cmd) {
     case 'erase':        cmdErase();               break;
     case 'install-dfp':  cmdInstallDFP(args[1]);   break;
     case 'devices':      cmdDevices(args.slice(1)); break;
-    case 'update':       cmdUpdate();               break;
+    case 'update':       cmdUpdate(args.slice(1));   break;
     case 'version':      console.log(`picpio ${PICPIO_VERSION}`); break;
     default:
         console.error(`[PICPIO] Unknown command: ${cmd}`);
@@ -900,11 +909,82 @@ switch (cmd) {
         process.exit(1);
 }
 
+// ─── UPDATE CHECK ─────────────────────────────────────────────────────────────
+// Small JSON file (next to picpio.js) caching the last update check, so the
+// per-command notice never has to hit the network: { lastCheck, latest }.
+function updateCachePath() { return path.join(path.dirname(process.argv[1]), '.update-check.json'); }
+function readUpdateCache() { try { return JSON.parse(fs.readFileSync(updateCachePath(), 'utf8')); } catch { return null; } }
+function writeUpdateCache(o) { try { fs.writeFileSync(updateCachePath(), JSON.stringify(o)); } catch { /* ignore */ } }
+
+// Compare dotted numeric versions: 1 if a>b, -1 if a<b, 0 if equal.
+function versionCmp(a, b) {
+    const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d) return d > 0 ? 1 : -1;
+    }
+    return 0;
+}
+
+// Fetches the latest published PICPIO_VERSION from GitHub (best-effort, with a
+// timeout). cb(version|null).
+function fetchLatestVersion(timeoutMs, cb) {
+    let done = false;
+    const finish = v => { if (!done) { done = true; cb(v); } };
+    try {
+        const https = require('https');
+        const req = https.get(PICPIO_LATEST_URL, { headers: { 'User-Agent': 'picpio' } }, res => {
+            if (res.statusCode !== 200) { res.resume(); return finish(null); }
+            let data = '';
+            res.on('data', d => { data += d; });
+            res.on('end', () => {
+                const m = data.match(/PICPIO_VERSION\s*=\s*'([^']+)'/);
+                finish(m ? m[1] : null);
+            });
+        });
+        req.on('error', () => finish(null));
+        req.setTimeout(timeoutMs, () => { req.destroy(); finish(null); });
+    } catch { finish(null); }
+}
+
+// Printed (to stderr, so it never corrupts a command's stdout/JSON) at the
+// start of any command when the cached latest version is newer than ours. The
+// cache is refreshed by `picpio update --check` and the VS Code extension's
+// daily check — so this notice costs no network on a normal command.
+function maybeNotifyUpdate() {
+    const c = readUpdateCache();
+    if (c && c.latest && versionCmp(c.latest, PICPIO_VERSION) > 0) {
+        console.error(`[PICPIO] Update available: v${c.latest} (you have v${PICPIO_VERSION}). Run 'picpio update'.`);
+    }
+}
+
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
-// Re-runs the GitHub installer, which refreshes the picpio CLI, the HAL
-// (picpio_compat), the bundled libraries, and the VS Code extension to the
-// latest published version. (Already-installed XC8/MPLAB X/Node are skipped.)
-function cmdUpdate() {
+// `picpio update`          -> re-runs the GitHub installer (refreshes CLI, HAL,
+//                             libraries, extension; XC8/MPLAB X/Node skipped).
+// `picpio update --check`  -> just reports whether a newer version exists.
+// `picpio update --check --json` -> machine-readable (used by the extension).
+function cmdUpdate(args) {
+    args = args || [];
+    if (args.includes('--check') || args.includes('--check-json')) {
+        const asJson = args.includes('--json') || args.includes('--check-json');
+        fetchLatestVersion(8000, latest => {
+            const available = !!(latest && versionCmp(latest, PICPIO_VERSION) > 0);
+            if (latest) writeUpdateCache({ lastCheck: Date.now(), latest });
+            if (asJson) {
+                console.log(JSON.stringify({ current: PICPIO_VERSION, latest: latest || null, updateAvailable: available }));
+            } else if (!latest) {
+                console.warn('[PICPIO] Could not check for updates (no network?).');
+            } else if (available) {
+                console.log(`[PICPIO] Update available: v${latest} (you have v${PICPIO_VERSION}). Run 'picpio update'.`);
+            } else {
+                console.log(`[PICPIO] You are on the latest version (v${PICPIO_VERSION}).`);
+            }
+            process.exit(0);
+        });
+        return;
+    }
+
     console.log(`[PICPIO] Updating PICPIO (current: v${PICPIO_VERSION})`);
     console.log(`[PICPIO] Fetching latest installer from GitHub...`);
     if (process.platform !== 'win32') {
@@ -920,6 +1000,8 @@ function cmdUpdate() {
         console.error(`[PICPIO] Update failed: ${r.error.message}`);
         process.exit(1);
     }
+    // Now on the latest -- clear the "update available" cache.
+    writeUpdateCache({ lastCheck: Date.now(), latest: PICPIO_VERSION });
     process.exit(r.status || 0);
 }
 
@@ -955,6 +1037,7 @@ Commands:
                 or DFP pack name (e.g. PIC16Fxxx_DFP).
   devices       Check whether a PICkit/ICD/Snap programmer is connected
   update        Update PICPIO (CLI, HAL, libraries, extension) to the latest
+  update --check  Check whether a newer version is available (no install)
   version       Print the installed PICPIO version
 `);
 }

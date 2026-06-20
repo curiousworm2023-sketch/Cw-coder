@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs   from 'fs';
 import * as path from 'path';
+import * as cp   from 'child_process';
 import { HomePanel }        from './homePanel';
 import { createStatusBar }  from './statusBar';
 import { TaskTreeProvider, QuickAccessProvider } from './taskTree';
@@ -258,6 +259,40 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.executeCommand('setContext', 'picpio.isActive', true);
     vscode.commands.executeCommand('setContext', 'picpio.isPicpio', isPicpioFramework(readConfig()?.framework));
     vscode.window.setStatusBarMessage('$(chip) PICPIO ready', 3000);
+
+    reg('picpio.checkUpdate', () => checkForUpdate(context, true));
+    checkForUpdate(context, false);   // throttled background check on startup
+}
+
+// Asks the CLI whether a newer PICPIO is published and, if so, shows a
+// notification with an "Update now" action. Throttled to once a day unless
+// `force` (the manual "Check for Updates" command).
+function checkForUpdate(context: vscode.ExtensionContext, force: boolean): void {
+    const DAY = 24 * 60 * 60 * 1000;
+    const last = context.globalState.get<number>('picpio.lastUpdateCheck', 0);
+    if (!force && Date.now() - last < DAY) return;
+
+    const exe = vscode.workspace.getConfiguration('picpio').get<string>('executablePath', 'picpio');
+    cp.exec(`${exe} update --check --json`, { timeout: 12000 }, (err, stdout) => {
+        // Record the attempt regardless, so a transient failure doesn't re-check
+        // on every activation.
+        context.globalState.update('picpio.lastUpdateCheck', Date.now());
+        if (err) { if (force) vscode.window.showWarningMessage('PICPIO: could not check for updates.'); return; }
+
+        let info: { current?: string; latest?: string; updateAvailable?: boolean } = {};
+        try { info = JSON.parse((stdout.trim().split('\n').pop() || '{}')); } catch { return; }
+
+        if (!info.updateAvailable || !info.latest) {
+            if (force) vscode.window.showInformationMessage(`PICPIO is up to date (v${info.current ?? '?'}).`);
+            return;
+        }
+        vscode.window.showInformationMessage(
+            `PICPIO ${info.latest} is available (you have ${info.current}).`,
+            'Update now', 'Later',
+        ).then(pick => {
+            if (pick === 'Update now') vscode.commands.executeCommand('picpio.runTask', 'update');
+        });
+    });
 }
 
 export function deactivate(): void {

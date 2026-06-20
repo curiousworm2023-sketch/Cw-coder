@@ -2,7 +2,7 @@
   "name": "picpio",
   "displayName": "PICPIO",
   "description": "PIC Microcontroller IDE — Build, Flash, Libraries, Serial Monitor",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publisher": "picpio",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Other"],
@@ -34,7 +34,8 @@
       { "command": "picpio.insertI2C",     "title": "+ I2C",                 "category": "PICPIO", "icon": "$(sync)" },
       { "command": "picpio.insertPWM",     "title": "+ PWM",                 "category": "PICPIO", "icon": "$(zap)" },
       { "command": "picpio.simulate",      "title": "Simulate",              "category": "PICPIO", "icon": "$(pulse)" },
-      { "command": "picpio.pidTune",       "title": "Auto PID Tuning",       "category": "PICPIO", "icon": "$(settings-gear)" }
+      { "command": "picpio.pidTune",       "title": "Auto PID Tuning",       "category": "PICPIO", "icon": "$(settings-gear)" },
+      { "command": "picpio.checkUpdate",    "title": "Check for Updates",     "category": "PICPIO", "icon": "$(cloud-download)" }
     ],
     "viewsContainers": {
       "activitybar": [
