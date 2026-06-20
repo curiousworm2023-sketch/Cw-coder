@@ -154,6 +154,44 @@ foreach ($f in @('Picpio.h','wiring.c','main_entry.c')) {
     }
 }
 
+# Bundled libraries + the extra HAL variants for non-K40 PIC families. These are
+# whole folders, so rather than hardcode every file we list the repo once via
+# the GitHub tree API and pull each file from raw (raw downloads aren't rate
+# limited). Without this, `lib add` has nothing to copy and non-K40 MCUs have no
+# HAL on a fresh install.
+$REPO_API = 'https://api.github.com/repos/curiousworm2023-sketch/Cw-coder/git/trees/main?recursive=1'
+$repoTree = $null
+try {
+    $repoTree = (Invoke-RestMethod $REPO_API -Headers @{ 'User-Agent' = 'picpio-installer' } -UseBasicParsing).tree
+} catch {
+    Write-Warn "Could not list repo via GitHub API: $($_.Exception.Message)"
+    Write-Warn "Libraries / extra HAL variants may be missing — re-run later or 'picpio update'."
+}
+
+function Save-RepoTree($prefix, $destBase) {
+    if (-not $repoTree) { return 0 }
+    $blobs = $repoTree | Where-Object { $_.type -eq 'blob' -and $_.path -like "$prefix/*" }
+    foreach ($b in $blobs) {
+        $rel  = $b.path.Substring($prefix.Length + 1)
+        $dest = Join-Path $destBase $rel
+        New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+        try { Invoke-WebRequest "$REPO_RAW/$($b.path)" -OutFile $dest -UseBasicParsing }
+        catch { Write-Skip "  skipped: $($b.path)" }
+    }
+    return ($blobs | Measure-Object).Count
+}
+
+if ($repoTree) {
+    [void](Save-RepoTree 'picpio_tool/libraries' "$INSTALL_DIR\libraries")
+    $libCount = if (Test-Path "$INSTALL_DIR\libraries") { (Get-ChildItem -Directory "$INSTALL_DIR\libraries").Count } else { 0 }
+    Write-Info "Bundled libraries -> $INSTALL_DIR\libraries ($libCount libraries)"
+
+    foreach ($variant in 'picpio_compat_pic16','picpio_compat_pic16f1','picpio_compat_pic18_classic','picpio_compat_pic24','picpio_compat_pic30f','picpio_compat_dspic33e') {
+        [void](Save-RepoTree "picpio_tool/$variant" "$INSTALL_DIR\$variant")
+    }
+    Write-Info "HAL variants for PIC16/PIC18-classic/PIC24/dsPIC installed"
+}
+
 # STEP 5 - PATH
 Write-Step 5 "System PATH"
 $machine = [System.Environment]::GetEnvironmentVariable('PATH','Machine')

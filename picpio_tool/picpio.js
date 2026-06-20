@@ -32,12 +32,118 @@ const PACK_INDEX_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // ─── LIB REGISTRY ────────────────────────────────────────────────────────────
 // Bundled libraries live in picpio_tool/libraries/<DirName>/ as plain-C sources
 // (struct + function API) written against the PICPIO HAL.
-const BUNDLED_LIBS = [
-    'PID', 'PIDTune', 'SSD1306', 'LiquidCrystal_I2C', 'ADS1115', 'ADS1219', 'PCF8575', 'LCD_HC595',
-    'BME280', 'SHT31', 'MCP23017', 'MCP4725', 'DS3231',
-    'dht22','ds18b20','servo','encoder',
-    'wire','spi','hardwareserial','at24c256','keypad','mpu6050','bmp280'
-];
+// The set of bundled libraries is discovered at runtime by scanning the
+// libraries/ folders that ship with picpio (plus any project-local
+// libraries/ dir) — the same search paths libAdd() copies from. This keeps
+// the advertised list exactly in sync with the libraries that actually exist
+// and can be installed, so `lib search` / the Library Manager never offer a
+// library that would then fail to add. Drop a new <Name>/ folder under
+// picpio_tool/libraries/ and it shows up automatically.
+function bundledLibSearchPaths() {
+    const scriptDir = path.dirname(process.argv[1]);
+    return [
+        path.join(process.cwd(), 'libraries'),
+        path.join(scriptDir, 'libraries'),
+        path.join(scriptDir, '..', 'libraries'),
+    ];
+}
+
+function listBundledLibs() {
+    const seen = new Map(); // lowercase key -> first-seen display name
+    for (const base of bundledLibSearchPaths()) {
+        if (!fs.existsSync(base)) continue;
+        for (const d of fs.readdirSync(base)) {
+            try { if (!fs.statSync(path.join(base, d)).isDirectory()) continue; }
+            catch { continue; }
+            const key = d.toLowerCase();
+            if (!seen.has(key)) seen.set(key, d);
+        }
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// ─── LIB COMPATIBILITY ───────────────────────────────────────────────────────
+// Before installing a bundled library we check it against the project's MCU.
+// A library's hardware needs are inferred from its source (which HAL objects it
+// calls) unless it ships a library.json that overrides them. Anything we can't
+// determine is treated as compatible — we never block on a guess.
+//
+// library.json (all fields optional):
+//   { "requires": ["i2c","spi"],     // peripherals the chip must have
+//     "families": ["PIC18","PIC24"], // whitelist (omit = any family)
+//     "excludeFamilies": ["PIC16"],  // blacklist
+//     "note": "Needs >=8KB RAM" }    // human hint shown with the warning
+
+// Supported parts that physically lack a peripheral. The PIC16F62x/PIC16F84
+// have no MSSP (USART only / nothing), so they can't run hardware I2C or SPI.
+const MCU_MISSING_PERIPH = {
+    i2c:  [/PIC16F62[78]/i, /PIC16F84/i],
+    spi:  [/PIC16F62[78]/i, /PIC16F84/i],
+    uart: [/PIC16F84A?$/i],
+};
+
+function mcuHasPeriph(mcu, periph) {
+    return !(MCU_MISSING_PERIPH[periph] || []).some(re => re.test(mcu || ''));
+}
+
+function findLibDir(name) {
+    const lname = (name || '').toLowerCase();
+    for (const base of bundledLibSearchPaths()) {
+        if (!fs.existsSync(base)) continue;
+        const d = fs.readdirSync(base).find(e =>
+            e.toLowerCase() === lname && fs.statSync(path.join(base, e)).isDirectory());
+        if (d) return path.join(base, d);
+    }
+    return null;
+}
+
+function readLibManifest(dir) {
+    const f = path.join(dir, 'library.json');
+    if (!fs.existsSync(f)) return {};
+    try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; }
+}
+
+// Infer required peripherals from which HAL objects the library's source calls.
+function inferLibRequires(dir) {
+    let src = '';
+    for (const f of fs.readdirSync(dir)) {
+        if (/\.(c|h|cpp|hpp)$/i.test(f)) {
+            try { src += fs.readFileSync(path.join(dir, f), 'utf8'); } catch { /* skip */ }
+        }
+    }
+    const req = [];
+    if (/\b(?:i2c1|i2c2|Wire2?)\s*\./.test(src))     req.push('i2c');
+    if (/\b(?:SPI2?)\s*\./.test(src))                req.push('spi');
+    if (/\b(?:uart1|uart2|Serial2?)\s*\./.test(src)) req.push('uart');
+    return req;
+}
+
+// Returns { ok, reasons:[...], note }. Non-bundled names (github:/http/unknown)
+// are reported ok — we can't inspect them.
+function checkLibCompat(name, cfg) {
+    const dir = findLibDir(name);
+    if (!dir) return { ok: true, reasons: [], note: '' };
+    const man     = readLibManifest(dir);
+    const mcu     = (cfg && cfg.mcu) || '';
+    const family  = ((cfg && cfg.family) || '').toUpperCase();
+    const reasons = [];
+
+    const requires = Array.isArray(man.requires) ? man.requires : inferLibRequires(dir);
+    for (const p of requires) {
+        if (!mcuHasPeriph(mcu, p)) {
+            reasons.push(`${mcu || 'this MCU'} has no hardware ${p.toUpperCase()} (required by this library)`);
+        }
+    }
+    if (Array.isArray(man.families) && man.families.length &&
+        !man.families.some(f => f.toUpperCase() === family)) {
+        reasons.push(`supported only on ${man.families.join(', ')} (project family is ${family || 'unknown'})`);
+    }
+    if (Array.isArray(man.excludeFamilies) &&
+        man.excludeFamilies.some(f => f.toUpperCase() === family)) {
+        reasons.push(`not supported on ${family}`);
+    }
+    return { ok: reasons.length === 0, reasons, note: man.note || '' };
+}
 
 // Starter usage snippets injected into src/main.cpp when a bundled library
 // with a known API (the picpio_tool/libraries/<Name>/ ports) is installed
@@ -179,28 +285,600 @@ const LIB_SNIPPETS = {
         }),
         loop: [],
     },
-    LCD_HC595: {
-        include: '#include "LCD_HC595.h"',
-        globals: [
-            'LCD595_t lcd595;',
-        ],
-        setup: [
-            'LCD595_init(&lcd595, D6, D7, D8);',
-            'LCD595_begin(&lcd595, 16, 2);',
-            'LCD595_backlight(&lcd595, true);',
-            'LCD595_setCursor(&lcd595, 0, 0);',
-            'LCD595_print(&lcd595, "Hello, World!");',
-        ],
-        loop: [],
-    },
+LCD_HC595: {
+         include: '#include "LCD_HC595.h"',
+         globals: [
+             'LCD595_t lcd595;',
+         ],
+         setup: [
+             'LCD595_init(&lcd595, D6, D7, D8);',
+             'LCD595_begin(&lcd595, 16, 2);',
+             'LCD595_backlight(&lcd595, true);',
+             'LCD595_setCursor(&lcd595, 0, 0);',
+             'LCD595_print(&lcd595, "Hello, World!");',
+         ],
+         loop: [],
+     },
+     // ─── DISPLAYS ───────────────────────────────────────────────────────────────
+     SH110X: {
+         include: '#include "SH110X.h"',
+         globals: ['SH110X_t oled;', 'uint8_t oled_buf[1024];'],
+         setup: [
+             'Wire.begin();',
+             'SH110X_init(&oled, 0x3C, 128, 64, oled_buf);',
+             'SH110X_begin(&oled);',
+             'SH110X_clearDisplay(&oled);',
+             'SH110X_display(&oled);',
+         ],
+         loop: [],
+     },
+     ILI9341: {
+         include: '#include "ILI9341.h"',
+         globals: ['ILI9341_t tft;'],
+         setup: [
+             'SPI.begin();',
+             'ILI9341_init(&tft, D10, D9, D8); // CS, DC, RST',
+             'ILI9341_begin(&tft, 240, 320);',
+'ILI9341_fillScreen(&tft, ILI9341_BLACK);',
+          ],
+          loop: [],
+      },
+      XPT2046: {
+          include: '#include "XPT2046.h"',
+          globals: ['XPT2046_t touch;'],
+          setup: [
+              'SPI.begin();',
+              'XPT2046_init(&touch, D7, D6); // CS, IRQ',
+          ],
+          loop: [
+              'if (XPT2046_touched(&touch)) {',
+              '    uint16_t tx, ty;',
+              '    XPT2046_read(&touch, &tx, &ty);',
+              '}',
+          ],
+      },
+      ST7735: {
+         include: '#include "ST7735.h"',
+         globals: ['ST7735_t tft;'],
+         setup: [
+             'SPI.begin();',
+             'ST7735_init(&tft, D10, D9, D8); // CS, DC, RST',
+             'ST7735_begin(&tft, 128, 160);',
+             'ST7735_fillScreen(&tft, 0x0000);',
+         ],
+         loop: [],
+     },
+     ST7789: {
+         include: '#include "ST7789.h"',
+         globals: ['ST7789_t tft;'],
+         setup: [
+             'SPI.begin();',
+             'ST7789_init(&tft, D10, D9, D8); // CS, DC, RST',
+             'ST7789_begin(&tft, 240, 240);',
+'ST7789_fillScreen(&tft, 0x0000);',
+          ],
+          loop: [],
+      },
+      LVGL: {
+          include: '#include "lv_conf.h"',
+          globals: [
+              'lv_disp_draw_buf_t draw_buf;',
+              'static lv_color_t buf1[LV_HOR_RES * 10];',
+              'lv_disp_drv_t disp_drv;',
+              'lv_indev_drv_t indev_drv;',
+          ],
+          setup: [
+              '// WARNING: LVGL needs 8KB+ RAM. Most PIC16/PIC18 have 2-4KB.',
+              '// Use PIC24/dsPIC or PIC32 for LVGL projects.',
+              '// Download LVGL to lib/LVGL/, then add lv_port_disp.c and lv_port_indev.c',
+              '// to your project. Call lv_port_disp_init(&tft) and lv_port_indev_init(&touch).',
+          ],
+          loop: [
+              'lv_timer_handler(); // Call periodically to handle LVGL tasks',
+              'sys_delay(5); // LVGL tick requires ~5ms delay minimum',
+          ],
+      },
+      DWIN: {
+          include: '#include "DWIN.h"',
+          globals: ['DWIN_t dwin;'],
+          setup: [
+              'Serial.begin(115200);',
+              'DWIN_init(&dwin);',
+          ],
+          loop: [
+              '// DWIN_setText(&dwin, page, widget, "text");',
+              '// DWIN_setValue(&dwin, addr, value);',
+          ],
+      },
+      DotStar: {
+         include: '#include "DotStar.h"',
+         globals: ['DotStar_t strip;'],
+         setup: [
+             'SPI.begin();',
+             'DotStar_init(&strip, 16, D10, D11);',
+             'DotStar_setPixelColor(&strip, 0, 255, 0, 0);',
+             'DotStar_show(&strip);',
+         ],
+         loop: [],
+     },
+     NeoPixel: {
+         include: '#include "NeoPixel.h"',
+         define: '#define LED_PIN D5\n#define LED_COUNT 16',
+         globals: ['NeoPixel_t strip;'],
+         setup: [
+             'NeoPixel_init(&strip, LED_COUNT, LED_PIN);',
+             'NeoPixel_begin(&strip);',
+             'NeoPixel_setPixelColor(&strip, 0, 255, 0, 0);',
+             'NeoPixel_show(&strip);',
+         ],
+         loop: [],
+     },
+     HT16K33: {
+         include: '#include "HT16K33.h"',
+         globals: ['HT16K33_t matrix;'],
+         setup: [
+             'Wire.begin();',
+             'HT16K33_begin(&matrix, 0x70);',
+         ],
+         loop: [
+             'HT16K33_drawPixel(&matrix, 0, 0, true);',
+             'HT16K33_writeDisplay(&matrix);',
+         ],
+     },
+     TLC5947: {
+         include: '#include "TLC5947.h"',
+         globals: ['TLC5947_t tlc;'],
+         setup: [
+             'SPI.begin();',
+             'TLC5947_init(&tlc, 1, D10, D9); // 1 board, DIN/CLK on SPI, LAT=D10, OE=D9',
+             'TLC5947_begin(&tlc);',
+         ],
+         loop: [
+             'TLC5947_setPWM(&tlc, 0, 4095);',
+             'TLC5947_write(&tlc);',
+         ],
+     },
+     // ─── ENVIRONMENTAL SENSORS ───────────────────────────────────────────────────
+     BME280: {
+         include: '#include "BME280.h"',
+         globals: ['BME280_t bme280;'],
+         setup: [
+             'Wire.begin();',
+             'BME280_init(&bme280, 0x77);',
+             'BME280_begin(&bme280);',
+         ],
+         loop: [
+             'float temp = BME280_readTemperature(&bme280);',
+             'float pres = BME280_readPressure(&bme280);',
+             'float hum  = BME280_readHumidity(&bme280);',
+         ],
+     },
+     BME680: {
+         include: '#include "BME680.h"',
+         globals: ['BME680_t bme680;'],
+         setup: [
+             'Wire.begin();',
+             'BME680_init(&bme680, 0x77);',
+             'BME680_begin(&bme680);',
+         ],
+         loop: [
+             'float temperature = BME680_readTemperature(&bme680);',
+             'float gas_res = BME680_readGas(&bme680);',
+         ],
+     },
+     BMP280: {
+         include: '#include "BMP280.h"',
+         globals: ['BMP280_t bmp;'],
+         setup: [
+             'Wire.begin();',
+             'BMP280_init(&bmp, 0x77);',
+             'BMP280_begin(&bmp);',
+         ],
+         loop: [
+             'float temp = BMP280_readTemperature(&bmp);',
+             'float pres = BMP280_readPressure(&bmp) / 100.0; // hPa',
+         ],
+     },
+     BMP3XX: {
+         include: '#include "BMP3XX.h"',
+         globals: ['BMP3XX_t bmp;'],
+         setup: [
+             'Wire.begin();',
+             'BMP3XX_init(&bmp, 0x77);',
+             'BMP3XX_begin(&bmp);',
+         ],
+         loop: [
+             'float temp = BMP3XX_readTemperature(&bmp);',
+             'float pres = BMP3XX_readPressure(&bmp) / 100.0; // hPa',
+         ],
+     },
+     DPS310: {
+         include: '#include "DPS310.h"',
+         globals: ['DPS310_t dps;'],
+         setup: [
+             'Wire.begin();',
+             'DPS310_init(&dps, 0x77);',
+             'DPS310_begin(&dps);',
+         ],
+         loop: [
+             'float pressure = DPS310_readPressure(&dps);',
+             'float temperature = DPS310_readTemperature(&dps);',
+         ],
+     },
+     LPS22: {
+         include: '#include "LPS22.h"',
+         globals: ['LPS22_t lps;'],
+         setup: [
+             'Wire.begin();',
+             'LPS22_init(&lps);',
+             'LPS22_begin(&lps);',
+         ],
+         loop: [
+             'float pres = LPS22_readPressure(&lps);',
+             'float temp = LPS22_readTemperature(&lps);',
+         ],
+     },
+     LPS25: {
+         include: '#include "LPS25.h"',
+         globals: ['LPS25_t lps;'],
+         setup: [
+             'Wire.begin();',
+             'LPS25_init(&lps);',
+             'LPS25_begin(&lps);',
+         ],
+         loop: [
+             'float pres = LPS25_readPressure(&lps);',
+             'float temp = LPS25_readTemperature(&lps);',
+         ],
+     },
+     SHT31: {
+         include: '#include "SHT31.h"',
+         globals: ['SHT31_t sht;'],
+         setup: [
+             'Wire.begin();',
+             'SHT31_begin(&sht, SHT31_ADDR);',
+         ],
+         loop: [
+             'float temp = SHT31_readTemperature(&sht);',
+             'float hum = SHT31_readHumidity(&sht);',
+         ],
+     },
+     SHT4x: {
+         include: '#include "SHT4x.h"',
+         globals: ['SHT4x_t sht;'],
+         setup: [
+             'Wire.begin();',
+             'SHT4x_init(&sht, 0x44);',
+         ],
+         loop: [
+             'float temp, hum;',
+             'SHT4x_getEvent(&sht, &temp, &hum);',
+         ],
+     },
+     AHT10: {
+         include: '#include "AHT10.h"',
+         globals: ['AHT10_t aht;'],
+         setup: [
+             'Wire.begin();',
+             'AHT10_init(&aht);',
+         ],
+         loop: [
+             'float temp = AHT10_readTemperature(&aht);',
+             'float hum = AHT10_readHumidity(&aht);',
+         ],
+     },
+     AHT20: {
+         include: '#include "AHT20.h"',
+         globals: ['AHT20_t aht;'],
+         setup: [
+             'Wire.begin();',
+             'AHT20_begin(&aht);',
+         ],
+         loop: [
+             'float temp, hum;',
+             'AHT20_getEvent(&aht, &temp, &hum);',
+         ],
+     },
+     HTS221: {
+         include: '#include "HTS221.h"',
+         globals: ['HTS221_t hts;'],
+         setup: [
+             'Wire.begin();',
+             'HTS221_init(&hts);',
+         ],
+         loop: [
+             'float temp = HTS221_readTemperature(&hts);',
+             'float hum = HTS221_readHumidity(&hts);',
+         ],
+     },
+     HDC1000: {
+         include: '#include "HDC1000.h"',
+         globals: ['HDC1000_t hdc;'],
+         setup: [
+             'Wire.begin();',
+             'HDC1000_init(&hdc);',
+         ],
+         loop: [
+             'float temp = HDC1000_readTemperature(&hdc);',
+             'float hum = HDC1000_readHumidity(&hdc);',
+         ],
+     },
+     SI7021: {
+         include: '#include "SI7021.h"',
+         globals: ['SI7021_t si;'],
+         setup: [
+             'Wire.begin();',
+             'SI7021_begin(&si);',
+         ],
+         loop: [
+             'float temp = SI7021_readTemperature(&si);',
+             'float hum = SI7021_readHumidity(&si);',
+         ],
+     },
+     // ─── MOTION / IMU ────────────────────────────────────────────────────────────
+     mpu6050: {
+         include: '#include "mpu6050.h"',
+         globals: ['MPU6050_t mpu;'],
+         setup: [
+             'Wire.begin();',
+             'MPU6050_init(&mpu, 0x68);',
+             'MPU6050_begin(&mpu);',
+         ],
+         loop: [
+             'float ax, ay, az;',
+             'MPU6050_getAccel(&mpu, &ax, &ay, &az);',
+         ],
+     },
+     MPU9250: {
+         include: '#include "MPU9250.h"',
+         globals: ['MPU9250_t imu;'],
+         setup: [
+             'Wire.begin();',
+             'MPU9250_begin(&imu, 0x68);',
+         ],
+         loop: [
+             'float ax, ay, az, gx, gy, gz, mx, my, mz;',
+             'MPU9250_readAccel(&imu, &ax, &ay, &az);',
+             'MPU9250_readMag(&imu, &mx, &my, &mz);',
+         ],
+     },
+     ICM20948: {
+         include: '#include "ICM20948.h"',
+         globals: ['ICM20948_t imu;'],
+         setup: [
+             'Wire.begin();',
+             'ICM20948_init(&imu);',
+             'ICM20948_begin(&imu);',
+         ],
+         loop: [
+             'float ax, ay, az;',
+             'ICM20948_readAccel(&imu, &ax, &ay, &az);',
+         ],
+     },
+     LSM6DS3: {
+         include: '#include "LSM6DS3.h"',
+         globals: ['LSM6DS3_t lsm;'],
+         setup: [
+             'Wire.begin();',
+             'LSM6DS3_init(&lsm, 0x6A);',
+             'LSM6DS3_begin(&lsm);',
+         ],
+         loop: [
+             'float ax, ay, az, gx, gy, gz;',
+             'LSM6DS3_readAcceleration(&lsm, &ax, &ay, &az);',
+             'LSM6DS3_readGyroscope(&lsm, &gx, &gy, &gz);',
+         ],
+     },
+     BNO055: {
+         include: '#include "BNO055.h"',
+         globals: ['BNO055_t bno;'],
+         setup: [
+             'Wire.begin();',
+             'BNO055_init(&bno, 0x28);',
+             'BNO055_begin(&bno, BNO055_OPERATION_MODE_NDOF);',
+         ],
+         loop: [
+             'bno_quat_t q = BNO055_getQuat(&bno);',
+         ],
+     },
+     // ─── OTHER SENSORS ───────────────────────────────────────────────────────────
+     INA219: {
+         include: '#include "INA219.h"',
+         globals: ['INA219_t ina219;'],
+         setup: [
+             'Wire.begin();',
+             'INA219_init(&ina219, 0x40);',
+             'INA219_begin(&ina219);',
+         ],
+         loop: [
+             'float bus_v = INA219_getBusVoltage_V(&ina219);',
+             'float current_ma = INA219_getCurrent_mA(&ina219);',
+         ],
+     },
+     INA260: {
+         include: '#include "INA260.h"',
+         globals: ['INA260_t ina;'],
+         setup: [
+             'Wire.begin();',
+             'INA260_init(&ina, 0x40);',
+             'INA260_begin(&ina);',
+         ],
+         loop: [
+             'float bus_v = INA260_getBusVoltage_V(&ina);',
+             'float current_ma = INA260_getCurrent_mA(&ina);',
+         ],
+     },
+     MCP4725: {
+         include: '#include "MCP4725.h"',
+         globals: ['MCP4725_t dac;'],
+         setup: [
+             'Wire.begin();',
+             'MCP4725_init(&dac, 0x60);',
+         ],
+         loop: [
+             'MCP4725_setVoltage(&dac, 2048, true); // 50% voltage (0-4095)',
+         ],
+     },
+     MCP23017: {
+         include: '#include "MCP23017.h"',
+         globals: ['MCP23017_t mcp;'],
+         setup: [
+             'Wire.begin();',
+             'MCP23017_begin(&mcp, 0x20);',
+         ],
+         loop: [
+             'MCP23017_pinMode(&mcp, 0, GPIO_OUT);',
+             'MCP23017_digitalWrite(&mcp, 0, GPIO_HIGH);',
+         ],
+     },
+     MCP23008: {
+         include: '#include "MCP23008.h"',
+         globals: ['MCP23008_t mcp;'],
+         setup: [
+             'Wire.begin();',
+             'MCP23008_init(&mcp, 0x20);',
+             'MCP23008_pinMode(&mcp, 0, GPIO_OUT);',
+         ],
+         loop: [
+             'MCP23008_digitalWrite(&mcp, 0, GPIO_HIGH);',
+             'sys_delay(500);',
+             'MCP23008_digitalWrite(&mcp, 0, GPIO_LOW);',
+             'sys_delay(500);',
+         ],
+     },
+     TCA9548A: {
+         include: '#include "TCA9548A.h"',
+         setup: [
+             'Wire.begin();',
+             'TCA9548A_selectChannel(0x70, 0); // Switch to I2C channel 0',
+         ],
+         loop: [],
+     },
+     MAX31855: {
+         include: '#include "MAX31855.h"',
+         globals: ['MAX31855_t max31855;'],
+         setup: [
+             'SPI.begin();',
+             'MAX31855_init(&max31855, D10); // CS pin D10',
+         ],
+         loop: [
+             'double temp = MAX31855_readCelsius(&max31855);',
+         ],
+     },
+     DS3231: {
+         include: '#include "DS3231.h"',
+         globals: ['DS3231_t rtc;'],
+         setup: [
+             'Wire.begin();',
+             'DS3231_init(&rtc);',
+         ],
+         loop: [
+             'DateTime_t now = DS3231_now(&rtc);',
+             'float temp = DS3231_getTemp(&rtc);',
+         ],
+     },
+     dht22: {
+         include: '#include "dht22.h"',
+         globals: ['DHT22_t dht;'],
+         setup: [
+             'DHT22_init(&dht, D2);',
+         ],
+         loop: [
+             'float hum = DHT22_readHumidity(&dht);',
+             'float tmp = DHT22_readTemperature(&dht);',
+         ],
+     },
+     // ─── PROXIMITY / DISTANCE ────────────────────────────────────────────────────
+     VL53L0X: {
+         include: '#include "VL53L0X.h"',
+         globals: ['VL53L0X_t sensor;'],
+         setup: [
+             'Wire.begin();',
+             'VL53L0X_init(&sensor);',
+             'VL53L0X_setTimeout(&sensor, 500);',
+             'VL53L0X_startContinuous(&sensor, 0);',
+         ],
+         loop: [
+             'uint16_t distance = VL53L0X_readRangeContinuousMillimeters(&sensor);',
+         ],
+     },
+     VL6180X: {
+         include: '#include "VL6180X.h"',
+         globals: ['VL6180X_t sensor;'],
+         setup: [
+             'Wire.begin();',
+             'VL6180X_init(&sensor);',
+         ],
+         loop: [
+             'uint8_t dist = VL6180X_readRange(&sensor);',
+         ],
+     },
+     // ─── LIGHT / COLOR ───────────────────────────────────────────────────────────
+     TSL2561: {
+         include: '#include "TSL2561.h"',
+         globals: ['TSL2561_t tsl;'],
+         setup: [
+             'Wire.begin();',
+             'TSL2561_init(&tsl, TSL2561_ADDR_FLOAT);',
+             'TSL2561_begin(&tsl);',
+         ],
+         loop: [
+             'uint32_t lux = TSL2561_calculateLux(&tsl);',
+         ],
+     },
+     TSL2591: {
+         include: '#include "TSL2591.h"',
+         globals: ['TSL2591_t tsl;'],
+         setup: [
+             'Wire.begin();',
+             'TSL2591_init(&tsl);',
+             'TSL2591_begin(&tsl);',
+         ],
+         loop: [
+             'uint32_t lum = TSL2591_getFullLuminosity(&tsl);',
+             'uint16_t ir = lum >> 16;',
+             'uint16_t full = lum & 0xFFFF;',
+         ],
+     },
+     TCS34725: {
+         include: '#include "TCS34725.h"',
+         globals: ['TCS34725_t tcs;'],
+         setup: [
+             'Wire.begin();',
+             'TCS34725_init(&tcs, TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);',
+             'TCS34725_begin(&tcs);',
+         ],
+         loop: [
+             'uint16_t r, g, b, c;',
+             'TCS34725_getRawData(&tcs, &r, &g, &b, &c);',
+         ],
+     },
+     APDS9960: {
+         include: '#include "APDS9960.h"',
+         globals: ['APDS9960_t apds;'],
+         setup: [
+             'Wire.begin();',
+             'APDS9960_init(&apds);',
+             'APDS9960_enableGesture(&apds, true);',
+         ],
+         loop: [
+             'uint8_t gesture = APDS9960_readGesture(&apds);',
+         ],
+     },
 };
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
+// Single source of truth for the tool version. `picpio update` re-runs the
+// GitHub installer, so bump this when publishing so users can tell old vs new.
+const PICPIO_VERSION = '1.4.0';
+// Where `picpio update` pulls the latest installer from.
+const PICPIO_INSTALL_URL = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/install.ps1';
+
 const args = process.argv.slice(2);
 const cmd  = args[0];
 
 if (!cmd || cmd === '--help' || cmd === '-h') { printHelp(); process.exit(0); }
-if (cmd === '--version' || cmd === '-v') { console.log('picpio 1.0.0'); process.exit(0); }
+if (cmd === '--version' || cmd === '-v') { console.log(`picpio ${PICPIO_VERSION}`); process.exit(0); }
 
 switch (cmd) {
     case 'build':   cmdBuild(args.slice(1));  break;
@@ -214,16 +892,41 @@ switch (cmd) {
     case 'erase':        cmdErase();               break;
     case 'install-dfp':  cmdInstallDFP(args[1]);   break;
     case 'devices':      cmdDevices(args.slice(1)); break;
+    case 'update':       cmdUpdate();               break;
+    case 'version':      console.log(`picpio ${PICPIO_VERSION}`); break;
     default:
         console.error(`[PICPIO] Unknown command: ${cmd}`);
         printHelp();
         process.exit(1);
 }
 
+// ─── UPDATE ──────────────────────────────────────────────────────────────────
+// Re-runs the GitHub installer, which refreshes the picpio CLI, the HAL
+// (picpio_compat), the bundled libraries, and the VS Code extension to the
+// latest published version. (Already-installed XC8/MPLAB X/Node are skipped.)
+function cmdUpdate() {
+    console.log(`[PICPIO] Updating PICPIO (current: v${PICPIO_VERSION})`);
+    console.log(`[PICPIO] Fetching latest installer from GitHub...`);
+    if (process.platform !== 'win32') {
+        console.error('[PICPIO] Auto-update is only supported on Windows.');
+        console.error(`         Re-run the installer manually: ${PICPIO_INSTALL_URL}`);
+        process.exit(1);
+    }
+    const r = cp.spawnSync('powershell.exe', [
+        '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-Command', `iex (irm ${PICPIO_INSTALL_URL})`,
+    ], { stdio: 'inherit' });
+    if (r.error) {
+        console.error(`[PICPIO] Update failed: ${r.error.message}`);
+        process.exit(1);
+    }
+    process.exit(r.status || 0);
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function printHelp() {
     console.log(`
-PICPIO - PIC Microcontroller Build Tool v1.0.0
+PICPIO - PIC Microcontroller Build Tool v${PICPIO_VERSION}
 
 Usage: picpio <command> [options]
 
@@ -239,6 +942,8 @@ Commands:
                 SSD1306 displays at different I2C addresses) instead of one
   lib remove    <name>
   lib list      List installed libraries
+  lib search    [query]  List available bundled libraries
+  lib check     <name>   Check if a library is compatible with this MCU
   lib update    Update library registry
   init          Create a new project (use --name --mcu --family etc.)
   reference     (Re)generate REFERENCE.md (pin map + API) and DATASHEET.md
@@ -249,6 +954,8 @@ Commands:
                 Accepts any device part number (e.g. PIC16F877A)
                 or DFP pack name (e.g. PIC16Fxxx_DFP).
   devices       Check whether a PICkit/ICD/Snap programmer is connected
+  update        Update PICPIO (CLI, HAL, libraries, extension) to the latest
+  version       Print the installed PICPIO version
 `);
 }
 
@@ -1092,7 +1799,7 @@ function scaffoldMainUsage(dirEntry, count) {
 
 function cmdLib(args) {
     const sub = args[0];
-    if (!sub) { console.log('Usage: picpio lib <add|remove|list|update>'); return; }
+    if (!sub) { console.log('Usage: picpio lib <add|remove|list|search|check|update>'); return; }
 
     if (sub === 'list') {
         const libDir = path.join(process.cwd(), 'lib');
@@ -1114,7 +1821,34 @@ function cmdLib(args) {
         if (!name) { console.error('[PICPIO] Usage: picpio lib add <name>'); process.exit(1); }
         const countIdx = args.indexOf('--count');
         const count = countIdx >= 0 ? (parseInt(args[countIdx + 1], 10) || 1) : 1;
-        libAdd(name, count);
+        const force = args.includes('--force') || args.includes('-f');
+        libAdd(name, count, force);
+        return;
+    }
+
+    // Report whether a library is compatible with the current project's MCU
+    // without installing it. `--json` prints machine-readable output for the
+    // whole registry (used by the VS Code Library Manager).
+    if (sub === 'check') {
+        const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+        if (args.includes('--json')) {
+            const out = listBundledLibs().map(n => {
+                const c = checkLibCompat(n, cfg);
+                return { name: n, ok: c.ok, reasons: c.reasons, note: c.note };
+            });
+            console.log(JSON.stringify(out));
+            return;
+        }
+        const name = args[1];
+        if (!name) { console.error('[PICPIO] Usage: picpio lib check <name> [--json]'); process.exit(1); }
+        const c = checkLibCompat(name, cfg);
+        if (c.ok) {
+            console.log(`[PICPIO] '${name}' is compatible with ${cfg ? cfg.mcu : 'this project'}.`);
+        } else {
+            console.warn(`[PICPIO] '${name}' may NOT be compatible with ${cfg ? cfg.mcu : 'this project'}:`);
+            c.reasons.forEach(r => console.warn(`         - ${r}`));
+            if (c.note) console.warn(`         note: ${c.note}`);
+        }
         return;
     }
 
@@ -1127,19 +1861,43 @@ function cmdLib(args) {
 
     if (sub === 'search') {
         const q = (args[1] || '').toLowerCase();
+        const libs = listBundledLibs().filter(l => !q || l.toLowerCase().includes(q));
+        if (!libs.length) {
+            console.log(q
+                ? `[PICPIO] No bundled library matches "${args[1]}".`
+                : '[PICPIO] No bundled libraries found.');
+            return;
+        }
         console.log('[PICPIO] Available libraries:');
-        BUNDLED_LIBS
-            .filter(l => !q || l.toLowerCase().includes(q))
-            .forEach(l => console.log(`  ${l}`));
+        libs.forEach(l => console.log(`  ${l}`));
         return;
     }
 
     console.error(`[PICPIO] Unknown lib subcommand: ${sub}`);
 }
 
-function libAdd(name, count) {
+function libAdd(name, count, force) {
     const libDir = path.join(process.cwd(), 'lib');
     fs.mkdirSync(libDir, { recursive: true });
+
+    // Compatibility guard: warn (and stop) if the bundled library can't run on
+    // the project's MCU. Skipped for github:/http downloads (can't inspect) and
+    // overridable with --force.
+    if (!name.startsWith('github:') && !name.startsWith('http')) {
+        const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+        const compat = checkLibCompat(name, cfg);
+        if (!compat.ok) {
+            console.warn(`[PICPIO] '${name}' may NOT be compatible with ${cfg ? cfg.mcu : 'this project'}:`);
+            compat.reasons.forEach(r => console.warn(`         - ${r}`));
+            if (compat.note) console.warn(`         note: ${compat.note}`);
+            if (!force) {
+                console.warn(`         Not installed. Re-run with --force to install anyway:`);
+                console.warn(`           picpio lib add ${name} --force`);
+                return;
+            }
+            console.warn(`         --force given: installing anyway.`);
+        }
+    }
 
     // GitHub shorthand
     if (name.startsWith('github:')) {

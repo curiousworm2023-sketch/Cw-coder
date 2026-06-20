@@ -28,6 +28,7 @@ export function createStatusBar(context: vscode.ExtensionContext): void {
     btn('picpio.upload',        '$(arrow-right)',      'Upload (Ctrl+Alt+U)',      108, '#569CD6');
     btn('picpio.clean',         '$(trash)',            'Clean',                    107);
     btn('picpio.cleanBuild',    '$(debug-restart)',    'Clean Build (Ctrl+Alt+R)', 106, '#C586C0');
+    btn('picpio.cleanBuildUpload','$(run-all)',        'Clean + Build + Upload',   105.5, '#D7BA7D');
     btn('picpio.serialMonitor', '$(plug)',             'Serial Monitor (Ctrl+Alt+S)', 105, '#CE9178');
     btn('picpio.openCli',       '$(terminal)',         'Open CLI Terminal',        104);
 

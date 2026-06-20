@@ -26,7 +26,7 @@ const PIN_MACROS: Record<string, number> = {
     D0: 0, D1: 1, D2: 2, D3: 3, D4: 4, D5: 5, D6: 6, D7: 7,
     D8: 8, D9: 9, D10: 10, D11: 11, D12: 12, D13: 13,
     A0: 14, A1: 15, A2: 16, A3: 17, A4: 18, A5: 19,
-    LED_BUILTIN: 13,
+    LED_BUILTIN: 13, BUILTIN_LED: 13,
 };
 
 export function detectComponents(src: string): AutoPart[] {
@@ -51,18 +51,21 @@ export function detectComponents(src: string): AutoPart[] {
     const inputPins  = new Set<string>();
     const analogPins = new Set<string>();
 
-    for (const m of s.matchAll(/pinMode\s*\(\s*(\w+)\s*,\s*(OUTPUT|INPUT_PULLUP|INPUT)\s*\)/g)) {
+    // Accept both the Arduino-style names (pinMode/OUTPUT) and the canonical
+    // PICPIO API (gpio_mode/GPIO_OUT) — see picpio_compat's Picpio.h aliases.
+    for (const m of s.matchAll(/(?:pinMode|gpio_mode)\s*\(\s*(\w+)\s*,\s*(OUTPUT|GPIO_OUT|INPUT_PULLUP|GPIO_PULLUP|INPUT|GPIO_IN)\s*\)/g)) {
         const label = resolvePin(m[1]);
         if (!label) continue;
-        if (m[2] === 'OUTPUT') outputPins.add(label);
+        if (m[2] === 'OUTPUT' || m[2] === 'GPIO_OUT') outputPins.add(label);
         else inputPins.add(label);
     }
-    // digitalWrite/analogWrite without an explicit pinMode still implies an output.
-    for (const m of s.matchAll(/(?:digitalWrite|analogWrite)\s*\(\s*(\w+)\s*,/g)) {
+    // digitalWrite/analogWrite (gpio_write/pwm_write) without an explicit
+    // pinMode still implies an output.
+    for (const m of s.matchAll(/(?:digitalWrite|gpio_write|analogWrite|pwm_write)\s*\(\s*(\w+)\s*,/g)) {
         const label = resolvePin(m[1]);
         if (label && !inputPins.has(label)) outputPins.add(label);
     }
-    for (const m of s.matchAll(/analogRead\s*\(\s*(\w+)\s*\)/g)) {
+    for (const m of s.matchAll(/(?:analogRead|adc_read)\s*\(\s*(\w+)\s*\)/g)) {
         const label = resolvePin(m[1]);
         if (label) analogPins.add(label);
     }
@@ -130,6 +133,8 @@ const PERIPHERAL_PINS: Record<string, [pin: string, role: string][]> = {
     SPI2:    [['RB2', 'SCK'],  ['RB3', 'MOSI'], ['RB4', 'MISO']],
     Serial:  [['RC6', 'TX'],   ['RC7', 'RX']],
     Serial2: [['RC0', 'TX'],   ['RC1', 'RX']],
+    uart1:   [['RC6', 'TX'],   ['RC7', 'RX']],
+    uart2:   [['RC0', 'TX'],   ['RC1', 'RX']],
 };
 
 // Instance number suffixed onto each role below to form a datasheet-style
@@ -138,6 +143,7 @@ const PERIPHERAL_INSTANCE: Record<string, string> = {
     Wire: '1', Wire2: '2',
     SPI: '1', SPI2: '2',
     Serial: '1', Serial2: '2',
+    uart1: '1', uart2: '2',
 };
 
 // Signal-name prefix -> bus type, for recognising a bare signal name like

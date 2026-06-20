@@ -299,6 +299,21 @@ const baseGlobals: Record<string, unknown> = {
     pinMode, digitalWrite, digitalRead, analogWrite, analogRead,
     delay, delayMicroseconds, millis, micros,
     Serial, Wire, SPI, Serial_print, Serial_println,
+    // ── Canonical PICPIO API (gpio_/adc_/pwm_/sys_/uart1) — these are #define
+    //    aliases in Picpio.h, which the sim never sees (only main.c is
+    //    transpiled), so they must be provided here or they'd resolve to no-op
+    //    stubs and the sketch would do nothing.
+    gpio_mode: pinMode, gpio_write: digitalWrite, gpio_read: digitalRead,
+    adc_read: analogRead, pwm_write: analogWrite,
+    sys_delay: delay, sys_delay_us: delayMicroseconds,
+    sys_millis: millis, sys_micros: micros,
+    sys_init: () => { /* picpio_init: HAL setup, nothing to do in sim */ },
+    sys_irq_on: () => { /* interrupts(): no-op in sim */ },
+    sys_irq_off: () => { /* noInterrupts(): no-op in sim */ },
+    interrupts: () => { /* no-op */ }, noInterrupts: () => { /* no-op */ },
+    uart1: Serial, uart1_print: Serial_print, uart1_println: Serial_println,
+    GPIO_IN: 0, GPIO_OUT: 1, GPIO_PULLUP: 2, GPIO_HIGH: 1, GPIO_LOW: 0,
+    BUILTIN_LED: 13,
     ssd1306_init, ssd1306_clear, ssd1306_set_cursor, ssd1306_setCursor: ssd1306_set_cursor,
     ssd1306_print, ssd1306_println, ssd1306_display,
     SSD1306_ADDRESS, SSD1306_BUFFER_SIZE, SSD1306_init, SSD1306_begin, SSD1306_clearDisplay,
@@ -378,7 +393,8 @@ try {
 
 if (!finished) {
     try {
-        vm.runInContext('if (typeof setup === "function") setup();', ctx, { timeout: RUN_TIMEOUT_MS, displayErrors: true });
+        // Canonical PICPIO entry point is init(); setup() is the legacy alias.
+        vm.runInContext('if (typeof init === "function") init(); else if (typeof setup === "function") setup();', ctx, { timeout: RUN_TIMEOUT_MS, displayErrors: true });
     } catch (e) {
         fail('setup', e);
     }
@@ -395,7 +411,7 @@ if (!finished) {
         iter++;
         try {
             vm.runInContext(
-                'if (typeof loop === "function") loop(); else throw new Error("loop() is not defined");',
+                'if (typeof run === "function") run(); else if (typeof loop === "function") loop(); else throw new Error("run() is not defined");',
                 ctx, { timeout: RUN_TIMEOUT_MS, displayErrors: true }
             );
         } catch (e) {

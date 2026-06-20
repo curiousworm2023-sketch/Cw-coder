@@ -144,6 +144,10 @@ export function activate(context: vscode.ExtensionContext): void {
     reg('picpio.buildUpload',   () => runTracked('build -u', 'Building & Uploading'));
     reg('picpio.clean',         () => runTracked('clean', 'Cleaning').then(refreshAll));
     reg('picpio.cleanBuild',    () => runTracked('clean', 'Cleaning').then(() => runTracked('build', 'Building')));
+    reg('picpio.cleanBuildUpload', () =>
+        runTracked('clean', 'Cleaning')
+            .then(() => runTracked('build', 'Building'))
+            .then(code => { if (code === 0) return runTracked('upload', 'Uploading'); }));
     reg('picpio.serialMonitor', () => openSerialMonitor());
     reg('picpio.libManager',    () => HomePanel.createOrShow(context));
 
@@ -155,6 +159,7 @@ export function activate(context: vscode.ExtensionContext): void {
             { label: '$(arrow-up)       Upload & Monitor',description: '',          action: () => runTracked('build -u', 'Building & Uploading') },
             { label: '$(trash)          Clean',          description: '',           action: () => runTracked('clean', 'Cleaning').then(refreshAll) },
             { label: '$(debug-restart)  Clean Build',    description: 'Ctrl+Alt+R', action: () => runTracked('clean', 'Cleaning').then(() => runTracked('build', 'Building')) },
+            { label: '$(run-all)        Clean + Build + Upload', description: '',    action: () => runTracked('clean', 'Cleaning').then(() => runTracked('build', 'Building')).then(() => runTracked('upload', 'Uploading')) },
             { label: '$(plug)           Serial Monitor', description: 'Ctrl+Alt+S', action: () => openSerialMonitor() },
             { label: '$(terminal)       Open CLI',       description: '',           action: () => getTerminal().show(false) },
         ];

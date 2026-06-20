@@ -88,6 +88,11 @@ void __interrupt(high_priority) ISR_High(void) {
 
 // ── picpio_init ──────────────────────────────────────────────────────────────
 void picpio_init(void) {
+    // HFINTOSC is already the clock source (RSTOSC config); just retune it to
+    // 64 MHz so the actual Fosc matches _XTAL_FREQ. Writing OSCFRQ alone does
+    // NOT switch the clock source, so it can't trip the Fail-Safe Clock Monitor.
+    OSCFRQ = 0x08;   // HFFRQ = 64 MHz
+
     ANSELA = 0x00; ANSELB = 0x00; ANSELC = 0x00;
     WPUB   = 0x00;
 #ifdef PICPIO_HAS_PORTDE
@@ -98,7 +103,7 @@ void picpio_init(void) {
     // Timer0: Fosc/4, 1:16 prescaler → 1MHz timer → reload 0xFC18 for 1ms
     T0CON1 = 0b01000100;
     TMR0H  = 0xFC; TMR0L = 0x18;
-    T0CON0 = 0b10000000;
+    T0CON0 = 0b10010000;   // T0EN=1, T016BIT=1 (16-bit mode; matches 0xFC18 reload)
     TMR0IE = 1;
     GIE    = 1;
     PEIE   = 1;
