@@ -279,6 +279,63 @@ function SSD1306_display(..._dev: unknown[]): void {
     ssd1306_display();
 }
 
+// HD44780 character-LCD emulation. A sketch can drive more than one LCD (e.g.
+// one over a 74HC595 shift register, one over I2C), so each device gets its
+// own buffer, keyed by `dev` ('hc595' / 'i2c'), and re-emits as
+// {t:'lcd', dev, lines} so the panel can route it to the matching part.
+function makeCharLcd(dev: string) {
+    let cols = 16, rows = 2;
+    let buf: string[] = Array.from({ length: rows }, () => ' '.repeat(cols));
+    let col = 0, row = 0;
+    const emitL = (): void => { emit({ t: 'lcd', dev, lines: buf.slice(), cols, rows }); };
+    const reset = (c?: number, r?: number): void => {
+        if (c) cols = Math.max(1, Math.trunc(Number(c)));
+        if (r) rows = Math.max(1, Math.trunc(Number(r)));
+        buf = Array.from({ length: rows }, () => ' '.repeat(cols));
+        col = 0; row = 0;
+    };
+    const setCursor = (rr: number, cc: number): void => {
+        row = Math.max(0, Math.min(rows - 1, Math.trunc(Number(rr)) || 0));
+        col = Math.max(0, Math.min(cols - 1, Math.trunc(Number(cc)) || 0));
+    };
+    const put = (ch: string): void => {
+        if (ch === '\n') { col = 0; row = (row + 1) % rows; return; }
+        if (col >= cols) { col = 0; row = (row + 1) % rows; }
+        buf[row] = buf[row].slice(0, col) + ch + buf[row].slice(col + 1);
+        col++;
+    };
+    const print = (x: unknown): void => { for (const ch of oledStringify(x)) put(ch); emitL(); };
+    const centerText = (rr: number, x: unknown): void => {
+        const t = oledStringify(x);
+        setCursor(rr, Math.max(0, Math.floor((cols - t.length) / 2)));
+        print(t);
+    };
+    return { reset, emitL, setCursor, put, print, centerText };
+}
+
+const hc595 = makeCharLcd('hc595');   // LCD_HC595 library (LCD595_*)
+const i2cLcd = makeCharLcd('i2c');    // LiquidCrystal_I2C library (LCD_*)
+
+// LCD_HC595 public API — device handle ignored. setCursor/printAt take (row, col).
+function LCD595_init(..._a: unknown[]): void { hc595.reset(); hc595.emitL(); }
+function LCD595_begin(_d: unknown, cols: number, rows: number): void { hc595.reset(cols, rows); hc595.emitL(); }
+function LCD595_clear(..._d: unknown[]): void { hc595.reset(); hc595.emitL(); }
+function LCD595_home(..._d: unknown[]): void { hc595.setCursor(0, 0); }
+function LCD595_setCursor(_d: unknown, row: number, col: number): void { hc595.setCursor(row, col); }
+function LCD595_print(_d: unknown, str: unknown): void { hc595.print(str); }
+function LCD595_printAt(_d: unknown, row: number, col: number, str: unknown): void { hc595.setCursor(row, col); hc595.print(str); }
+function LCD595_write(_d: unknown, v: unknown): void { hc595.put(typeof v === 'number' ? String.fromCharCode(Number(v)) : String(v)); hc595.emitL(); }
+function LCD595_centerText(_d: unknown, row: number, text: unknown): void { hc595.centerText(row, text); }
+
+// LiquidCrystal_I2C public API — device handle ignored. setCursor takes (col, row).
+function LCD_init(_l: unknown, _addr: number, cols: number, rows: number): void { i2cLcd.reset(cols, rows); i2cLcd.emitL(); }
+function LCD_begin(_l: unknown, cols: number, rows: number, _cs?: number): void { i2cLcd.reset(cols, rows); i2cLcd.emitL(); }
+function LCD_clear(..._l: unknown[]): void { i2cLcd.reset(); i2cLcd.emitL(); }
+function LCD_home(..._l: unknown[]): void { i2cLcd.setCursor(0, 0); }
+function LCD_setCursor(_l: unknown, col: number, row: number): void { i2cLcd.setCursor(row, col); }
+function LCD_print(_l: unknown, str: unknown): void { i2cLcd.print(str); }
+function LCD_writeChar(_l: unknown, v: unknown): void { i2cLcd.put(typeof v === 'number' ? String.fromCharCode(Number(v)) : String(v)); i2cLcd.emitL(); }
+
 function map(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
     return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
@@ -318,6 +375,17 @@ const baseGlobals: Record<string, unknown> = {
     ssd1306_print, ssd1306_println, ssd1306_display,
     SSD1306_ADDRESS, SSD1306_BUFFER_SIZE, SSD1306_init, SSD1306_begin, SSD1306_clearDisplay,
     SSD1306_setCursor, SSD1306_print, SSD1306_println, SSD1306_display,
+    // HC595 character LCD (LCD_HC595 library). Unlisted LCD595_*/LCD_* helpers
+    // (createChar, progressBar, blink, scroll, …) fall through to the no-op stub.
+    LCD595_init, LCD595_begin, LCD595_clear, LCD595_home, LCD595_setCursor,
+    LCD595_print, LCD595_printAt, LCD595_write, LCD595_centerText,
+    LCD595_backlight: () => { /* visual no-op */ },
+    LCD595_display: () => { /* no-op */ }, LCD595_noDisplay: () => { /* no-op */ },
+    // I2C character LCD (LiquidCrystal_I2C library).
+    LCD_5x8DOTS: 0x00, LCD_5x10DOTS: 0x04,
+    LCD_init, LCD_begin, LCD_clear, LCD_home, LCD_setCursor, LCD_print, LCD_writeChar,
+    LCD_backlight: () => { /* visual no-op */ }, LCD_noBacklight: () => { /* no-op */ },
+    LCD_display: () => { /* no-op */ }, LCD_noDisplay: () => { /* no-op */ },
     map, constrain, random,
     min: Math.min, max: Math.max, abs: Math.abs, pow: Math.pow, sqrt: Math.sqrt,
 };

@@ -562,7 +562,7 @@ function selectPart(id) {
   if (id && parts[id]) parts[id].el.classList.add('selected');
 }
 
-function addPart(type, addr) {
+function addPart(type, addr, opts) {
   const id = 'part' + (++partCounter);
   const el = document.createElement('div');
   el.className = 'circuit-part';
@@ -578,8 +578,11 @@ function addPart(type, addr) {
   if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd">' + Array(4).fill('&nbsp;'.repeat(20)).join('\\n') + '</div>'; label = 'LCD 20x4'; }
   if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SSD1306'; }
   if (type === 'spi_display') { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SPI Display'; }
+  if (opts && opts.label) label = opts.label;
 
-  const terms = TERMINALS[type] || [''];
+  // Auto-detected parts can supply their own terminals (e.g. an HC595 LCD's
+  // DATA/CLK/LATCH GPIO lines instead of the default I2C SDA/SCL).
+  const terms = (opts && opts.terms && opts.terms.length) ? opts.terms : (TERMINALS[type] || ['']);
   const termsHtml = (terms.length === 1 && terms[0] === '')
     ? '<div class="term" id="' + id + '-term"></div>'
     : '<div class="part-terms">' + terms.map(t =>
@@ -587,12 +590,17 @@ function addPart(type, addr) {
       ).join('') + '</div>';
 
   const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'oled' || type === 'spi_display';
-  const i2cAddr = (type === 'lcd1602' || type === 'lcd2004' || type === 'oled') ? (addr || I2C_ADDR_DEFAULT[type]) : null;
+  // I2C address badge: shown for I2C displays, but suppressed when the part is
+  // explicitly on another bus (opts.i2c === false), e.g. an HC595-driven LCD.
+  const showI2C = (opts && opts.i2c !== undefined)
+    ? opts.i2c
+    : (type === 'lcd1602' || type === 'lcd2004' || type === 'oled');
+  const i2cAddr = showI2C ? (addr || I2C_ADDR_DEFAULT[type]) : null;
   const i2cHtml = i2cAddr ? '<div class="part-i2c">I2C ' + i2cAddr + '</div>' : '';
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
     '<div class="part-label">' + label + '</div>' + i2cHtml + termsHtml;
   circuitParts.appendChild(el);
-  parts[id] = { id, type, el, rotation: 0, zoom: 1 };
+  parts[id] = { id, type, el, dev: (opts && opts.dev) || null, rotation: 0, zoom: 1 };
 
   el.title = 'Click to select, then press Space to rotate' + (zoomable ? '. Scroll to zoom.' : '');
   el.addEventListener('click', () => selectPart(id));
@@ -684,7 +692,16 @@ function addPart(type, addr) {
 function applyAutoCircuit(autoParts) {
   if (Object.keys(parts).length > 0) return;
   autoParts.forEach(ap => {
-    const id = addPart(ap.type, ap.addr);
+    const opts = {};
+    if (ap.dev) opts.dev = ap.dev;
+    const termList = (ap.wires || []).map(w => w.term).filter(Boolean);
+    if (termList.length) opts.terms = termList;
+    if (ap.iface === 'gpio') {
+      opts.i2c = false;
+      if (ap.type === 'lcd1602') opts.label = 'LCD 16x2 (HC595)';
+      if (ap.type === 'lcd2004') opts.label = 'LCD 20x4 (HC595)';
+    }
+    const id = addPart(ap.type, ap.addr, opts);
     (ap.wires || []).forEach(w => {
       const mcuEl = document.getElementById('term-' + w.pin);
       const partEl = document.getElementById(id + '-term' + (w.term ? '-' + w.term : ''));
@@ -785,6 +802,17 @@ function handleSimMessage(m) {
     case 'oled':
       document.querySelectorAll('.part-oled').forEach(el => { el.textContent = m.lines.join('\\n'); });
       break;
+    case 'lcd': {
+      // Route to the LCD part matching this device ('hc595'/'i2c'); fall back
+      // to every LCD if none was tagged (e.g. a manually added part).
+      const matched = Object.keys(parts)
+        .filter(pid => parts[pid].dev && parts[pid].dev === m.dev)
+        .map(pid => document.getElementById(pid + '-lcd'));
+      const targets = matched.filter(Boolean);
+      const els = targets.length ? targets : Array.from(document.querySelectorAll('.part-lcd'));
+      els.forEach(el => { el.textContent = m.lines.join('\\n'); });
+      break;
+    }
     case 'error':
       appendProto('ERROR (' + m.phase + '): ' + m.message, 'log-err');
       setStatus('error', m.phase);

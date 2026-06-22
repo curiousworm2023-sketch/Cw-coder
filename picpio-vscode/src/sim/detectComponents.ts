@@ -4,7 +4,7 @@
 // simulator can auto-place and auto-wire matching circuit parts.
 
 export interface AutoWire { pin: string; term: string; }
-export interface AutoPart { type: string; wires: AutoWire[]; addr?: string; }
+export interface AutoPart { type: string; wires: AutoWire[]; addr?: string; iface?: 'i2c' | 'gpio'; dev?: string; }
 
 // Normalize a captured address literal ("0x27" or "39") to a "0xNN" hex string.
 function formatAddr(raw: string): string {
@@ -82,6 +82,9 @@ export function detectComponents(src: string): AutoPart[] {
     // the fixed hardware-SPI pins (RB3=MOSI/SDA, RB5=SCK).
     const has = (needle: string): boolean => s.includes(needle);
 
+    // Displays are detected independently (a sketch can drive more than one,
+    // e.g. an I2C LCD and an HC595 LCD at once). Each gets a `dev` key so the
+    // simulator can route its text to the matching on-screen part.
     if (has('SPI.h') && /Adafruit_(ST7735|ST7789|ILI9341)/.test(s)) {
         let cs = 'RB2', dc = 'RB1', rst = 'RB0'; // default to D10/D9/D8
         const ctor = s.match(/Adafruit_(?:ST7735|ST7789|ILI9341)\s+\w+\s*\(\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
@@ -90,32 +93,54 @@ export function detectComponents(src: string): AutoPart[] {
             dc  = resolvePin(ctor[2]) ?? dc;
             rst = resolvePin(ctor[3]) ?? rst;
         }
-        parts.push({ type: 'spi_display', wires: [
+        parts.push({ type: 'spi_display', dev: 'spi', wires: [
             { pin: cs,    term: 'CS'  },
             { pin: dc,    term: 'DC'  },
             { pin: 'RB3', term: 'SDA' },
             { pin: 'RB5', term: 'SCK' },
             { pin: rst,   term: 'RST' },
         ]});
-    } else if (has('LiquidCrystal_I2C')) {
-        const is2004 = /LiquidCrystal_I2C[^;]*\(\s*\w+\s*,\s*20\s*,\s*4\s*\)/.test(s);
-        const addrM = s.match(/LiquidCrystal_I2C\s+\w+\s*\(\s*(0[xX][0-9A-Fa-f]+|\d+)/);
-        const addr = addrM ? formatAddr(addrM[1]) : '0x27';
-        parts.push({ type: is2004 ? 'lcd2004' : 'lcd1602', addr, wires: [
+    }
+
+    if (has('LiquidCrystal_I2C') || /\bLCD_init\s*\(/.test(s)) {
+        // I2C HD44780 LCD: LCD_init(&lcd, addr, cols, rows).
+        const m = s.match(/LCD_init\s*\(\s*&?\s*\w+\s*,\s*(0[xX][0-9A-Fa-f]+|\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        const addr = formatAddr(m?.[1] ?? '0x27');
+        const rows = m ? parseInt(m[3], 10) : 2;
+        parts.push({ type: rows >= 4 ? 'lcd2004' : 'lcd1602', addr, dev: 'i2c', iface: 'i2c', wires: [
             { pin: 'RC4', term: 'SDA' },
             { pin: 'RC3', term: 'SCL' },
         ]});
-    } else if (/SSD1306|U8g2|U8X8/.test(s)) {
+    }
+
+    if (/SSD1306|U8g2|U8X8/.test(s)) {
         // Look for "#define SSD1306_ADDRESS <value>" (the documented way to
         // override the default), then a literal address passed directly as
         // SSD1306_init(&dev, <addr>, ...), then fall back to the default.
         const defineM = s.match(/#define\s+SSD1306_ADDRESS\s+(0[xX][0-9A-Fa-f]+|\d+)/);
         const initM = s.match(/SSD1306_init\s*\(\s*&?\s*\w+\s*,\s*(0[xX][0-9A-Fa-f]+|\d+)/);
         const addr = formatAddr((defineM ?? initM)?.[1] ?? '0x3C');
-        parts.push({ type: 'oled', addr, wires: [
+        parts.push({ type: 'oled', dev: 'oled', addr, wires: [
             { pin: 'RC4', term: 'SDA' },
             { pin: 'RC3', term: 'SCL' },
         ]});
+    }
+
+    if (has('LCD_HC595') || /\bLCD595_/.test(s)) {
+        // HD44780 character LCD driven through a 74HC595 shift register over
+        // 3 GPIO pins: LCD595_init(&dev, dataPin, clockPin, latchPin).
+        const initM = s.match(/LCD595_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
+        const data  = initM ? resolvePin(initM[1]) : null;
+        const clk   = initM ? resolvePin(initM[2]) : null;
+        const latch = initM ? resolvePin(initM[3]) : null;
+        // Geometry from LCD595_begin(&dev, cols, rows) — default 16x2.
+        const beginM = s.match(/LCD595_begin\s*\(\s*&?\s*\w+\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        const rows = beginM ? parseInt(beginM[2], 10) : 2;
+        const wires: AutoWire[] = [];
+        if (data)  wires.push({ pin: data,  term: 'DATA'  });
+        if (clk)   wires.push({ pin: clk,   term: 'CLK'   });
+        if (latch) wires.push({ pin: latch, term: 'LATCH' });
+        parts.push({ type: rows >= 4 ? 'lcd2004' : 'lcd1602', dev: 'hc595', iface: 'gpio', wires });
     }
 
     return parts;
