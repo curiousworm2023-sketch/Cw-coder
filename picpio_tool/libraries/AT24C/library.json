@@ -1,0 +1,4 @@
+{
+  "requires": ["i2c"],
+  "note": "I2C EEPROM (24LCxx/AT24Cxx). Supports 1-byte (24LC01/02) and 2-byte (24LC32..512) address parts; not the 24LC04/08/16 block-select variants."
+}

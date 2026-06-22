@@ -1,0 +1,5 @@
+{
+  "requires": ["spi"],
+  "excludeFamilies": ["PIC16"],
+  "note": "Uses ~1.1 KB RAM (512B sector cache + 512B per open file); needs a part with >=2 KB RAM."
+}

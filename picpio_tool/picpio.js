@@ -868,6 +868,37 @@ LCD_HC595: {
              'uint8_t gesture = APDS9960_readGesture(&apds);',
          ],
      },
+     // ─── STORAGE ────────────────────────────────────────────────────────────────
+     SD: {
+         include: '#include "SD.h"',
+         define: '#define SD_CS D0  // SD card chip-select pin',
+         globals: ['SD_t sd;', 'SD_File sd_file;'],
+         setup: [
+             'SPI.begin();',
+             'if (SD_begin(&sd, SD_CS)) {',
+             '    if (SD_open(&sd, &sd_file, "LOG.CSV", SD_APPEND)) {',
+             '        SD_print(&sd_file, "booted\\n");',
+             '        SD_close(&sd_file);',
+             '    }',
+             '}',
+         ],
+         loop: [
+             '// SD_open(&sd, &sd_file, "LOG.CSV", SD_APPEND);',
+             '// SD_print(&sd_file, "1,2,3\\n");',
+             '// SD_close(&sd_file);',
+         ],
+     },
+     AT24C: {
+         include: '#include "AT24C.h"',
+         globals: ['AT24C_t eeprom;'],
+         setup: [
+             'Wire.begin();',
+             'AT24C_init(&eeprom, 0x50, 32768, 64); // 24LC256: addr 0x50, 32KB, 64B page',
+             'AT24C_writeByte(&eeprom, 0, 42);',
+             'uint8_t eeprom_v = AT24C_readByte(&eeprom, 0);',
+         ],
+         loop: [],
+     },
      // ─── RTC ──────────────────────────────────────────────────────────────────────
      DS1307: {
          include: '#include "DS1307.h"',
@@ -1290,6 +1321,22 @@ function dfpFamilyFor(mcu) {
     if (u.match(/PIC32MX/))       return 'PIC32MX_DFP';
     if (u.match(/PIC32MZ/))       return 'PIC32MZ_DFP';
     return 'PIC18F-K_DFP';
+}
+
+// Short family tag (PIC16/PIC18/PIC24/DSPIC/PIC32) derived from a part number.
+// Used as the picpio.ini `family` default when --family isn't given.
+function familyFromMcu(mcu) {
+    const u = (mcu || '').toUpperCase();
+    if (u.startsWith('DSPIC30')) return 'DSPIC30';
+    if (u.startsWith('DSPIC33')) return 'DSPIC33';
+    if (u.startsWith('DSPIC'))   return 'DSPIC';
+    if (u.startsWith('PIC32'))   return 'PIC32';
+    if (u.startsWith('PIC24'))   return 'PIC24';
+    if (u.startsWith('PIC18'))   return 'PIC18';
+    if (u.startsWith('PIC16'))   return 'PIC16';
+    if (u.startsWith('PIC12'))   return 'PIC12';
+    if (u.startsWith('PIC10'))   return 'PIC10';
+    return 'PIC18';
 }
 
 // Picks the HAL ("picpio_compat*") variant for a given MCU.
@@ -2551,7 +2598,7 @@ function cmdInit(args) {
     const params = parseFlags(args);
     const name   = params['name'] || path.basename(process.cwd());
     const mcu    = params['mcu']  || 'PIC18F27K40';
-    const family = params['family'] || 'PIC18';
+    const family = params['family'] || familyFromMcu(mcu);
     const clock  = params['clock'] || '64000000';
     const prog   = params['programmer'] || 'PICKit4';
     const fw     = params['framework'] || 'bare-metal';
