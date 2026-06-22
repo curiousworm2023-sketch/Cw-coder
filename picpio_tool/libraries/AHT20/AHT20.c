@@ -6,8 +6,8 @@ static uint8_t _status(aht20_t *d) {
     return (uint8_t)i2c1.read();
 }
 
-uint8_t aht20_begin(aht20_t *dev) {
-    dev->address = AHT20_ADDR;
+uint8_t aht20_begin(aht20_t *dev, uint8_t addr) {
+    dev->address = addr;
     sys_delay(40);                          // power-up time
 
     i2c1.beginTransmission(dev->address);   // initialize / calibrate

@@ -17,8 +17,8 @@ static uint16_t _measure(htu21df_t *d, uint8_t cmd) {
     return (uint16_t)(((msb << 8) | lsb) & 0xFFFC);
 }
 
-uint8_t htu21df_begin(htu21df_t *dev) {
-    dev->address = HTU21DF_ADDR;
+uint8_t htu21df_begin(htu21df_t *dev, uint8_t addr) {
+    dev->address = addr;
     i2c1.beginTransmission(dev->address);
     i2c1.write(0xFE);                      // soft reset
     i2c1.endTransmission();

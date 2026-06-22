@@ -23,6 +23,7 @@
 typedef struct {
     uint8_t cs, irq;
     uint16_t width, height;
+    uint8_t rotation;
 } XPT2046_t;
 
 // Initialize touchscreen struct

@@ -4,7 +4,7 @@
 //
 // Usage:
 //   htu21df_t htu;
-//   void init() { i2c1.begin(); htu21df_begin(&htu); }
+//   void init() { i2c1.begin(); htu21df_begin(&htu, HTU21DF_ADDR); }
 //   void run()  { float t = htu21df_readTemperature(&htu);   // degrees C
 //                 float h = htu21df_readHumidity(&htu); }     // %RH
 #ifndef HTU21DF_H
@@ -12,11 +12,13 @@
 
 #include "Picpio.h"
 
-#define HTU21DF_ADDR 0x40           // fixed I2C address
+#ifndef HTU21DF_ADDR
+#define HTU21DF_ADDR 0x40           // default I2C address
+#endif
 
 typedef struct { uint8_t address; } htu21df_t;
 
-uint8_t htu21df_begin(htu21df_t *dev);                 // soft reset; returns 1
+uint8_t htu21df_begin(htu21df_t *dev, uint8_t addr);   // soft reset; returns 1
 float   htu21df_readTemperature(htu21df_t *dev);       // degrees C
 float   htu21df_readHumidity(htu21df_t *dev);          // %RH
 

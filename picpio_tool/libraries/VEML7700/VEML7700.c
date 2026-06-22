@@ -26,8 +26,8 @@ static uint16_t _r16(veml7700_t *d, uint8_t reg) {
     return (uint16_t)((hi << 8) | lo);
 }
 
-uint8_t veml7700_begin(veml7700_t *dev) {
-    dev->address = VEML7700_ADDR;
+uint8_t veml7700_begin(veml7700_t *dev, uint8_t addr) {
+    dev->address = addr;
     _w16(dev, REG_ALS_CONF, 0x0000);        // gain 1x, IT 100ms, powered on
     sys_delay(5);                           // wait > one integration cycle
     return 1;

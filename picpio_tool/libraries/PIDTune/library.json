@@ -1,0 +1,4 @@
+{
+  "depends": ["PID"],
+  "note": "Companion auto-tuner for the PID library; install adds PID automatically."
+}
