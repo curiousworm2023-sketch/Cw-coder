@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICPIO — The free PIC microcontroller IDE for VS Code</title>
+<meta name="description" content="PICPIO is a free IDE for Microchip PIC microcontrollers, right inside VS Code. A simple high-level C API, one-command build &amp; flash, 35+ libraries, and a built-in simulator.">
+<meta property="og:title" content="PICPIO — PIC microcontroller IDE for VS Code">
+<meta property="og:description" content="Free, simple, modern PIC development in VS Code: build, flash, 35+ libraries, simulator.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://picpio.in/">
+<meta property="og:image" content="https://picpio.in/assets/og-card.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PICPIO — PIC microcontroller IDE for VS Code">
+<meta name="twitter:description" content="Free, simple, modern PIC development in VS Code: build, flash, 35+ libraries, simulator.">
+<meta name="twitter:image" content="https://picpio.in/assets/og-card.svg">
+<link rel="canonical" href="https://picpio.in/">
+<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt="PICPIO logo"><span>PICPIO</span></a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#why">Why PICPIO</a>
+      <a href="#about">About</a>
+      <a class="nav-gh" href="#install">Get started</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="container">
+    <div class="logo-circle"><img src="/assets/logo.svg" alt="PICPIO"></div>
+    <h1>Program PIC chips<br>the <span class="accent">easy way.</span></h1>
+    <p class="tagline">A free PIC microcontroller IDE, right inside VS Code.</p>
+    <p class="sub">Write clean, high-level C for Microchip PIC chips, then build and flash to real hardware &mdash; with one-command setup, 35+ ready-made libraries, and a built-in simulator.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://marketplace.visualstudio.com/items?itemName=picpio.picpio" target="_blank" rel="noopener">Install in VS Code</a>
+      <a class="btn btn-ghost" href="#features">See what it can do</a>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>VS Code &mdash; Quick Open (Ctrl+P)</span></div>
+      <div class="term-body">
+        <code id="cmd"><span class="tok">ext install</span> picpio.picpio</code>
+        <button onclick="copyCmd()" id="copyBtn">Copy</button>
+      </div>
+    </div>
+    <p class="cmd-note">Get it from the VS Code Marketplace &mdash; or use the one-line installer below.</p>
+  </div>
+</div>
+
+<!-- WHAT IS IT -->
+<section id="what">
+  <div class="container">
+    <div class="eyebrow">What is PICPIO</div>
+    <h2>PIC development without the pain.</h2>
+    <p class="lead">
+      Microchip's PIC microcontrollers are everywhere &mdash; but the classic workflow means heavy IDEs and writing to raw registers.
+      PICPIO makes PIC development feel modern and approachable, inside the editor you already use.
+      You get a clean, high-level C API (<code style="color:var(--gold)">gpio_write</code>, <code style="color:var(--gold)">adc_read</code>, <code style="color:var(--gold)">uart1</code>, <code style="color:var(--gold)">i2c1</code>&hellip;),
+      and PICPIO handles the compiler, programmer, and project setup for you.
+    </p>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="eyebrow">What it can do</div>
+    <h2>Everything you need, built in.</h2>
+    <div class="feat-grid">
+
+      <!-- API -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>main.c</span></div>
+          <div class="tw-code">
+            <div><span class="t-kw">void</span> <span class="t-fn">init</span>() {</div>
+            <div>  uart1.<span class="t-fn">begin</span>(<span class="t-num">115200</span>);</div>
+            <div>  <span class="t-fn">gpio_mode</span>(BUILTIN_LED, <span class="t-cn">GPIO_OUT</span>);</div>
+            <div>}</div>
+            <div><span class="t-kw">void</span> <span class="t-fn">run</span>() {</div>
+            <div>  <span class="t-fn">gpio_write</span>(BUILTIN_LED, <span class="t-cn">GPIO_HIGH</span>);</div>
+            <div>  <span class="t-fn">sys_delay</span>(<span class="t-num">500</span>);</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>Simple, high-level API</h3><p>Friendly functions for GPIO, ADC, PWM, UART, I2C, SPI, timing and interrupts &mdash; no register juggling required.</p></div>
+      </div>
+
+      <!-- BUILD & FLASH -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Terminal</span></div>
+          <div class="tw-code">
+            <div><span class="t-pr">$</span> picpio upload</div>
+            <div class="t-com">Compiling main.c with XC8&hellip;</div>
+            <div class="t-com">Program: 3.1% &middot; Data: 1.4%</div>
+            <div><span class="ok">&#10003;</span> Flashed to PIC18F27K40</div>
+            <div><span class="ok">&#10003;</span> Done in 4.2s</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>One-click build &amp; flash</h3><p>Compile with Microchip's official XC8/XC16/XC32 and flash over a PICkit, ICD or Snap &mdash; straight from VS Code.</p></div>
+      </div>
+
+      <!-- LIBRARIES -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Libraries</span></div>
+          <div class="tw-list">
+            <div><span class="ok">&#10003;</span> SSD1306 OLED</div>
+            <div><span class="ok">&#10003;</span> BME280</div>
+            <div><span class="ok">&#10003;</span> SD &middot; FAT16/32</div>
+            <div><span class="t-sub">+ NeoPixel, Servo, PID&hellip;</span></div>
+            <div class="tw-cmd">picpio lib add SSD1306</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>35+ libraries</h3><p>Sensors, OLED/TFT displays, RTCs, SD card (FAT16/32), EEPROM, NeoPixel, servos, PID and more. <code>picpio lib add</code> drops working example code into your sketch.</p></div>
+      </div>
+
+      <!-- SIMULATOR -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Simulator</span></div>
+          <div class="tw-sim">
+            <div class="sim-pins">
+              <span class="pin on">RA0</span><span class="pin on">RB1</span><span class="pin">RC2</span><span class="pin on">RC5</span>
+            </div>
+            <svg class="sim-wave" viewBox="0 0 200 36" preserveAspectRatio="none">
+              <polyline points="0,28 25,28 25,8 60,8 60,28 95,28 95,8 130,8 130,28 165,28 165,8 200,8" fill="none" stroke="#f27f0c" stroke-width="2"/>
+            </svg>
+            <div class="t-com">PWM RC2 &middot; 1 kHz &middot; 50%</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>Built-in simulator</h3><p>Run your sketch logic and watch pins, Serial and I2C/SPI traffic &mdash; before you touch hardware.</p></div>
+      </div>
+
+      <!-- SERIAL MONITOR -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Serial Monitor &mdash; COM3 @ 115200</span></div>
+          <div class="tw-code">
+            <div class="t-teal">Temp: 24.6 C</div>
+            <div class="t-teal">Temp: 24.7 C</div>
+            <div class="t-teal">Humidity: 48%</div>
+            <div class="t-teal">Temp: 24.7 C</div>
+            <div><span class="cursor">&#9608;</span></div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>Serial monitor</h3><p>Watch live output from your board, pick the port and baud rate, and send data back.</p></div>
+      </div>
+
+      <!-- DOCTOR -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>picpio doctor</span></div>
+          <div class="tw-list">
+            <div><span class="ok">&#10003;</span> XC8 compiler <span class="t-sub">v2.46</span></div>
+            <div><span class="ok">&#10003;</span> PICkit 3 detected</div>
+            <div><span class="ok">&#10003;</span> DFP pack installed</div>
+            <div><span class="ok">&#10003;</span> 35 libraries</div>
+            <div class="ok">All systems go.</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>Compatibility &amp; doctor</h3><p>PICPIO warns if a library needs a peripheral your chip lacks, and <code>picpio doctor</code> verifies your whole toolchain.</p></div>
+      </div>
+
+      <!-- FAMILIES -->
+      <div class="feat">
+        <div class="feat-thumb">
+          <div class="tw-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Devices</span></div>
+          <div class="tw-fam">
+            <span class="fam">PIC16F</span><span class="fam">PIC18F</span>
+            <span class="fam">PIC24F</span><span class="fam">dsPIC30F</span>
+            <span class="fam">dsPIC33E</span><span class="fam">PIC32</span>
+            <div class="t-com" style="grid-column:1/-1">Right compiler chosen automatically.</div>
+          </div>
+        </div>
+        <div class="feat-body"><h3>Many PIC families</h3><p>From 8-bit PIC16/PIC18 to 16-bit PIC24/dsPIC and 32-bit PIC32 &mdash; one tool, the right compiler chosen automatically.</p></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="container">
+    <div class="eyebrow">How to install</div>
+    <h2>Install it from VS Code.</h2>
+    <p class="lead">PICPIO is a <b>VS Code extension</b>. Install it the same way you install any extension &mdash; right from the Extensions panel. No downloads to hunt for.</p>
+
+    <div class="install-grid">
+      <!-- visual: VS Code extensions panel -->
+      <div class="vscode-mock">
+        <div class="vsc-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>Visual Studio Code &mdash; Extensions</span></div>
+        <div class="vsc-body">
+          <div class="vsc-search"><span class="vsc-ico">&#128269;</span> PICPIO</div>
+          <div class="vsc-ext">
+            <div class="vsc-ext-icon"><img src="/assets/logo.svg" alt="PICPIO"></div>
+            <div class="vsc-ext-info">
+              <div class="vsc-ext-name">PICPIO <span class="vsc-verified" title="Verified">&#10003;</span></div>
+              <div class="vsc-ext-desc">PIC Microcontroller IDE &mdash; Build, Flash, Libraries, Simulator</div>
+              <div class="vsc-ext-meta">CURIOUS WORM</div>
+              <button class="vsc-install">Install</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- numbered steps -->
+      <div class="steps install-steps">
+        <div class="step"><h3>Open VS Code</h3><p>Get it free from <a href="https://code.visualstudio.com" target="_blank" rel="noopener">code.visualstudio.com</a> if you don't already have it.</p></div>
+        <div class="step"><h3>Open the Extensions panel</h3><p>Click the <b>Extensions</b> icon in the sidebar, or press <code>Ctrl+Shift+X</code>.</p></div>
+        <div class="step"><h3>Search &ldquo;PICPIO&rdquo;</h3><p>Type <b>PICPIO</b> in the search box and hit <b>Install</b> on the PICPIO extension by CURIOUS WORM.</p></div>
+        <div class="step"><h3>Add Microchip's free tools</h3><p>On first run, PICPIO points you to Microchip's official pages for the <b>XC8 compiler</b> and <b>MPLAB X</b> (for flashing) &mdash; free, installed once.</p></div>
+        <div class="step"><h3>Create a project</h3><p>Click the PICPIO icon in the sidebar &rarr; <b>New Project</b>, pick your chip, and start coding.</p></div>
+      </div>
+    </div>
+
+    <p class="cmd-note" style="margin-top:26px">Prefer the keyboard? Press <code>Ctrl+P</code> in VS Code and run:</p>
+    <div class="term" style="max-width:520px;margin:12px auto 0">
+      <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>VS Code &mdash; Quick Open</span></div>
+      <div class="term-body">
+        <code id="cmd2"><span class="tok">ext install</span> picpio.picpio</code>
+        <button onclick="copyCmd('cmd2')">Copy</button>
+      </div>
+    </div>
+    <p class="cmd-note" style="margin-top:18px">PICPIO is free, and so are the Microchip tools it uses.</p>
+  </div>
+</section>
+
+<!-- WHY / DIFFERENTIATORS -->
+<section id="why">
+  <div class="container">
+    <div class="eyebrow">Why PICPIO</div>
+    <h2>How it's different.</h2>
+    <p class="lead">There are other ways to program PICs &mdash; here's where PICPIO stands out.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>&nbsp;</th><th class="col-pic">PICPIO</th><th>Classic MPLAB X</th><th>Other PIC IDEs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Price</td><td class="col-pic">Free</td><td>Free</td><td>Often paid / subscription</td></tr>
+          <tr><td>Editor</td><td class="col-pic">Modern VS Code</td><td>Standalone IDE</td><td>Standalone IDE</td></tr>
+          <tr><td>Coding style</td><td class="col-pic">Simple high-level API</td><td>Raw registers</td><td>Vendor-specific</td></tr>
+          <tr><td>Setup</td><td class="col-pic">One command</td><td>Manual</td><td>Manual</td></tr>
+          <tr><td>Bundled libraries + auto example code</td><td class="yes">35+</td><td class="no">Limited</td><td>Varies</td></tr>
+          <tr><td>Built-in simulator</td><td class="yes">Yes</td><td class="yes">Yes</td><td>Sometimes</td></tr>
+          <tr><td>Official Microchip compiler (XC8)</td><td class="yes">Yes</td><td class="yes">Yes</td><td>Often a custom compiler</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cmd-note" style="margin-top:16px">PICPIO uses the same trusted, free Microchip XC compilers &mdash; it just makes them friendlier.</p>
+
+    <div class="eyebrow" style="margin-top:50px">Supported chips</div>
+    <div class="chips">
+      <span class="chip">PIC16F</span>
+      <span class="chip">PIC18F (K40 / Q10 / classic)</span>
+      <span class="chip">PIC24F / PIC24FJ</span>
+      <span class="chip">dsPIC30F</span>
+      <span class="chip">dsPIC33E</span>
+      <span class="chip">PIC32</span>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT / OWNER -->
+<section id="about">
+  <div class="container">
+    <div class="eyebrow">Who makes it</div>
+    <h2>Built by CURIOUS WORM.</h2>
+    <div class="about">
+      <p>PICPIO is created and maintained by <strong>CURIOUS WORM</strong> &mdash; an independent maker building free, friendly tools for embedded developers.</p>
+      <p>PICPIO is free to use and actively developed, with new chips, libraries and features added regularly.</p>
+      <p style="margin-top:18px"><a class="btn btn-primary" href="#install">Get started</a></p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div>© <span id="yr"></span> CURIOUS WORM · PICPIO</div>
+    <div>
+      <a href="#features">Features</a> ·
+      <a href="#install">Install</a> ·
+      <a href="#why">Why PICPIO</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+  function copyCmd(id){
+    var t = document.getElementById(id || 'cmd').textContent.trim();
+    navigator.clipboard.writeText(t).then(function(){
+      var b = document.getElementById('copyBtn');
+      if (b){ var o=b.textContent; b.textContent='Copied!'; setTimeout(function(){b.textContent=o;},1500); }
+    });
+  }
+</script>
+</body>
+</html>
