@@ -1,5 +1,8 @@
 # PICPIO Full Installer for Windows
-# Installs: XC8 compiler + MPLAB X IPE + picpio tool + VS Code extension
+# Installs the PICPIO tool + VS Code extension + Node.js, and guides you to
+# install Microchip's free XC8 compiler and MPLAB X (IPE/MDB) directly from
+# Microchip. We intentionally do NOT auto-download Microchip's installers --
+# you download them from Microchip's own site, under Microchip's own license.
 #
 # One-liner:
 #   iex (irm https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main/install.ps1)
@@ -8,29 +11,37 @@ $ErrorActionPreference = 'Stop'
 $INSTALL_DIR = 'C:\picpio'
 $REPO_RAW    = 'https://raw.githubusercontent.com/curiousworm2023-sketch/Cw-coder/main'
 
-$XC8_URL    = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v3.10-full-install-windows-x64-installer.exe'
-# XC16 = PIC24 / dsPIC (16-bit). v2.10 is the final XC16 release. NOTE: Microchip
-# now serves this only behind its browser "filehandler" (direct download 403s),
-# so the auto-download usually fails and the script falls back to a manual link.
-$XC16_URL   = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc16-v2.10-full-install-windows-x64-installer.exe'
-$XC16_PAGE  = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc16#downloads'
-# XC32 = PIC32 (32-bit). Direct download works.
-$XC32_URL   = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc32-v4.35-full-install-windows-x64-installer.exe'
-# Pinned to v6.00 -- newer MPLAB X IPE releases (6.20+) dropped PICkit3 support,
-# and picpio.ini defaults `programmer = PICKit3`. Do not bump this without
-# checking PICkit3 (-TPPK3) still works in ipecmd.
-$MPLABX_URL = 'https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/MPLABX-v6.00-windows-installer.exe'
+# Official Microchip download PAGES (not direct CDN links). The user downloads
+# the free installers themselves from Microchip -- the clean, terms-compliant way.
+$XC8_PAGE    = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc8#downloads'
+$XC16_PAGE   = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc16#downloads'
+$XC32_PAGE   = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-xc-compilers/xc32#downloads'
+$MPLABX_PAGE = 'https://www.microchip.com/en-us/tools-resources/develop/mplab-x-ide#downloads'
 $NODE_MSI_URL = 'https://nodejs.org/dist/v22.13.0/node-v22.13.0-x64.msi'
 
-# ww1.microchip.com hotlink-protects these installers (returns 401/403
-# without a Referer from microchip.com), even though browsers download
-# them fine.
-$MICROCHIP_HEADERS = @{ 'Referer' = 'https://www.microchip.com/' }
+# Tracks Microchip tools the user still needs to install by hand.
+$script:NeedsManual = @()
 
 function Write-Step($n, $msg) { Write-Host "[$n] $msg" -ForegroundColor Green }
 function Write-Info($msg)      { Write-Host "    $msg"  -ForegroundColor White }
 function Write-Skip($msg)      { Write-Host "    $msg"  -ForegroundColor DarkGray }
 function Write-Warn($msg)      { Write-Host "    $msg"  -ForegroundColor Yellow }
+
+# Guides the user to install a Microchip tool from Microchip's own site. For
+# required tools ($open=$true) the official download page is opened in the
+# browser; optional ones just print the link. Records it so `picpio doctor`
+# (and the final summary) can confirm it afterwards. No auto-download.
+function Need-Vendor($name, $page, [bool]$open, [string[]]$notes) {
+    Write-Warn "$name -- not installed."
+    foreach ($n in $notes) { Write-Info "  - $n" }
+    if ($open) {
+        Write-Info "Opening Microchip's official download page in your browser..."
+        try { Start-Process $page } catch { Write-Info "  $page" }
+    } else {
+        Write-Info "  Download page: $page"
+    }
+    $script:NeedsManual += $name
+}
 
 # Downloads $url to $out, streaming with a single-line progress readout in MB
 # (e.g. "  42.0 MB / 107.3 MB"). $headers is an optional hashtable of request
@@ -94,121 +105,55 @@ Write-Host ""
 Write-Host "  PICPIO - PIC Microcontroller IDE for VS Code" -ForegroundColor Cyan
 Write-Host ""
 
-# STEP 1 - XC8 Compiler
-Write-Step 1 "XC8 Compiler (Microchip)"
+# STEP 1 - XC8 Compiler (required for PIC10/12/16/18)
+Write-Step 1 "XC8 Compiler (Microchip, free)"
 if (Test-XC8Installed) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\xc8" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: XC8 $ver -- skipping"
 } else {
-    Write-Info "Downloading XC8 compiler (~107 MB)..."
-    $xc8Installer = "$env:TEMP\xc8-installer.exe"
-    try {
-        Save-Url $XC8_URL $xc8Installer $MICROCHIP_HEADERS
-        Unblock-File $xc8Installer -ErrorAction SilentlyContinue
-        Write-Info "Installing XC8 silently (accepts free license; one UAC prompt may appear)..."
-        Start-Process $xc8Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
-        if (-not (Test-XC8Installed)) {
-            Write-Warn "Silent install didn't produce a compiler -- opening the XC8 setup wizard."
-            Write-Warn "Click through with the default options (Next > Next > I Accept > Next > Install > Finish)."
-            Start-Process $xc8Installer -Verb RunAs -Wait
-        }
-        Remove-Item $xc8Installer -Force -ErrorAction SilentlyContinue
-        if (Test-XC8Installed) {
-            Write-Info "XC8 installed."
-        } else {
-            Write-Warn "XC8 install did not complete. Get it at: https://www.microchip.com/xc8"
-        }
-    } catch {
-        Write-Warn "Download/install failed: $($_.Exception.Message)"
-        Write-Warn "Install manually: https://www.microchip.com/xc8"
-    }
+    Need-Vendor 'XC8 compiler' $XC8_PAGE $true @(
+        'Required for PIC10/12/16/18 projects (~107 MB).',
+        'Download the latest Windows installer and run it.',
+        'Choose the FREE license during setup -- no PRO key needed.'
+    )
 }
 
-# STEP 2 - XC16 Compiler (PIC24 / dsPIC)
-Write-Step 2 "XC16 Compiler (PIC24 / dsPIC, Microchip)"
+# STEP 2 - XC16 Compiler (optional: PIC24 / dsPIC)
+Write-Step 2 "XC16 Compiler (PIC24 / dsPIC, Microchip, free)"
 if (Test-XC16Installed) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\xc16" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: XC16 $ver -- skipping"
 } else {
-    Write-Info "Downloading XC16 compiler (~300 MB)..."
-    $xc16Installer = "$env:TEMP\xc16-installer.exe"
-    try {
-        Save-Url $XC16_URL $xc16Installer $MICROCHIP_HEADERS
-        Unblock-File $xc16Installer -ErrorAction SilentlyContinue
-        Write-Info "Installing XC16 silently (one UAC prompt may appear)..."
-        Start-Process $xc16Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
-        if (-not (Test-XC16Installed)) {
-            Write-Warn "Silent install didn't produce a compiler -- opening the XC16 setup wizard."
-            Start-Process $xc16Installer -Verb RunAs -Wait
-        }
-        Remove-Item $xc16Installer -Force -ErrorAction SilentlyContinue
-        if (Test-XC16Installed) { Write-Info "XC16 installed." }
-        else { Write-Warn "XC16 install did not complete. Get it at: $XC16_PAGE" }
-    } catch {
-        # Microchip serves XC16 only behind its browser filehandler (a direct
-        # download 403s), so open the download page in the user's browser to
-        # download + run the installer manually. Needed only for PIC24/dsPIC.
-        Write-Warn "XC16 can't be auto-downloaded (Microchip serves it via a browser only)."
-        Write-Warn "Opening the XC16 download page -- click 'Windows', then run the installer."
-        Write-Warn "(Only needed for PIC24/dsPIC projects; skip it otherwise.)"
-        try { Start-Process $XC16_PAGE } catch { Write-Warn "  $XC16_PAGE" }
-    }
+    Need-Vendor 'XC16 compiler (optional)' $XC16_PAGE $false @(
+        'Only needed for PIC24 / dsPIC projects -- skip otherwise.',
+        'Download the Windows installer from the page and run it.'
+    )
 }
 
-# STEP 3 - XC32 Compiler (PIC32)
-Write-Step 3 "XC32 Compiler (PIC32, Microchip)"
+# STEP 3 - XC32 Compiler (optional: PIC32)
+Write-Step 3 "XC32 Compiler (PIC32, Microchip, free)"
 if (Test-XC32Installed) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\xc32" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: XC32 $ver -- skipping"
 } else {
-    Write-Info "Downloading XC32 compiler (~445 MB)..."
-    $xc32Installer = "$env:TEMP\xc32-installer.exe"
-    try {
-        Save-Url $XC32_URL $xc32Installer $MICROCHIP_HEADERS
-        Unblock-File $xc32Installer -ErrorAction SilentlyContinue
-        Write-Info "Installing XC32 silently (one UAC prompt may appear)..."
-        Start-Process $xc32Installer -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
-        if (-not (Test-XC32Installed)) {
-            Write-Warn "Silent install didn't produce a compiler -- opening the XC32 setup wizard."
-            Start-Process $xc32Installer -Verb RunAs -Wait
-        }
-        Remove-Item $xc32Installer -Force -ErrorAction SilentlyContinue
-        if (Test-XC32Installed) { Write-Info "XC32 installed." }
-        else { Write-Warn "XC32 install did not complete. Get it at: https://www.microchip.com/xc32" }
-    } catch {
-        Write-Warn "Download/install failed: $($_.Exception.Message)"
-        Write-Warn "Install manually (needed only for PIC32 projects): https://www.microchip.com/xc32"
-    }
+    Need-Vendor 'XC32 compiler (optional)' $XC32_PAGE $false @(
+        'Only needed for PIC32 projects -- skip otherwise.',
+        'Download the Windows installer from the page and run it.'
+    )
 }
 
-# STEP 4 - MPLAB X IPE
-Write-Step 4 "MPLAB X IPE (programmer software)"
+# STEP 4 - MPLAB X IPE (required for upload + debug)
+Write-Step 4 "MPLAB X (IPE + MDB debugger, Microchip, free)"
 if (Test-MPLABXInstalled) {
     $ver = (Get-ChildItem "C:\Program Files\Microchip\MPLABX" | Sort-Object Name -Descending | Select-Object -First 1).Name
     Write-Skip "Already installed: MPLAB X $ver -- skipping"
 } else {
-    Write-Info "Downloading MPLAB X installer (~640 MB, this may take a while)..."
-    $mplabxInstaller = "$env:TEMP\mplabx-installer.exe"
-    try {
-        Save-Url $MPLABX_URL $mplabxInstaller $MICROCHIP_HEADERS
-        Unblock-File $mplabxInstaller -ErrorAction SilentlyContinue
-        Write-Info "Installing MPLAB X silently (one UAC prompt may appear)..."
-        Start-Process $mplabxInstaller -ArgumentList '--mode unattended --unattendedmodeui minimal' -Verb RunAs -Wait
-        if (-not (Test-MPLABXInstalled)) {
-            Write-Warn "Silent install didn't produce IPE -- opening the MPLAB X setup wizard."
-            Write-Warn "Click through with the default options; the IPE component is enough (you can deselect MPLAB X IDE/compilers)."
-            Start-Process $mplabxInstaller -Verb RunAs -Wait
-        }
-        Remove-Item $mplabxInstaller -Force -ErrorAction SilentlyContinue
-        if (Test-MPLABXInstalled) {
-            Write-Info "MPLAB X installed."
-        } else {
-            Write-Warn "MPLAB X install did not complete. Get it at: https://www.microchip.com/mplabx"
-        }
-    } catch {
-        Write-Warn "Download/install failed: $($_.Exception.Message)"
-        Write-Warn "Install manually: https://www.microchip.com/mplabx"
-    }
+    Need-Vendor 'MPLAB X (IPE/MDB)' $MPLABX_PAGE $true @(
+        'Provides ipecmd (flash) and mdb (the on-chip debugger).',
+        'IMPORTANT: install version 6.00 specifically -- open the "Downloads Archive"',
+        'and pick MPLAB X v6.00. Newer releases (6.20+) dropped the PICkit 3 support',
+        'PICPIO uses. The IPE component alone is enough.'
+    )
 }
 
 # STEP 5 - Node.js (required to run the picpio CLI)
@@ -385,15 +330,15 @@ if ($codeCmd) {
     Write-Warn "Then install extension from: https://github.com/curiousworm2023-sketch/Cw-coder"
 }
 
-# Final check -- make sure everything picpio needs is actually in place,
-# so problems surface here instead of as a confusing "build" error later.
+# Final check. Split into what the installer itself set up (must be OK) vs.
+# the Microchip tools you install from Microchip (shown as [TODO] if pending).
 Write-Host ""
 Write-Host "  Checking installation..." -ForegroundColor Cyan
+
+# Installed by this script:
 $checks = [ordered]@{
-    'XC8 compiler'   = Test-XC8Installed
-    'MPLAB X IPE'    = Test-MPLABXInstalled
-    'Node.js'        = Test-Path "C:\Program Files\nodejs\node.exe"
-    'picpio CLI'     = Test-Path "$INSTALL_DIR\picpio.cmd"
+    'Node.js'    = Test-Path "C:\Program Files\nodejs\node.exe"
+    'picpio CLI' = Test-Path "$INSTALL_DIR\picpio.cmd"
 }
 $allOk = $true
 foreach ($name in $checks.Keys) {
@@ -405,28 +350,40 @@ foreach ($name in $checks.Keys) {
     }
 }
 
-# Optional compilers -- only needed for PIC24/dsPIC (XC16) or PIC32 (XC32)
-# projects, so a missing one is informational, not a failure.
-$optional = [ordered]@{
-    'XC16 compiler (PIC24/dsPIC)' = Test-XC16Installed
-    'XC32 compiler (PIC32)'       = Test-XC32Installed
+# Microchip tools -- you install these from Microchip (pages opened above).
+Write-Host ""
+Write-Host "  Microchip tools (install from Microchip):" -ForegroundColor Cyan
+$mchp = [ordered]@{
+    'XC8 compiler (PIC10/12/16/18)' = (Test-XC8Installed),    $true
+    'MPLAB X (IPE + MDB debugger)'  = (Test-MPLABXInstalled), $true
+    'XC16 compiler (PIC24/dsPIC)'   = (Test-XC16Installed),   $false
+    'XC32 compiler (PIC32)'         = (Test-XC32Installed),   $false
 }
-foreach ($name in $optional.Keys) {
-    if ($optional[$name]) {
+foreach ($name in $mchp.Keys) {
+    $present  = $mchp[$name][0]
+    $required = $mchp[$name][1]
+    if ($present) {
         Write-Host "    [OK]   $name" -ForegroundColor Green
+    } elseif ($required) {
+        Write-Host "    [TODO] $name -- install from Microchip" -ForegroundColor Yellow
     } else {
-        Write-Host "    [ --]  $name (optional -- install only if you target these)" -ForegroundColor DarkGray
+        Write-Host "    [ --]  $name (optional -- only if you target these)" -ForegroundColor DarkGray
     }
 }
 
 Write-Host ""
-if ($allOk) {
+if ($allOk -and $script:NeedsManual.Count -eq 0) {
     Write-Host "  PICPIO installation complete!" -ForegroundColor Cyan
+} elseif ($allOk) {
+    Write-Host "  PICPIO is installed. Finish by installing the Microchip tool(s) marked [TODO]" -ForegroundColor Yellow
+    Write-Host "  above (the download pages were opened in your browser), then confirm with:" -ForegroundColor Yellow
+    Write-Host "      picpio doctor" -ForegroundColor White
 } else {
     Write-Host "  PICPIO installation finished with warnings (see [MISS] above)." -ForegroundColor Yellow
     Write-Host "  Re-run this same command to retry the missing piece(s)." -ForegroundColor Yellow
 }
-Write-Host "  1. Close and reopen VS Code / the terminal" -ForegroundColor White
-Write-Host "  2. PICPIO icon in sidebar > New Project" -ForegroundColor White
+Write-Host "  1. Install any [TODO] Microchip tools, then close & reopen VS Code / the terminal" -ForegroundColor White
+Write-Host "  2. Run 'picpio doctor' to verify the toolchain" -ForegroundColor White
+Write-Host "  3. PICPIO icon in sidebar > New Project" -ForegroundColor White
 Write-Host "  Docs: https://github.com/curiousworm2023-sketch/Cw-coder" -ForegroundColor DarkCyan
 Write-Host ""
