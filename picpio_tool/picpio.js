@@ -1013,7 +1013,6 @@ switch (cmd) {
     case 'upload':  cmdUpload(args.slice(1)); break;
     case 'clean':   cmdClean();               break;
     case 'monitor': cmdMonitor();             break;
-    case 'debug':   cmdDebug(args.slice(1));  break;
     case 'init':    cmdInit(args.slice(1));   break;
     case 'reference': cmdReference();          break;
     case 'lib':          cmdLib(args.slice(1));    break;
@@ -1158,8 +1157,6 @@ Commands:
                 or DFP pack name (e.g. PIC16Fxxx_DFP).
   devices       Check whether a PICkit/ICD/Snap programmer is connected
   doctor        Check the toolchain + project health (XC8/16/32, IPE, DFPs)
-  debug         On-chip source debug (breakpoints/step) via PICkit/ICD/Snap + MDB
-                Optional: --tool=<pickit3|pickit4|snap|icd3|icd4>
   update        Update PICPIO (CLI, HAL, libraries, extension) to the latest
   update --check  Check whether a newer version is available (no install)
   version       Print the installed PICPIO version
@@ -1575,98 +1572,6 @@ function findIPE() {
     return null;
 }
 
-// MDB — Microchip's command-line on-chip debugger (ships with MPLAB X).
-function findMDB() {
-    const base = 'C:\\Program Files\\Microchip\\MPLABX';
-    if (!fs.existsSync(base)) return null;
-    const vers = fs.readdirSync(base).filter(d => d.startsWith('v'))
-        .sort((a, b) => parseFloat(b.slice(1)) - parseFloat(a.slice(1)));
-    for (const v of vers) {
-        const p = path.join(base, v, 'mplab_platform', 'bin', 'mdb.bat');
-        if (fs.existsSync(p)) return p;
-    }
-    return null;
-}
-
-// Map a detected programmer name to the MDB/XC8 tool id.
-function mdbToolFor(name) {
-    const n = (name || '').toLowerCase();
-    if (n.includes('pickit 4') || n.includes('pickit4')) return 'pickit4';
-    if (n.includes('pickit 5') || n.includes('pickit5')) return 'pickit4';   // PK5 speaks PK4 protocol
-    if (n.includes('pickit 3') || n.includes('pickit3')) return 'pickit3';
-    if (n.includes('snap'))                              return 'snap';
-    if (n.includes('icd 4') || n.includes('icd4'))       return 'icd4';
-    if (n.includes('icd 3') || n.includes('icd3'))       return 'icd3';
-    return '';
-}
-
-// ─── DEBUG (on-chip, via MDB) ────────────────────────────────────────────────
-// Builds a debug image and drops into MDB connected to the PICkit/ICD/Snap, so
-// the user gets real source-level breakpoints/stepping on silicon.
-function cmdDebug(args = []) {
-    const cfg = requireConfig();
-    const mcu = cfg.mcu || 'PIC18F27K40';
-    const family = (cfg.family || 'PIC18').toUpperCase();
-    if (!family.startsWith('PIC18') && !family.startsWith('PIC16')) {
-        console.warn(`[PICPIO] Debug is currently wired for XC8 parts (PIC16/PIC18). ${mcu} may not work.`);
-    }
-
-    // Pick the debug tool: --tool=<id> overrides; otherwise auto-detect.
-    let tool = (args.find(a => a.startsWith('--tool=')) || '').split('=')[1] || '';
-    if (!tool) {
-        let progs = [];
-        try { progs = detectProgrammers(); } catch { /* ignore */ }
-        tool = mdbToolFor(progs[0] && progs[0].name);
-        if (!tool) {
-            console.warn('[PICPIO] No supported programmer detected — assuming pickit4.');
-            console.warn('         Override with: picpio debug --tool=<pickit3|pickit4|snap|icd3|icd4>');
-            tool = 'pickit4';
-        } else {
-            console.log(`[PICPIO] Debug tool: ${progs[0].name} -> ${tool}`);
-        }
-    }
-
-    const mdb = findMDB();
-    if (!mdb) { console.error('[PICPIO] MDB not found (install MPLAB X). Cannot start a debug session.'); process.exit(1); }
-
-    // 1) debug build (symbols + reserved debug resources for this tool)
-    console.log('[PICPIO] Building debug image (symbols, -O0)...');
-    cmdBuild(['--debug', `--debugger=${tool}`]);
-
-    const buildDir = path.join(process.cwd(), cfg.build_dir || '.picpio');
-    const elf = path.join(buildDir, (cfg.name || 'firmware') + '.elf');
-    if (!fs.existsSync(elf)) { console.error('[PICPIO] Debug build produced no .elf — aborting.'); process.exit(1); }
-
-    // 2) MDB connect/program/break script (also saved for reference)
-    const script = [
-        'set system.disableerrormsg true',
-        `Device ${mcu}`,
-        `Hwtool ${tool}`,
-        `Program "${elf.replace(/\\/g, '/')}"`,
-        'Break init',          // halt at the start of the sketch's setup
-        'Run',
-    ];
-    try { fs.writeFileSync(path.join(buildDir, 'debug.mdb'), script.join('\n') + '\n'); } catch { /* ignore */ }
-
-    console.log('');
-    console.log('[PICPIO] Starting on-chip debugger (MDB) — connecting your ' + tool + '...');
-    console.log('         Step commands:  Step  Next  Continue  Halt  Stepi');
-    console.log('         Inspect:        Print <var>   Print pin <name>');
-    console.log('         Breakpoints:    Break main.c:42   |   Break <function>   |   Delete');
-    console.log('         Exit:           quit');
-    console.log('');
-
-    // 3) Launch MDB: auto-run the connect script, then hand stdin to the user
-    //    for live stepping (so it's a real interactive debug session).
-    const child = cp.spawn(`"${mdb}"`, [], { shell: true });
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
-    child.stdin.write(script.join('\n') + '\n');     // connect + program + break + run
-    process.stdin.resume();
-    process.stdin.pipe(child.stdin);                 // user drives stepping from here
-    child.on('exit', (code) => { try { process.stdin.pause(); } catch {} process.exit(code || 0); });
-}
-
 // ─── SOURCE COLLECTOR ────────────────────────────────────────────────────────
 function collectSources(cfg) {
     const sources   = [];
@@ -1751,9 +1656,6 @@ function scanDir(dir, out, tempOut) {
 function cmdBuild(opts) {
     const verbose  = opts.includes('-v') || opts.includes('--verbose');
     const showSize = opts.includes('--size');
-    // Debug build: DWARF symbols + reserved debug resources for `picpio debug`.
-    const debug    = opts.includes('--debug');
-    const dbgTool  = (opts.find(o => o.startsWith('--debugger=')) || '').split('=')[1] || '';
 
     // Auto-generate .vscode/c_cpp_properties.json if missing (enables Ctrl+Click)
     if (!fs.existsSync(path.join(process.cwd(), '.vscode', 'c_cpp_properties.json'))) {
@@ -1784,7 +1686,6 @@ function cmdBuild(opts) {
     }
 
     const outHex  = path.join(buildDir, (cfg.name || 'firmware') + '.hex');
-    const outElf  = path.join(buildDir, (cfg.name || 'firmware') + '.elf');
 
     const incFlags = includes.map(i => `-I"${i}"`).join(' ');
 
@@ -1819,13 +1720,10 @@ function cmdBuild(opts) {
         compilerFlags = `-mcpu=${xc16Cpu} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -Wl,-Tp${xc16Cpu}.gld`;
     } else {
         // XC8 — lowercase MCU name required
-        const dbg = debug ? ` -gdwarf-3${dbgTool ? ` -mdebugger=${dbgTool}` : ''}` : '';
-        const optUse = debug ? '0' : optLevel;   // -O0 gives accurate line-by-line stepping
-        compilerFlags = `-mcpu=${mcu.toLowerCase()} ${dfpFlag} -O${optUse} -D_XTAL_FREQ=${clock} -std=c99${dbg}`;
+        compilerFlags = `-mcpu=${mcu.toLowerCase()} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -std=c99`;
     }
 
-    // A debug build emits the .elf (DWARF symbols) for the on-chip debugger.
-    const outFile = debug ? outElf : outHex;
+    const outFile = outHex;
     const srcList = sources.map(s => `"${s}"`).join(' ');
     const command = `"${compiler}" ${compilerFlags} ${incFlags} ${srcList} -o "${outFile}"`;
 

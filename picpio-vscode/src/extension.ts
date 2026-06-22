@@ -150,7 +150,6 @@ export function activate(context: vscode.ExtensionContext): void {
             .then(() => runTracked('build', 'Building'))
             .then(code => { if (code === 0) return runTracked('upload', 'Uploading'); }));
     reg('picpio.serialMonitor', () => openSerialMonitor());
-    reg('picpio.debug',         () => picpio('debug'));   // on-chip debug via MDB (interactive terminal)
     reg('picpio.libManager',    () => HomePanel.createOrShow(context));
 
     reg('picpio.taskMenu', async () => {
