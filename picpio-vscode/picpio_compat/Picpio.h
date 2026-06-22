@@ -172,7 +172,7 @@ typedef struct {
 } HardwareSerial_t;
 
 extern HardwareSerial_t Serial;  // TX=RC6, RX=RC7
-extern HardwareSerial_t Serial2; // TX=RB0, RX=RB1
+extern HardwareSerial_t Serial2; // TX=RB6, RX=RB7
 // Overload-like print macro (C11 _Generic)
 // Use: Serial.print("text")  or  Serial.print(42)  or  Serial.print(3.14f)
 #define Serial_print(x)   _Generic((x), \
@@ -219,7 +219,7 @@ typedef struct {
     void    (*setClockDivider)(uint8_t div);
 } SPIClass_t;
 
-extern SPIClass_t SPI;  // SCK=RC3, SDI=RC4, SDO=RC5
+extern SPIClass_t SPI;  // SCK=RC5, SDI/MISO=RC2, SDO/MOSI=RC1 (CS=RC0 user-driven)
 #define MSBFIRST 1
 #define LSBFIRST 0
 #define SPI_MODE0 0

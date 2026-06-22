@@ -254,12 +254,13 @@ void _serial_println_f_def(float f)  { _serial_println_f(f, 2); }
 void _serial_print_d_def(double d)   { _serial_print_f((float)d, 2); }
 void _serial_println_d_def(double d) { _serial_println_f((float)d, 2); }
 
-// ── Serial2 (EUSART2, TX=RB0, RX=RB1 via PPS) ────────────────────────────────
+// ── Serial2 (EUSART2, TX=RB6, RX=RB7 via PPS) ────────────────────────────────
 static void _serial2_begin(uint32_t baud) {
-    RB0PPS  = 0x0B;          // TX2/CK2 → RB0
-    RX2PPS  = 0x09;          // RB1 → RX2 input
-    TRISBbits.TRISB0 = 0;    // TX output
-    TRISBbits.TRISB1 = 1;    // RX input
+    ANSELB &= (uint8_t)~0xC0; // RB6/RB7 digital
+    RB6PPS  = 0x0B;          // TX2/CK2 → RB6
+    RX2PPS  = 0x0F;          // RB7 → RX2 input
+    TRISBbits.TRISB6 = 0;    // TX output
+    TRISBbits.TRISB7 = 1;    // RX input
     BAUD2CON = 0x08;         // BRG16=1
     uint16_t brg = (uint16_t)(_XTAL_FREQ / (4UL * baud) - 1);
     SPBRGH2 = (uint8_t)(brg >> 8);
@@ -449,15 +450,18 @@ TwoWire_t Wire2 = {
     .read              = _wire2_read,
 };
 
-// ── SPI (SSP1 as SPI Master, RC3=SCK, RC5=MOSI, RC4=MISO) ───────────────────
-// NOTE: SSP1 is shared with Wire — do not use SPI and Wire simultaneously
+// ── SPI (SSP1 as SPI Master, SCK=RC5, MOSI/SDO=RC1, MISO/SDI=RC2) ────────────
+// NOTE: SSP1 is shared with Wire — do not use SPI and Wire simultaneously.
+// Pins match the ads1219_temp_test reference board's SPI header (CS=RC0 is
+// driven by the sketch, the master library does not control it).
 static void _spi_begin(void) {
-    RC3PPS      = 0x0F;   // SCK1 → RC3
-    RC5PPS      = 0x10;   // SDO1/MOSI → RC5
-    SSP1DATPPS  = 0x14;   // RC4 → SDI1/MISO input
-    TRISCbits.TRISC3 = 0;
-    TRISCbits.TRISC5 = 0;
-    TRISCbits.TRISC4 = 1;
+    ANSELC &= (uint8_t)~0x26; // RC1/RC2/RC5 digital
+    RC5PPS      = 0x0F;   // SCK1 → RC5
+    RC1PPS      = 0x10;   // SDO1/MOSI → RC1
+    SSP1DATPPS  = 0x12;   // RC2 → SDI1/MISO input
+    TRISCbits.TRISC5 = 0; // SCK output
+    TRISCbits.TRISC1 = 0; // MOSI output
+    TRISCbits.TRISC2 = 1; // MISO input
     SSP1STAT = 0x40;      // CKE=1 (Mode 0 default)
     SSP1CON1 = 0x20;      // SSPEN=1, SSPM=0000 (SPI Master Fosc/4)
 }

@@ -128,13 +128,13 @@ export function detectComponents(src: string): AutoPart[] {
 // sketch references the corresponding object.
 const PERIPHERAL_PINS: Record<string, [pin: string, role: string][]> = {
     Wire:    [['RC3', 'SCL'],  ['RC4', 'SDA']],
-    Wire2:   [['RB0', 'SCL'],  ['RB1', 'SDA']],
-    SPI:     [['RC3', 'SCK'],  ['RC5', 'MOSI'], ['RC4', 'MISO']],
+    Wire2:   [['RB2', 'SCL'],  ['RB3', 'SDA']],
+    SPI:     [['RC5', 'SCK'],  ['RC1', 'MOSI'], ['RC2', 'MISO']],
     SPI2:    [['RB2', 'SCK'],  ['RB3', 'MOSI'], ['RB4', 'MISO']],
     Serial:  [['RC6', 'TX'],   ['RC7', 'RX']],
-    Serial2: [['RC0', 'TX'],   ['RC1', 'RX']],
+    Serial2: [['RB6', 'TX'],   ['RB7', 'RX']],
     uart1:   [['RC6', 'TX'],   ['RC7', 'RX']],
-    uart2:   [['RC0', 'TX'],   ['RC1', 'RX']],
+    uart2:   [['RB6', 'TX'],   ['RB7', 'RX']],
 };
 
 // Instance number suffixed onto each role below to form a datasheet-style
