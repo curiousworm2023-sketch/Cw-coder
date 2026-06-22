@@ -20,6 +20,7 @@
       { "command": "picpio.cleanBuild",    "title": "Clean Build",           "category": "PICPIO", "icon": "$(debug-restart)" },
       { "command": "picpio.cleanBuildUpload", "title": "Clean + Build + Upload", "category": "PICPIO", "icon": "$(run-all)" },
       { "command": "picpio.serialMonitor", "title": "Serial Port Monitor",   "category": "PICPIO", "icon": "$(plug)" },
+      { "command": "picpio.debug",         "title": "Debug (On-Chip)",       "category": "PICPIO", "icon": "$(debug-alt)" },
       { "command": "picpio.openCli",       "title": "PlatformIO Core (CLI)", "category": "PICPIO", "icon": "$(terminal)" },
       { "command": "picpio.libManager",    "title": "Library Manager",       "category": "PICPIO", "icon": "$(library)" },
       { "command": "picpio.newProject",    "title": "New Project",           "category": "PICPIO", "icon": "$(new-folder)" },
@@ -58,6 +59,7 @@
         { "command": "picpio.cleanBuild",    "when": "picpio.isActive", "group": "picpio@4" },
         { "command": "picpio.cleanBuildUpload", "when": "picpio.isActive", "group": "picpio@5" },
         { "command": "picpio.serialMonitor", "when": "picpio.isActive", "group": "picpio@6" },
+        { "command": "picpio.debug",         "when": "picpio.isActive", "group": "picpio@6" },
         { "command": "picpio.insertSPI",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@7" },
         { "command": "picpio.insertUSART",   "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@8" },
         { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@9" },
@@ -79,6 +81,7 @@
       { "command": "picpio.upload",        "key": "ctrl+alt+u" },
       { "command": "picpio.cleanBuild",    "key": "ctrl+alt+r" },
       { "command": "picpio.serialMonitor", "key": "ctrl+alt+s" },
+      { "command": "picpio.debug",         "key": "ctrl+alt+d" },
       { "command": "picpio.pidTune",       "key": "ctrl+alt+t" }
     ],
     "configuration": {
