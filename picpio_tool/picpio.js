@@ -2025,6 +2025,66 @@ function scaffoldMainUsage(dirEntry, count) {
     console.log(`[PICPIO] Added ${dirEntry} example code to ${mainRel}`);
 }
 
+// Reverse of scaffoldMainUsage: strip the marked #include / #define / globals /
+// setup / loop blocks that `picpio lib add` injected for `dirEntry`, so
+// `picpio lib remove` cleans up src/main.* too. Marker-based, so user code that
+// doesn't carry the marker is left untouched.
+function unscaffoldMainUsage(dirEntry) {
+    const snippet = LIB_SNIPPETS[dirEntry]
+        || LIB_SNIPPETS[Object.keys(LIB_SNIPPETS).find(k => k.toLowerCase() === dirEntry.toLowerCase())];
+
+    const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+    if (!cfg || !isPicpioFw(cfg.framework)) return;
+    const srcDir = path.join(process.cwd(), cfg.src_dir || 'src');
+    const mainFile = [path.join(srcDir, 'main.cpp'), path.join(srcDir, 'main.c')]
+        .find(p => fs.existsSync(p));
+    if (!mainFile) return;
+    const mainRel = path.relative(process.cwd(), mainFile);
+
+    const marker  = `// ---- ${dirEntry} (added by picpio lib add) ----`;
+    const content = fs.readFileSync(mainFile, 'utf8');
+    if (!content.includes(marker)) return;
+
+    // #define macro names this snippet added (removed even if the value was
+    // edited, e.g. a changed I2C address).
+    const defNames = [];
+    if (snippet && snippet.define) {
+        for (const dl of snippet.define.split('\n')) {
+            const dm = dl.match(/^\s*#define\s+(\w+)/);
+            if (dm) defNames.push(dm[1]);
+        }
+    }
+    const isAddedDefine = (line) => defNames.some(n => new RegExp(`^\\s*#define\\s+${n}\\b`).test(line));
+    const ANY_MARK = '(added by picpio lib add)';
+
+    const lines = content.split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i];
+        const t = line.trim();
+        if (line.includes(marker) && t.startsWith('#include')) { i++; continue; }  // marked include
+        if (isAddedDefine(line))                               { i++; continue; }  // our #define
+        if (t === marker) {                                                         // a block
+            if (out.length && out[out.length - 1].trim() === '') out.pop();         // drop separator above
+            i++;                                                                    // skip marker line
+            while (i < lines.length) {
+                const bt = lines[i].trim();
+                if (bt === '' || bt === '}' || bt.startsWith('void ') || lines[i].includes(ANY_MARK)) break;
+                i++;
+            }
+            if (i < lines.length && lines[i].trim() === '') i++;                     // drop trailing blank
+            continue;
+        }
+        out.push(line); i++;
+    }
+    const result = out.join('\n');
+    if (result !== content) {
+        fs.writeFileSync(mainFile, result);
+        console.log(`[PICPIO] Removed ${dirEntry} example code from ${mainRel}`);
+    }
+}
+
 function cmdLib(args) {
     const sub = args[0];
     if (!sub) { console.log('Usage: picpio lib <add|remove|list|search|check|update>'); return; }
@@ -2199,13 +2259,35 @@ function libAdd(name, count, force) {
 }
 
 function libRemove(name) {
-    const libDir = path.join(process.cwd(), 'lib', name);
-    if (fs.existsSync(libDir)) {
-        fs.rmSync(libDir, { recursive: true, force: true });
-        console.log(`[PICPIO] Removed library '${name}'`);
-    } else {
-        console.error(`[PICPIO] Library '${name}' is not installed.`);
+    const libRoot = path.join(process.cwd(), 'lib');
+    // Resolve the real folder name case-insensitively (user may type "sd"/"SD").
+    let actual = name;
+    if (fs.existsSync(libRoot)) {
+        const found = fs.readdirSync(libRoot).find(d =>
+            d.toLowerCase() === name.toLowerCase() && fs.statSync(path.join(libRoot, d)).isDirectory());
+        if (found) actual = found;
     }
+    const libDir = path.join(libRoot, actual);
+    if (!fs.existsSync(libDir)) {
+        console.error(`[PICPIO] Library '${name}' is not installed.`);
+        return;
+    }
+    unscaffoldMainUsage(actual);                 // strip its code from main.* first
+    fs.rmSync(libDir, { recursive: true, force: true });
+    removeIniLib(actual);                        // drop it from picpio.ini [libraries]
+    console.log(`[PICPIO] Removed library '${actual}'`);
+}
+
+function removeIniLib(name) {
+    const iniPath = path.join(process.cwd(), 'picpio.ini');
+    if (!fs.existsSync(iniPath)) return;
+    let text = fs.readFileSync(iniPath, 'utf8');
+    const m = text.match(/^installed\s*=\s*(.*)$/m);
+    if (!m) return;
+    const existing = m[1].split(',').map(s => s.trim()).filter(Boolean)
+        .filter(l => l.toLowerCase() !== name.toLowerCase());
+    text = text.replace(/^installed\s*=.*$/m, `installed  = ${existing.join(', ')}`);
+    fs.writeFileSync(iniPath, text);
 }
 
 function updateIniLibs(name) {
