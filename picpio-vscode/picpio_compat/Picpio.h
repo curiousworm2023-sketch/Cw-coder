@@ -258,6 +258,18 @@ void     EEPROM_put(uint16_t addr, const void *src, uint16_t len); // write (via
 #define interrupts()    (GIE = 1)
 #define noInterrupts()  (GIE = 0)
 
+// ── External / pin-change interrupts (IOC on PORTA/B/C pins) ──────────────────
+#define CHANGE   1
+#define FALLING  2
+#define RISING   3
+// Call `fn` when `pin` changes. fn must be a void(void) and short (runs in ISR).
+void attachInterrupt(uint8_t pin, void (*fn)(void), uint8_t mode);
+void detachInterrupt(uint8_t pin);
+
+// ── tone() — square wave on `pin` for `durationMs` (blocking) ─────────────────
+void tone(uint8_t pin, uint16_t freq, uint16_t durationMs);
+void noTone(uint8_t pin);
+
 // ── Internal init (called by main_entry.c before setup()) ─────────────────────
 void picpio_init(void);
 

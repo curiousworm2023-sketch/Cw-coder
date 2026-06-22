@@ -1,6 +1,11 @@
 #define PICPIO_PIN_ALIASES   // HAL internals reference the native Rxx pin names
 #include "Picpio.h"
 
+// The HAL exposes most functions only through function-pointer structs
+// (Serial/Wire/SPI/...), so XC8 can't see the calls and floods the build with
+// "(520) function ... is never called" — silence that noise here.
+#pragma warning disable 520
+
 // ── Pin map ───────────────────────────────────────────────────────────────────
 typedef struct {
     volatile unsigned char *tris;
@@ -65,7 +70,17 @@ static volatile uint8_t _rxhead = 0, _rxtail = 0;
 static volatile uint8_t _rxbuf2[RX_BUF];
 static volatile uint8_t _rxhead2 = 0, _rxtail2 = 0;
 
-// ── ISR: Timer0 millis + EUSART1/EUSART2 RX ring buffers ─────────────────────
+// ── Pin-change interrupt registry (attachInterrupt via IOC) ──────────────────
+typedef struct {
+    volatile unsigned char *flagReg;   // IOCAF / IOCBF / IOCCF
+    uint8_t mask;                       // 1 << bit
+    void (*fn)(void);
+} IocEntry;
+#define IOC_MAX 8
+static volatile IocEntry _ioc[IOC_MAX];
+static volatile uint8_t  _iocCount = 0;
+
+// ── ISR: Timer0 millis + EUSART1/EUSART2 RX ring buffers + pin-change ────────
 void __interrupt(high_priority) ISR_High(void) {
     if (TMR0IF && TMR0IE) {
         TMR0H = 0xFC; TMR0L = 0x18;
@@ -83,6 +98,14 @@ void __interrupt(high_priority) ISR_High(void) {
         uint8_t b = RC2REG;
         uint8_t next = (_rxhead2 + 1) & (RX_BUF - 1);
         if (next != _rxtail2) { _rxbuf2[_rxhead2] = b; _rxhead2 = next; }
+    }
+    if (PIR0bits.IOCIF) {
+        for (uint8_t i = 0; i < _iocCount; i++) {
+            if (*_ioc[i].flagReg & _ioc[i].mask) {
+                *_ioc[i].flagReg &= (uint8_t)~_ioc[i].mask;   // clear edge flag
+                if (_ioc[i].fn) _ioc[i].fn();
+            }
+        }
     }
 }
 
@@ -171,6 +194,62 @@ void analogWrite(uint8_t pin, uint8_t duty) {
     CCPR1L  = duty;
     TRISCbits.TRISC2 = 0;
 }
+
+// ── External / pin-change interrupts (IOC on PORTA/B/C) ──────────────────────
+// Map a PICPIO pin to its IOC positive/negative/flag registers + bit.
+static uint8_t _iocRegs(uint8_t pin, volatile unsigned char **pp,
+                        volatile unsigned char **np, volatile unsigned char **fp, uint8_t *bit) {
+    if (pin <= 7)               { *pp = &IOCCP; *np = &IOCCN; *fp = &IOCCF; *bit = pin;        return 1; } // D0-7 = RC0-7
+    else if (pin >= 8  && pin <= 13) { *pp = &IOCBP; *np = &IOCBN; *fp = &IOCBF; *bit = pin - 8;  return 1; } // D8-13 = RB0-5
+    else if (pin >= 14 && pin <= 19) { *pp = &IOCAP; *np = &IOCAN; *fp = &IOCAF; *bit = pin - 14; return 1; } // A0-5 = RA0-5
+    return 0;
+}
+
+void attachInterrupt(uint8_t pin, void (*fn)(void), uint8_t mode) {
+    volatile unsigned char *pp, *np, *fp; uint8_t bit;
+    if (!_iocRegs(pin, &pp, &np, &fp, &bit)) return;
+    uint8_t mask = (uint8_t)(1u << bit);
+
+    pinMode(pin, INPUT);                       // digital input
+    if (mode == RISING  || mode == CHANGE) *pp |= mask; else *pp &= (uint8_t)~mask;
+    if (mode == FALLING || mode == CHANGE) *np |= mask; else *np &= (uint8_t)~mask;
+    *fp &= (uint8_t)~mask;                      // clear any stale flag
+
+    uint8_t i;
+    for (i = 0; i < _iocCount; i++)            // replace existing handler for this pin
+        if (_ioc[i].flagReg == fp && _ioc[i].mask == mask) { _ioc[i].fn = fn; break; }
+    if (i == _iocCount && _iocCount < IOC_MAX) {
+        _ioc[_iocCount].flagReg = fp; _ioc[_iocCount].mask = mask; _ioc[_iocCount].fn = fn;
+        _iocCount++;
+    }
+    PIE0bits.IOCIE = 1; PEIE = 1; GIE = 1;
+}
+
+void detachInterrupt(uint8_t pin) {
+    volatile unsigned char *pp, *np, *fp; uint8_t bit;
+    if (!_iocRegs(pin, &pp, &np, &fp, &bit)) return;
+    uint8_t mask = (uint8_t)(1u << bit);
+    *pp &= (uint8_t)~mask; *np &= (uint8_t)~mask;
+    for (uint8_t i = 0; i < _iocCount; i++)
+        if (_ioc[i].flagReg == fp && _ioc[i].mask == mask) {
+            for (uint8_t j = i; j + 1 < _iocCount; j++) _ioc[j] = _ioc[j + 1];
+            _iocCount--; break;
+        }
+}
+
+// ── tone() — bit-banged square wave (blocking for `durationMs`) ──────────────
+void tone(uint8_t pin, uint16_t freq, uint16_t durationMs) {
+    if (freq == 0) { digitalWrite(pin, LOW); return; }
+    pinMode(pin, OUTPUT);
+    uint16_t halfUs = (uint16_t)(500000UL / freq);
+    uint32_t cycles = ((uint32_t)freq * durationMs) / 1000UL;
+    if (cycles == 0) cycles = 1;
+    for (uint32_t i = 0; i < cycles; i++) {
+        digitalWrite(pin, HIGH); delayMicroseconds(halfUs);
+        digitalWrite(pin, LOW);  delayMicroseconds(halfUs);
+    }
+}
+void noTone(uint8_t pin) { digitalWrite(pin, LOW); }
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 uint32_t millis(void) {
@@ -520,7 +599,7 @@ void EEPROM_write(uint16_t addr, uint8_t value) {
     NVMCON1bits.WR = 1;
     while (NVMCON1bits.WR) { }        // wait for write to finish
     NVMCON1bits.WREN = 0;
-    GIE = gie_save;
+    if (gie_save) GIE = 1;            // restore interrupts only if they were on
 }
 
 void EEPROM_update(uint16_t addr, uint8_t value) {
