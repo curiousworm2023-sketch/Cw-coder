@@ -888,6 +888,18 @@ LCD_HC595: {
              '// SD_close(&sd_file);',
          ],
      },
+     Servo: {
+         include: '#include "Servo.h"',
+         define: '#define SERVO_PIN D9',
+         globals: ['Servo_t servo;'],
+         setup: [
+             'Servo_attach(&servo, SERVO_PIN);',
+             'Servo_write(&servo, 90); // center position (0-180)',
+         ],
+         loop: [
+             'Servo_refresh(); // keep calling so the servo holds position',
+         ],
+     },
      AT24C: {
          include: '#include "AT24C.h"',
          globals: ['AT24C_t eeprom;'],
@@ -1001,6 +1013,7 @@ switch (cmd) {
     case 'upload':  cmdUpload(args.slice(1)); break;
     case 'clean':   cmdClean();               break;
     case 'monitor': cmdMonitor();             break;
+    case 'debug':   cmdDebug(args.slice(1));  break;
     case 'init':    cmdInit(args.slice(1));   break;
     case 'reference': cmdReference();          break;
     case 'lib':          cmdLib(args.slice(1));    break;
@@ -1008,6 +1021,7 @@ switch (cmd) {
     case 'erase':        cmdErase();               break;
     case 'install-dfp':  cmdInstallDFP(args[1]);   break;
     case 'devices':      cmdDevices(args.slice(1)); break;
+    case 'doctor':       cmdDoctor(args.slice(1));   break;
     case 'update':       cmdUpdate(args.slice(1));   break;
     case 'version':      console.log(`picpio ${PICPIO_VERSION}`); break;
     default:
@@ -1143,6 +1157,9 @@ Commands:
                 Accepts any device part number (e.g. PIC16F877A)
                 or DFP pack name (e.g. PIC16Fxxx_DFP).
   devices       Check whether a PICkit/ICD/Snap programmer is connected
+  doctor        Check the toolchain + project health (XC8/16/32, IPE, DFPs)
+  debug         On-chip source debug (breakpoints/step) via PICkit/ICD/Snap + MDB
+                Optional: --tool=<pickit3|pickit4|snap|icd3|icd4>
   update        Update PICPIO (CLI, HAL, libraries, extension) to the latest
   update --check  Check whether a newer version is available (no install)
   version       Print the installed PICPIO version
@@ -1467,6 +1484,78 @@ function cmdDevices(args = []) {
     }
 }
 
+// ─── DOCTOR ──────────────────────────────────────────────────────────────────
+// One-shot health check of the toolchain + current project. Reports what's
+// installed/missing so setup problems are obvious. `--json` for machine output.
+function cmdDoctor(args = []) {
+    const checks = [];
+    // sev: 'ok' = good, 'warn' = optional/info (won't fail the check), 'fail' = real problem
+    const add = (sev, label, detail, hint) => checks.push({ sev, label, detail: detail || '', hint: hint || '' });
+    const yn = (cond, fail, warn) => cond ? 'ok' : (warn ? 'warn' : 'fail');
+
+    add('ok', 'Node.js', process.version);
+    add('ok', 'picpio', `v${PICPIO_VERSION}  (${path.dirname(process.argv[1])})`);
+
+    // compilers
+    const xc8 = findXC8(), xc16 = findXC16(), xc32 = findXC32();
+    add(yn(xc8),       'XC8 (PIC10/12/16/18)', xc8  || 'not found', xc8  ? '' : 'Install XC8 from microchip.com or run: picpio update');
+    add(yn(xc16,0,1),  'XC16 (PIC24/dsPIC)',   xc16 || 'not installed', 'Optional — only needed for PIC24/dsPIC targets');
+    add(yn(xc32,0,1),  'XC32 (PIC32)',         xc32 || 'not installed', 'Optional — only needed for PIC32 targets');
+
+    // programmer tool
+    const ipe = findIPE();
+    add(yn(ipe,0,1), 'MPLAB IPE (ipecmd)', ipe || 'not found', ipe ? '' : 'Install MPLAB X (IPE) — needed for upload/erase (not for build)');
+
+    // DFP packs
+    let packCount = 0;
+    try { packCount = fs.readdirSync(PACKS_DIR).filter(d => /_DFP/i.test(d)).length; } catch { /* none */ }
+    add(yn(packCount > 0, 0, 1), 'Device Family Packs', `${packCount} installed in ${PACKS_DIR}`,
+        packCount ? '' : 'Auto-installs on first build, or run: picpio install-dfp <device>');
+
+    // bundled libraries
+    let libCount = 0;
+    try { libCount = listBundledLibs().length; } catch { /* ignore */ }
+    add(yn(libCount > 0, 0, 1), 'Bundled libraries', `${libCount} available (picpio lib search)`);
+
+    // connected programmers
+    let progs = [];
+    try { progs = detectProgrammers(); } catch { /* ignore */ }
+    add(yn(progs.length > 0, 0, 1), 'Programmer connected',
+        progs.length ? progs.map(p => p.name).join(', ') : 'none detected',
+        progs.length ? '' : 'Plug in a PICkit/ICD/Snap to upload (not needed to build)');
+
+    // serial ports
+    let ports = [];
+    try {
+        ports = cp.execSync('powershell -NoProfile -Command "[System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object"',
+            { timeout: 5000 }).toString().trim().split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    } catch { /* ignore */ }
+    add('ok', 'Serial ports', ports.length ? ports.join(', ') : 'none (only needed for the serial monitor)');
+
+    // current project (if run inside one)
+    const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+    if (cfg) {
+        add('ok', 'Project', `${cfg.name || '(unnamed)'} — ${cfg.mcu} (${cfg.family}, ${cfg.framework})`);
+        const need = findCompiler(cfg.family);
+        add(yn(need), `Compiler for ${cfg.family}`, need || 'not found',
+            need ? '' : `This project needs ${(cfg.family || '').startsWith('PIC32') ? 'XC32' : ((cfg.family || '').match(/PIC24|DSPIC/) ? 'XC16' : 'XC8')} installed`);
+    }
+
+    if (args.includes('--json')) { console.log(JSON.stringify(checks, null, 2)); return; }
+
+    const MARK = { ok: 'OK  ', warn: '--  ', fail: 'XX  ' };
+    console.log('[PICPIO] Environment check\n');
+    let problems = 0;
+    for (const c of checks) {
+        if (c.sev === 'fail') problems++;
+        console.log(`  ${MARK[c.sev]}${c.label.padEnd(26)} ${c.detail}`);
+        if (c.sev !== 'ok' && c.hint) console.log(`       -> ${c.hint}`);
+    }
+    console.log('');
+    if (problems === 0) console.log('[PICPIO] All good — ready to build & upload.');
+    else { console.log(`[PICPIO] ${problems} item(s) need attention (see -> hints above).`); process.exitCode = 1; }
+}
+
 function findIPE() {
     const base = 'C:\\Program Files\\Microchip\\MPLABX';
     if (!fs.existsSync(base)) return null;
@@ -1484,6 +1573,98 @@ function findIPE() {
         }
     }
     return null;
+}
+
+// MDB — Microchip's command-line on-chip debugger (ships with MPLAB X).
+function findMDB() {
+    const base = 'C:\\Program Files\\Microchip\\MPLABX';
+    if (!fs.existsSync(base)) return null;
+    const vers = fs.readdirSync(base).filter(d => d.startsWith('v'))
+        .sort((a, b) => parseFloat(b.slice(1)) - parseFloat(a.slice(1)));
+    for (const v of vers) {
+        const p = path.join(base, v, 'mplab_platform', 'bin', 'mdb.bat');
+        if (fs.existsSync(p)) return p;
+    }
+    return null;
+}
+
+// Map a detected programmer name to the MDB/XC8 tool id.
+function mdbToolFor(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('pickit 4') || n.includes('pickit4')) return 'pickit4';
+    if (n.includes('pickit 5') || n.includes('pickit5')) return 'pickit4';   // PK5 speaks PK4 protocol
+    if (n.includes('pickit 3') || n.includes('pickit3')) return 'pickit3';
+    if (n.includes('snap'))                              return 'snap';
+    if (n.includes('icd 4') || n.includes('icd4'))       return 'icd4';
+    if (n.includes('icd 3') || n.includes('icd3'))       return 'icd3';
+    return '';
+}
+
+// ─── DEBUG (on-chip, via MDB) ────────────────────────────────────────────────
+// Builds a debug image and drops into MDB connected to the PICkit/ICD/Snap, so
+// the user gets real source-level breakpoints/stepping on silicon.
+function cmdDebug(args = []) {
+    const cfg = requireConfig();
+    const mcu = cfg.mcu || 'PIC18F27K40';
+    const family = (cfg.family || 'PIC18').toUpperCase();
+    if (!family.startsWith('PIC18') && !family.startsWith('PIC16')) {
+        console.warn(`[PICPIO] Debug is currently wired for XC8 parts (PIC16/PIC18). ${mcu} may not work.`);
+    }
+
+    // Pick the debug tool: --tool=<id> overrides; otherwise auto-detect.
+    let tool = (args.find(a => a.startsWith('--tool=')) || '').split('=')[1] || '';
+    if (!tool) {
+        let progs = [];
+        try { progs = detectProgrammers(); } catch { /* ignore */ }
+        tool = mdbToolFor(progs[0] && progs[0].name);
+        if (!tool) {
+            console.warn('[PICPIO] No supported programmer detected — assuming pickit4.');
+            console.warn('         Override with: picpio debug --tool=<pickit3|pickit4|snap|icd3|icd4>');
+            tool = 'pickit4';
+        } else {
+            console.log(`[PICPIO] Debug tool: ${progs[0].name} -> ${tool}`);
+        }
+    }
+
+    const mdb = findMDB();
+    if (!mdb) { console.error('[PICPIO] MDB not found (install MPLAB X). Cannot start a debug session.'); process.exit(1); }
+
+    // 1) debug build (symbols + reserved debug resources for this tool)
+    console.log('[PICPIO] Building debug image (symbols, -O0)...');
+    cmdBuild(['--debug', `--debugger=${tool}`]);
+
+    const buildDir = path.join(process.cwd(), cfg.build_dir || '.picpio');
+    const elf = path.join(buildDir, (cfg.name || 'firmware') + '.elf');
+    if (!fs.existsSync(elf)) { console.error('[PICPIO] Debug build produced no .elf — aborting.'); process.exit(1); }
+
+    // 2) MDB connect/program/break script (also saved for reference)
+    const script = [
+        'set system.disableerrormsg true',
+        `Device ${mcu}`,
+        `Hwtool ${tool}`,
+        `Program "${elf.replace(/\\/g, '/')}"`,
+        'Break init',          // halt at the start of the sketch's setup
+        'Run',
+    ];
+    try { fs.writeFileSync(path.join(buildDir, 'debug.mdb'), script.join('\n') + '\n'); } catch { /* ignore */ }
+
+    console.log('');
+    console.log('[PICPIO] Starting on-chip debugger (MDB) — connecting your ' + tool + '...');
+    console.log('         Step commands:  Step  Next  Continue  Halt  Stepi');
+    console.log('         Inspect:        Print <var>   Print pin <name>');
+    console.log('         Breakpoints:    Break main.c:42   |   Break <function>   |   Delete');
+    console.log('         Exit:           quit');
+    console.log('');
+
+    // 3) Launch MDB: auto-run the connect script, then hand stdin to the user
+    //    for live stepping (so it's a real interactive debug session).
+    const child = cp.spawn(`"${mdb}"`, [], { shell: true });
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
+    child.stdin.write(script.join('\n') + '\n');     // connect + program + break + run
+    process.stdin.resume();
+    process.stdin.pipe(child.stdin);                 // user drives stepping from here
+    child.on('exit', (code) => { try { process.stdin.pause(); } catch {} process.exit(code || 0); });
 }
 
 // ─── SOURCE COLLECTOR ────────────────────────────────────────────────────────
@@ -1570,6 +1751,9 @@ function scanDir(dir, out, tempOut) {
 function cmdBuild(opts) {
     const verbose  = opts.includes('-v') || opts.includes('--verbose');
     const showSize = opts.includes('--size');
+    // Debug build: DWARF symbols + reserved debug resources for `picpio debug`.
+    const debug    = opts.includes('--debug');
+    const dbgTool  = (opts.find(o => o.startsWith('--debugger=')) || '').split('=')[1] || '';
 
     // Auto-generate .vscode/c_cpp_properties.json if missing (enables Ctrl+Click)
     if (!fs.existsSync(path.join(process.cwd(), '.vscode', 'c_cpp_properties.json'))) {
@@ -1635,11 +1819,15 @@ function cmdBuild(opts) {
         compilerFlags = `-mcpu=${xc16Cpu} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -Wl,-Tp${xc16Cpu}.gld`;
     } else {
         // XC8 — lowercase MCU name required
-        compilerFlags = `-mcpu=${mcu.toLowerCase()} ${dfpFlag} -O${optLevel} -D_XTAL_FREQ=${clock} -std=c99`;
+        const dbg = debug ? ` -gdwarf-3${dbgTool ? ` -mdebugger=${dbgTool}` : ''}` : '';
+        const optUse = debug ? '0' : optLevel;   // -O0 gives accurate line-by-line stepping
+        compilerFlags = `-mcpu=${mcu.toLowerCase()} ${dfpFlag} -O${optUse} -D_XTAL_FREQ=${clock} -std=c99${dbg}`;
     }
 
+    // A debug build emits the .elf (DWARF symbols) for the on-chip debugger.
+    const outFile = debug ? outElf : outHex;
     const srcList = sources.map(s => `"${s}"`).join(' ');
-    const command = `"${compiler}" ${compilerFlags} ${incFlags} ${srcList} -o "${outHex}"`;
+    const command = `"${compiler}" ${compilerFlags} ${incFlags} ${srcList} -o "${outFile}"`;
 
     console.log(`[PICPIO] Building ${cfg.name || 'firmware'} for ${mcu}...`);
     if (verbose) console.log(`[PICPIO] ${command}`);
@@ -1661,7 +1849,7 @@ function cmdBuild(opts) {
     }
 
     console.log(`\n[PICPIO] BUILD SUCCESSFUL`);
-    console.log(`[PICPIO] Output: ${outHex}`);
+    console.log(`[PICPIO] Output: ${outFile}`);
 
     // Generate compile_commands.json for IntelliSense / clangd / Ctrl+Click
     const compileCommands = sources.map(src => ({
@@ -1674,9 +1862,9 @@ function cmdBuild(opts) {
         JSON.stringify(compileCommands, null, 2)
     );
 
-    if (showSize && fs.existsSync(outHex)) {
-        const stat = fs.statSync(outHex);
-        console.log(`[PICPIO] HEX size: ${(stat.size / 1024).toFixed(1)} KB`);
+    if (showSize && fs.existsSync(outFile)) {
+        const stat = fs.statSync(outFile);
+        console.log(`[PICPIO] Output size: ${(stat.size / 1024).toFixed(1)} KB`);
     }
 }
 

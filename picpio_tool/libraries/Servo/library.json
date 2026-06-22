@@ -1,0 +1,3 @@
+{
+  "note": "Software-timed RC servo driver (bit-banged 50Hz). Call Servo_refresh() often in run(). Works on any pin; no I2C/SPI needed."
+}
