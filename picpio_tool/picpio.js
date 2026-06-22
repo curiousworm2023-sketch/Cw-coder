@@ -72,6 +72,7 @@ function listBundledLibs() {
 //   { "requires": ["i2c","spi"],     // peripherals the chip must have
 //     "families": ["PIC18","PIC24"], // whitelist (omit = any family)
 //     "excludeFamilies": ["PIC16"],  // blacklist
+//     "depends": ["PID"],            // other bundled libs auto-installed first
 //     "note": "Needs >=8KB RAM" }    // human hint shown with the warning
 
 // Supported parts that physically lack a peripheral. The PIC16F62x/PIC16F84
@@ -441,16 +442,15 @@ LCD_HC595: {
      // ─── ENVIRONMENTAL SENSORS ───────────────────────────────────────────────────
      BME280: {
          include: '#include "BME280.h"',
-         globals: ['BME280_t bme280;'],
+         globals: ['bme280_t bme280;'],
          setup: [
              'Wire.begin();',
-             'BME280_init(&bme280, 0x77);',
-             'BME280_begin(&bme280);',
+             'bme280_begin(&bme280, BME280_ADDR);',
          ],
          loop: [
-             'float temp = BME280_readTemperature(&bme280);',
-             'float pres = BME280_readPressure(&bme280);',
-             'float hum  = BME280_readHumidity(&bme280);',
+             'float bme280_temp = bme280_readTemperature(&bme280); // degrees C',
+             'float bme280_pres = bme280_readPressure(&bme280);    // Pascals',
+             'float bme280_hum  = bme280_readHumidity(&bme280);    // %RH',
          ],
      },
      BME680: {
@@ -468,15 +468,14 @@ LCD_HC595: {
      },
      BMP280: {
          include: '#include "BMP280.h"',
-         globals: ['BMP280_t bmp;'],
+         globals: ['bmp280_t bmp;'],
          setup: [
              'Wire.begin();',
-             'BMP280_init(&bmp, 0x77);',
-             'BMP280_begin(&bmp);',
+             'bmp280_begin(&bmp, BMP280_ADDR);',
          ],
          loop: [
-             'float temp = BMP280_readTemperature(&bmp);',
-             'float pres = BMP280_readPressure(&bmp) / 100.0; // hPa',
+             'float bmp280_temp = bmp280_readTemperature(&bmp);        // degrees C',
+             'float bmp280_pres = bmp280_readPressure(&bmp) / 100.0;   // hPa',
          ],
      },
      BMP3XX: {
@@ -533,14 +532,14 @@ LCD_HC595: {
      },
      SHT31: {
          include: '#include "SHT31.h"',
-         globals: ['SHT31_t sht;'],
+         globals: ['sht31_t sht;'],
          setup: [
              'Wire.begin();',
-             'SHT31_begin(&sht, SHT31_ADDR);',
+             'sht31_begin(&sht, SHT31_ADDR);',
          ],
          loop: [
-             'float temp = SHT31_readTemperature(&sht);',
-             'float hum = SHT31_readHumidity(&sht);',
+             'float sht31_temp, sht31_hum;',
+             'sht31_read(&sht, &sht31_temp, &sht31_hum); // degrees C, %RH',
          ],
      },
      SHT4x: {
@@ -560,23 +559,23 @@ LCD_HC595: {
          globals: ['AHT10_t aht;'],
          setup: [
              'Wire.begin();',
-             'AHT10_init(&aht);',
+             'AHT10_init(&aht, AHT10_ADDR);',
          ],
          loop: [
-             'float temp = AHT10_readTemperature(&aht);',
-             'float hum = AHT10_readHumidity(&aht);',
+             'float aht10_temp = AHT10_readTemperature(&aht); // degrees C',
+             'float aht10_hum  = AHT10_readHumidity(&aht);    // %RH',
          ],
      },
      AHT20: {
          include: '#include "AHT20.h"',
-         globals: ['AHT20_t aht;'],
+         globals: ['aht20_t aht;'],
          setup: [
              'Wire.begin();',
-             'AHT20_begin(&aht);',
+             'aht20_begin(&aht, AHT20_ADDR);',
          ],
          loop: [
-             'float temp, hum;',
-             'AHT20_getEvent(&aht, &temp, &hum);',
+             'float aht20_temp, aht20_hum;',
+             'aht20_read(&aht, &aht20_temp, &aht20_hum); // degrees C, %RH',
          ],
      },
      HTS221: {
@@ -608,25 +607,25 @@ LCD_HC595: {
          globals: ['SI7021_t si;'],
          setup: [
              'Wire.begin();',
-             'SI7021_begin(&si);',
+             'SI7021_begin(&si, SI7021_ADDR);',
          ],
          loop: [
-             'float temp = SI7021_readTemperature(&si);',
-             'float hum = SI7021_readHumidity(&si);',
+             'float si7021_temp = SI7021_readTemperature(&si); // degrees C',
+             'float si7021_hum  = SI7021_readHumidity(&si);    // %RH',
          ],
      },
      // ─── MOTION / IMU ────────────────────────────────────────────────────────────
-     mpu6050: {
-         include: '#include "mpu6050.h"',
-         globals: ['MPU6050_t mpu;'],
+     MPU6050: {
+         include: '#include "MPU6050.h"',
+         globals: ['mpu6050_t mpu;'],
          setup: [
              'Wire.begin();',
-             'MPU6050_init(&mpu, 0x68);',
-             'MPU6050_begin(&mpu);',
+             'mpu6050_begin(&mpu, MPU6050_ADDR);',
          ],
          loop: [
              'float ax, ay, az;',
-             'MPU6050_getAccel(&mpu, &ax, &ay, &az);',
+             'mpu6050_readAccel(&mpu, &ax, &ay, &az); // g',
+             'float mpu_temp = mpu6050_readTemp(&mpu); // degrees C',
          ],
      },
      MPU9250: {
@@ -684,15 +683,14 @@ LCD_HC595: {
      // ─── OTHER SENSORS ───────────────────────────────────────────────────────────
      INA219: {
          include: '#include "INA219.h"',
-         globals: ['INA219_t ina219;'],
+         globals: ['ina219_t ina219;'],
          setup: [
              'Wire.begin();',
-             'INA219_init(&ina219, 0x40);',
-             'INA219_begin(&ina219);',
+             'ina219_begin(&ina219, INA219_ADDR);',
          ],
          loop: [
-             'float bus_v = INA219_getBusVoltage_V(&ina219);',
-             'float current_ma = INA219_getCurrent_mA(&ina219);',
+             'float ina219_bus_v      = ina219_busVoltage(&ina219); // Volts',
+             'float ina219_current_ma = ina219_current(&ina219);    // milliAmps',
          ],
      },
      INA260: {
@@ -710,39 +708,42 @@ LCD_HC595: {
      },
      MCP4725: {
          include: '#include "MCP4725.h"',
-         globals: ['MCP4725_t dac;'],
+         globals: ['mcp4725_t dac;'],
          setup: [
              'Wire.begin();',
-             'MCP4725_init(&dac, 0x60);',
+             'mcp4725_begin(&dac, MCP4725_ADDR);',
          ],
          loop: [
-             'MCP4725_setVoltage(&dac, 2048, true); // 50% voltage (0-4095)',
+             'mcp4725_setValue(&dac, 2048); // 50% output (0-4095)',
          ],
      },
      MCP23017: {
          include: '#include "MCP23017.h"',
-         globals: ['MCP23017_t mcp;'],
+         globals: ['mcp23017_t mcp;'],
          setup: [
              'Wire.begin();',
-             'MCP23017_begin(&mcp, 0x20);',
+             'mcp23017_begin(&mcp, MCP23017_ADDR);',
+             'mcp23017_pinMode(&mcp, 0, GPIO_OUT);',
          ],
          loop: [
-             'MCP23017_pinMode(&mcp, 0, GPIO_OUT);',
-             'MCP23017_digitalWrite(&mcp, 0, GPIO_HIGH);',
+             'mcp23017_write(&mcp, 0, GPIO_HIGH);',
+             'sys_delay(500);',
+             'mcp23017_write(&mcp, 0, GPIO_LOW);',
+             'sys_delay(500);',
          ],
      },
      MCP23008: {
          include: '#include "MCP23008.h"',
-         globals: ['MCP23008_t mcp;'],
+         globals: ['mcp23008_t mcp;'],
          setup: [
              'Wire.begin();',
-             'MCP23008_init(&mcp, 0x20);',
-             'MCP23008_pinMode(&mcp, 0, GPIO_OUT);',
+             'mcp23008_begin(&mcp, MCP23008_ADDR);',
+             'mcp23008_pinMode(&mcp, 0, GPIO_OUT);',
          ],
          loop: [
-             'MCP23008_digitalWrite(&mcp, 0, GPIO_HIGH);',
+             'mcp23008_write(&mcp, 0, GPIO_HIGH);',
              'sys_delay(500);',
-             'MCP23008_digitalWrite(&mcp, 0, GPIO_LOW);',
+             'mcp23008_write(&mcp, 0, GPIO_LOW);',
              'sys_delay(500);',
          ],
      },
@@ -767,14 +768,16 @@ LCD_HC595: {
      },
      DS3231: {
          include: '#include "DS3231.h"',
-         globals: ['DS3231_t rtc;'],
+         globals: ['ds3231_t rtc;', 'ds3231_time_t now;'],
          setup: [
              'Wire.begin();',
-             'DS3231_init(&rtc);',
+             'ds3231_begin(&rtc, DS3231_ADDR);',
+             'ds3231_time_t set = { 2026, 6, 18, 14, 30, 0 }; // y,mo,d,h,mi,s — set clock once',
+             'ds3231_setTime(&rtc, &set);',
          ],
          loop: [
-             'DateTime_t now = DS3231_now(&rtc);',
-             'float temp = DS3231_getTemp(&rtc);',
+             'ds3231_getTime(&rtc, &now); // now.year/month/day/hour/minute/second',
+             'float ds3231_temp = ds3231_getTemperature(&rtc); // degrees C',
          ],
      },
      dht22: {
@@ -831,7 +834,7 @@ LCD_HC595: {
          globals: ['TSL2591_t tsl;'],
          setup: [
              'Wire.begin();',
-             'TSL2591_init(&tsl);',
+             'TSL2591_init(&tsl, TSL2591_ADDR);',
              'TSL2591_begin(&tsl);',
          ],
          loop: [
@@ -863,6 +866,79 @@ LCD_HC595: {
          ],
          loop: [
              'uint8_t gesture = APDS9960_readGesture(&apds);',
+         ],
+     },
+     // ─── RTC ──────────────────────────────────────────────────────────────────────
+     DS1307: {
+         include: '#include "DS1307.h"',
+         globals: ['ds1307_t rtc;', 'ds1307_time_t now;'],
+         setup: [
+             'Wire.begin();',
+             'ds1307_begin(&rtc, DS1307_ADDR);',
+             'ds1307_time_t set = { 2026, 6, 18, 14, 30, 0 }; // y,mo,d,h,mi,s — set clock once',
+             'ds1307_setTime(&rtc, &set);',
+         ],
+         loop: [
+             'ds1307_getTime(&rtc, &now); // now.year/month/day/hour/minute/second',
+         ],
+     },
+     // ─── MORE ENVIRONMENTAL / TEMP / LIGHT SENSORS ────────────────────────────────
+     HTU21DF: {
+         include: '#include "HTU21DF.h"',
+         globals: ['htu21df_t htu;'],
+         setup: [
+             'Wire.begin();',
+             'htu21df_begin(&htu, HTU21DF_ADDR);',
+         ],
+         loop: [
+             'float htu_temp = htu21df_readTemperature(&htu); // degrees C',
+             'float htu_hum  = htu21df_readHumidity(&htu);    // %RH',
+         ],
+     },
+     MCP9808: {
+         include: '#include "MCP9808.h"',
+         globals: ['mcp9808_t mcp9808;'],
+         setup: [
+             'Wire.begin();',
+             'mcp9808_begin(&mcp9808, MCP9808_ADDR);',
+         ],
+         loop: [
+             'float mcp9808_temp = mcp9808_readTemperature(&mcp9808); // degrees C',
+         ],
+     },
+     TMP117: {
+         include: '#include "TMP117.h"',
+         globals: ['tmp117_t tmp117;'],
+         setup: [
+             'Wire.begin();',
+             'tmp117_begin(&tmp117, TMP117_ADDR);',
+         ],
+         loop: [
+             'float tmp117_temp = tmp117_readTemperature(&tmp117); // degrees C',
+         ],
+     },
+     VEML7700: {
+         include: '#include "VEML7700.h"',
+         globals: ['veml7700_t veml7700;'],
+         setup: [
+             'Wire.begin();',
+             'veml7700_begin(&veml7700, VEML7700_ADDR);',
+         ],
+         loop: [
+             'float veml7700_lux = veml7700_readLux(&veml7700); // lux',
+         ],
+     },
+     // ─── ADC / DAC ────────────────────────────────────────────────────────────────
+     PCF8591: {
+         include: '#include "PCF8591.h"',
+         globals: ['pcf8591_t pcf8591;'],
+         setup: [
+             'Wire.begin();',
+             'pcf8591_begin(&pcf8591, PCF8591_ADDR);',
+         ],
+         loop: [
+             'uint8_t pcf8591_ain0 = pcf8591_read(&pcf8591, 0); // channel 0, 0-255',
+             'pcf8591_write(&pcf8591, 128);                     // DAC out ~half scale',
          ],
      },
 };
@@ -1798,33 +1874,40 @@ function insertAfterLastInclude(content, line) {
     return lines.join('\n');
 }
 
-// Insert `lines` (joined) immediately before `void setup(...)`.
+// Insert `lines` (joined) immediately before the boot function. PICPIO sketches
+// use init()/run(); setup()/loop() are accepted as legacy aliases.
 function insertBeforeSetup(content, lines) {
     if (!lines.length) return content;
-    const m = content.match(/\bvoid\s+setup\s*\([^)]*\)/);
+    const m = content.match(/\bvoid\s+(?:init|setup)\s*\([^)]*\)/);
     if (!m) return content;
     const text = lines.join('\n') + '\n\n';
     return content.slice(0, m.index) + text + content.slice(m.index);
 }
 
-// Insert `lines` (indented) just before the closing brace of `void <fnName>(...) { ... }`,
-// using brace-depth tracking so nested braces in an existing body don't confuse it.
-function insertIntoFunctionBody(content, fnName, lines) {
+// Insert `lines` (indented) just before the closing brace of the first matching
+// `void <name>(...) { ... }`, trying each name in `fnNames` (e.g. ['run','loop'])
+// so it works whether the sketch uses init()/run() or setup()/loop(). Uses
+// brace-depth tracking so nested braces in an existing body don't confuse it.
+function insertIntoFunctionBody(content, fnNames, lines) {
     if (!lines.length) return content;
-    const re = new RegExp(`void\\s+${fnName}\\s*\\([^)]*\\)\\s*\\{`);
-    const m = content.match(re);
-    if (!m) return content;
+    const names = Array.isArray(fnNames) ? fnNames : [fnNames];
+    for (const fnName of names) {
+        const re = new RegExp(`void\\s+${fnName}\\s*\\([^)]*\\)\\s*\\{`);
+        const m = content.match(re);
+        if (!m) continue;
 
-    let depth = 1;
-    let i = m.index + m[0].length;
-    for (; i < content.length; i++) {
-        if (content[i] === '{') depth++;
-        else if (content[i] === '}') { depth--; if (depth === 0) break; }
+        let depth = 1;
+        let i = m.index + m[0].length;
+        for (; i < content.length; i++) {
+            if (content[i] === '{') depth++;
+            else if (content[i] === '}') { depth--; if (depth === 0) break; }
+        }
+        if (i >= content.length) return content;
+
+        const body = '\n' + lines.map(l => '    ' + l).join('\n') + '\n';
+        return content.slice(0, i) + body + content.slice(i);
     }
-    if (i >= content.length) return content;
-
-    const body = '\n' + lines.map(l => '    ' + l).join('\n') + '\n';
-    return content.slice(0, i) + body + content.slice(i);
+    return content;
 }
 
 // After a bundled library with a known snippet is installed, drop a starter
@@ -1834,20 +1917,35 @@ function insertIntoFunctionBody(content, fnName, lines) {
 // different addresses on one bus), generate one numbered instance per count
 // instead of the single default instance.
 function scaffoldMainUsage(dirEntry, count) {
-    const snippet = LIB_SNIPPETS[dirEntry];
+    // Match the snippet key case-insensitively — the folder name (e.g. "MPU6050")
+    // may differ in case from the LIB_SNIPPETS key (e.g. "mpu6050").
+    const snippet = LIB_SNIPPETS[dirEntry]
+        || LIB_SNIPPETS[Object.keys(LIB_SNIPPETS).find(k => k.toLowerCase() === dirEntry.toLowerCase())];
     if (!snippet) return;
 
     const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
     if (!cfg || !isPicpioFw(cfg.framework)) return;
 
-    const mainFile = path.join(process.cwd(), cfg.src_dir || 'src', 'main.cpp');
-    if (!fs.existsSync(mainFile)) return;
+    // The sketch may be main.cpp or main.c.
+    const srcDir = path.join(process.cwd(), cfg.src_dir || 'src');
+    const mainFile = [path.join(srcDir, 'main.cpp'), path.join(srcDir, 'main.c')]
+        .find(p => fs.existsSync(p));
+    if (!mainFile) return;
+    const mainRel = path.relative(process.cwd(), mainFile);
 
     let content = fs.readFileSync(mainFile, 'utf8');
 
     const marker = `// ---- ${dirEntry} (added by picpio lib add) ----`;
     if (content.includes(marker)) {
-        console.log(`[PICPIO] main.cpp already has ${dirEntry} example code — skipping.`);
+        console.log(`[PICPIO] ${mainRel} already has ${dirEntry} example code — skipping.`);
+        return;
+    }
+
+    // If the sketch already includes this library's header (user wired it up
+    // manually), don't scaffold a duplicate #include/#define/usage.
+    const hdrM = (snippet.include || '').match(/["<]([^">]+)[">]/);
+    if (hdrM && content.includes(hdrM[1])) {
+        console.log(`[PICPIO] ${mainRel} already includes ${hdrM[1]} — skipping example scaffold.`);
         return;
     }
 
@@ -1868,8 +1966,8 @@ function scaffoldMainUsage(dirEntry, count) {
         }
     }
 
-    content = insertIntoFunctionBody(content, 'loop', [marker, ...loop]);
-    content = insertIntoFunctionBody(content, 'setup', [marker, ...setup]);
+    content = insertIntoFunctionBody(content, ['run', 'loop'],   [marker, ...loop]);
+    content = insertIntoFunctionBody(content, ['init', 'setup'], [marker, ...setup]);
     content = insertBeforeSetup(content, [marker, ...globals]);
     const includeLine = defineLines.length
         ? `${defineLines.join('\n')}\n${snippet.include}  ${marker}`
@@ -1877,7 +1975,7 @@ function scaffoldMainUsage(dirEntry, count) {
     content = insertAfterLastInclude(content, includeLine);
 
     fs.writeFileSync(mainFile, content);
-    console.log(`[PICPIO] Added ${dirEntry} example code to ${path.relative(process.cwd(), mainFile)}`);
+    console.log(`[PICPIO] Added ${dirEntry} example code to ${mainRel}`);
 }
 
 function cmdLib(args) {
@@ -1997,6 +2095,23 @@ function libAdd(name, count, force) {
         console.log(`[PICPIO] Downloading: ${name}`);
         downloadFile(name, path.join(libDir, fname));
         return;
+    }
+
+    // Install declared dependencies first (library.json "depends": ["PID"]),
+    // so e.g. PIDTune gets PID's headers + scaffold before its own.
+    const selfDir = findLibDir(name);
+    if (selfDir) {
+        const deps = readLibManifest(selfDir).depends;
+        if (Array.isArray(deps)) {
+            for (const dep of deps) {
+                const already = fs.existsSync(libDir) &&
+                    fs.readdirSync(libDir).some(d => d.toLowerCase() === dep.toLowerCase());
+                if (!already) {
+                    console.log(`[PICPIO] '${name}' requires '${dep}' — installing it first.`);
+                    libAdd(dep, 1, force);
+                }
+            }
+        }
     }
 
     // Bundled library — copy from picpio_tool/libraries/<DirName>/
@@ -2534,15 +2649,19 @@ function cmdVscode() {
     const family = (cfg.family || 'PIC18').toUpperCase();
     const isXC16 = family.startsWith('PIC24') || family.startsWith('DSPIC') || /DSPIC30F/.test(mcu.toUpperCase());
 
-    // Find XC8 include dirs (v3.x has separate include and include/c99)
+    // Find XC8 include dirs (v3.x has separate include and include/c99) and the
+    // compiler exe (compilerPath lets the VS Code C/C++ extension auto-locate the
+    // toolchain's system headers — without it, it reports "cannot open xc.h").
     const base = 'C:\\Program Files\\Microchip\\xc8';
     let xc8Inc  = 'C:/Program Files/Microchip/xc8/v3.10/pic/include';
     let xc8Inc2 = 'C:/Program Files/Microchip/xc8/v3.10/pic/include/c99';
+    let compilerPath = '';
     if (fs.existsSync(base)) {
         const vers = fs.readdirSync(base).filter(d => d.startsWith('v')).sort().reverse();
         if (vers[0]) {
             xc8Inc  = `C:/Program Files/Microchip/xc8/${vers[0]}/pic/include`;
             xc8Inc2 = `C:/Program Files/Microchip/xc8/${vers[0]}/pic/include/c99`;
+            compilerPath = `C:/Program Files/Microchip/xc8/${vers[0]}/bin/xc8-cc.exe`;
         }
     }
 
@@ -2552,6 +2671,7 @@ function cmdVscode() {
     if (isXC16) {
         const xc16Gcc = findXC16();
         if (xc16Gcc) {
+            compilerPath = xc16Gcc.replace(/\\/g, '/');
             const root = path.join(path.dirname(xc16Gcc), '..');
             xc16Includes = [
                 path.join(root, 'include').replace(/\\/g, '/'),
@@ -2591,27 +2711,55 @@ function cmdVscode() {
 
     const extraInclude = (cfg.lib_extra_dirs || '').split(',').map(s => s.trim()).filter(Boolean);
 
+    const includePath = [
+        '${workspaceFolder}/src',
+        '${workspaceFolder}/include',
+        '${workspaceFolder}/lib/**',
+        ...(isXC16 ? xc16Includes : [xc8Inc, xc8Inc2, xc8Inc.replace('/include', '/include/proc')]),
+        ...dfpIncludes,
+        acDir.replace(/\\/g, '/'),
+        ...extraInclude
+    ];
+
     fs.writeFileSync(path.join(vsDir, 'c_cpp_properties.json'), JSON.stringify({
         configurations: [{
             name: mcu,
-            includePath: [
-                '${workspaceFolder}/src',
-                '${workspaceFolder}/include',
-                '${workspaceFolder}/lib/**',
-                ...(isXC16 ? xc16Includes : [xc8Inc, xc8Inc2, xc8Inc.replace('/include', '/include/proc')]),
-                ...dfpIncludes,
-                acDir.replace(/\\/g, '/'),
-                ...extraInclude
-            ],
+            includePath,
             defines: [`__${mcu}__`, `_XTAL_FREQ=${cfg.clock_hz || '64000000'}`],
+            ...(compilerPath ? { compilerPath } : {}),
             cStandard: 'c99',
-            intelliSenseMode: 'gcc-x86'
+            intelliSenseMode: 'gcc-x86',
+            // Persist the symbol database to disk so the tag parser doesn't
+            // re-index the (huge) XC header tree from scratch on every reload —
+            // this is what stops Ctrl+Click sticking on "Loading...".
+            browse: {
+                path: includePath,
+                limitSymbolsToIncludedHeaders: false,
+                databaseFilename: '${workspaceFolder}/.vscode/.browse.vc.db'
+            }
         }],
         version: 4
     }, null, 2));
 
+    // settings.json: keep a generous on-disk IntelliSense cache (default is too
+    // small for the XC chip headers, so the parse is thrown away and re-run).
+    const settingsPath = path.join(vsDir, 'settings.json');
+    let settings = {};
+    if (fs.existsSync(settingsPath)) {
+        try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { settings = {}; }
+    }
+    settings['C_Cpp.intelliSenseCacheSize'] = 2048;        // MB of parsed-header cache
+    settings['C_Cpp.intelliSenseCachePath'] = '${workspaceFolder}/.vscode/.ipch';
+    settings['C_Cpp.intelliSenseEngine'] = 'default';
+    settings['files.associations'] = Object.assign({ '*.c': 'c', '*.h': 'c' }, settings['files.associations'] || {});
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+    // Keep the (potentially large) IntelliSense cache + symbol DB out of git.
+    fs.writeFileSync(path.join(vsDir, '.gitignore'), '.ipch/\n.browse.vc.db\n*.vc.db\n');
+
     console.log('[PICPIO] Generated .vscode/tasks.json');
     console.log('[PICPIO] Generated .vscode/c_cpp_properties.json');
+    console.log('[PICPIO] Generated .vscode/settings.json');
 }
 
 // ─── INSTALL DFP ─────────────────────────────────────────────────────────────
