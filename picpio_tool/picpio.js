@@ -2127,9 +2127,10 @@ function unscaffoldMainUsage(dirEntry) {
     if (!mainFile) return;
     const mainRel = path.relative(process.cwd(), mainFile);
 
-    const marker  = `// ---- ${dirEntry} (added by picpio lib add) ----`;
-    const content = fs.readFileSync(mainFile, 'utf8');
-    if (!content.includes(marker)) return;
+    const marker   = `// ---- ${dirEntry} (added by picpio lib add) ----`;
+    const markerLc = marker.toLowerCase();   // match case-insensitively (user may type "sd"/"SD")
+    const content  = fs.readFileSync(mainFile, 'utf8');
+    if (!content.toLowerCase().includes(markerLc)) return;
 
     // #define macro names this snippet added (removed even if the value was
     // edited, e.g. a changed I2C address).
@@ -2149,9 +2150,9 @@ function unscaffoldMainUsage(dirEntry) {
     while (i < lines.length) {
         const line = lines[i];
         const t = line.trim();
-        if (line.includes(marker) && t.startsWith('#include')) { i++; continue; }  // marked include
+        if (line.toLowerCase().includes(markerLc) && t.startsWith('#include')) { i++; continue; }  // marked include
         if (isAddedDefine(line))                               { i++; continue; }  // our #define
-        if (t === marker) {                                                         // a block
+        if (t.toLowerCase() === markerLc) {                                         // a block
             if (out.length && out[out.length - 1].trim() === '') out.pop();         // drop separator above
             i++;                                                                    // skip marker line
             while (i < lines.length) {
@@ -2332,6 +2333,7 @@ function libAdd(name, count, force) {
             console.log(`[PICPIO] Installed library '${dirEntry}' (${files.length} files)`);
             updateIniLibs(dirEntry);
             scaffoldMainUsage(dirEntry, count);
+            refreshVscodeConfig();               // re-index so IntelliSense sees the new header
             found = true;
             break;
         }
@@ -2353,15 +2355,19 @@ function libRemove(name) {
             d.toLowerCase() === name.toLowerCase() && fs.statSync(path.join(libRoot, d)).isDirectory());
         if (found) actual = found;
     }
-    const libDir = path.join(libRoot, actual);
-    if (!fs.existsSync(libDir)) {
-        console.error(`[PICPIO] Library '${name}' is not installed.`);
-        return;
-    }
+    const libDir    = path.join(libRoot, actual);
+    const hadFolder = fs.existsSync(libDir);
+
+    // Always strip the scaffolded code + ini entry, even if the lib/ folder was
+    // already deleted — otherwise stranded example code (and a broken #include)
+    // would be left in main.* with no way to clean it via the tool.
     unscaffoldMainUsage(actual);                 // strip its code from main.* first
-    fs.rmSync(libDir, { recursive: true, force: true });
+    if (hadFolder) fs.rmSync(libDir, { recursive: true, force: true });
     removeIniLib(actual);                        // drop it from picpio.ini [libraries]
-    console.log(`[PICPIO] Removed library '${actual}'`);
+    refreshVscodeConfig();                       // re-index so IntelliSense drops the removed header
+
+    if (hadFolder) console.log(`[PICPIO] Removed library '${actual}'`);
+    else           console.log(`[PICPIO] '${actual}' folder was already gone — cleaned its code + picpio.ini entry`);
 }
 
 function removeIniLib(name) {
@@ -2858,7 +2864,7 @@ function cmdInit(args) {
 }
 
 // ─── VSCODE CONFIG ───────────────────────────────────────────────────────────
-function cmdVscode() {
+function cmdVscode(opts = {}) {
     const cfg    = requireConfig();
     const mcu    = cfg.mcu || 'PIC18F27K40';
     const family = (cfg.family || 'PIC18').toUpperCase();
@@ -2972,9 +2978,25 @@ function cmdVscode() {
     // Keep the (potentially large) IntelliSense cache + symbol DB out of git.
     fs.writeFileSync(path.join(vsDir, '.gitignore'), '.ipch/\n.browse.vc.db\n*.vc.db\n');
 
-    console.log('[PICPIO] Generated .vscode/tasks.json');
-    console.log('[PICPIO] Generated .vscode/c_cpp_properties.json');
-    console.log('[PICPIO] Generated .vscode/settings.json');
+    if (opts.quiet) {
+        // Rewriting c_cpp_properties.json bumps its mtime, which makes the VS Code
+        // C/C++ extension reload the config, re-glob lib/** and re-index — this is
+        // what clears the stale "cannot open source file" squiggle after lib add/remove.
+        console.log('[PICPIO] Refreshed IntelliSense config (.vscode/c_cpp_properties.json)');
+    } else {
+        console.log('[PICPIO] Generated .vscode/tasks.json');
+        console.log('[PICPIO] Generated .vscode/c_cpp_properties.json');
+        console.log('[PICPIO] Generated .vscode/settings.json');
+    }
+}
+
+// After a library is added/removed, regenerate the IntelliSense config so the
+// C/C++ extension re-scans for new/removed headers (only if the project is
+// already set up for VS Code — don't force .vscode on CLI-only users).
+function refreshVscodeConfig() {
+    if (fs.existsSync(path.join(process.cwd(), '.vscode', 'c_cpp_properties.json'))) {
+        try { cmdVscode({ quiet: true }); } catch { /* non-fatal */ }
+    }
 }
 
 // ─── INSTALL DFP ─────────────────────────────────────────────────────────────
