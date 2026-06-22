@@ -493,3 +493,48 @@ SPIClass_t SPI = {
     .setDataMode    = _spi_setDataMode,
     .setClockDivider= _spi_setClkDiv,
 };
+
+// ── On-chip data EEPROM (PIC18F K40/Q10 NVM) ──────────────────────────────────
+// EEPROM region is selected by NVMCON1.NVMREG = 0b00; address goes in
+// NVMADRH:NVMADRL, data in NVMDAT. Writes use the 0x55/0xAA unlock sequence.
+uint8_t EEPROM_read(uint16_t addr) {
+    NVMADRL = (uint8_t)addr;
+    NVMADRH = (uint8_t)(addr >> 8);
+    NVMCON1bits.NVMREG = 0;          // 00 = data EEPROM
+    NVMCON1bits.RD = 1;
+    NOP();
+    NOP();
+    return NVMDAT;
+}
+
+void EEPROM_write(uint16_t addr, uint8_t value) {
+    uint8_t gie_save = (uint8_t)GIE;
+    NVMADRL = (uint8_t)addr;
+    NVMADRH = (uint8_t)(addr >> 8);
+    NVMDAT  = value;
+    NVMCON1bits.NVMREG = 0;          // 00 = data EEPROM
+    NVMCON1bits.WREN = 1;
+    GIE = 0;                          // unlock sequence must not be interrupted
+    NVMCON2 = 0x55;
+    NVMCON2 = 0xAA;
+    NVMCON1bits.WR = 1;
+    while (NVMCON1bits.WR) { }        // wait for write to finish
+    NVMCON1bits.WREN = 0;
+    GIE = gie_save;
+}
+
+void EEPROM_update(uint16_t addr, uint8_t value) {
+    if (EEPROM_read(addr) != value) EEPROM_write(addr, value);
+}
+
+uint16_t EEPROM_length(void) { return (uint16_t)PICPIO_EEPROM_SIZE; }
+
+void EEPROM_get(uint16_t addr, void *dst, uint16_t len) {
+    uint8_t *d = (uint8_t *)dst;
+    for (uint16_t i = 0; i < len; i++) d[i] = EEPROM_read((uint16_t)(addr + i));
+}
+
+void EEPROM_put(uint16_t addr, const void *src, uint16_t len) {
+    const uint8_t *s = (const uint8_t *)src;
+    for (uint16_t i = 0; i < len; i++) EEPROM_update((uint16_t)(addr + i), s[i]);
+}

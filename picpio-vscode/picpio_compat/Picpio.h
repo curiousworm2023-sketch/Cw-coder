@@ -22,6 +22,16 @@
 #define PICPIO_HAS_PORTDE 1
 #endif
 
+// ── On-chip data EEPROM size ──────────────────────────────────────────────────
+// K40 parts have 256 B; Q10 parts have 1024 B. Override with -D if needed.
+#if defined(_18F24Q10) || defined(_18F25Q10) || defined(_18F26Q10) || defined(_18F27Q10) || \
+    defined(_18F45Q10) || defined(_18F46Q10) || defined(_18F47Q10)
+#  define PICPIO_EEPROM_SIZE 1024
+#endif
+#ifndef PICPIO_EEPROM_SIZE
+#  define PICPIO_EEPROM_SIZE 256
+#endif
+
 // ── PICPIO types ─────────────────────────────────────────────────────────────
 typedef uint8_t  byte;
 typedef uint16_t word;
@@ -233,6 +243,16 @@ extern SPIClass_t SPI;  // SCK=RC5, SDI/MISO=RC2, SDO/MOSI=RC1 (CS=RC0 user-driv
 #define SPI_CLOCK_DIV32  32
 #define SPI_CLOCK_DIV64  64
 #define SPI_CLOCK_DIV128 128
+
+// ── On-chip data EEPROM (NVM) ─────────────────────────────────────────────────
+// Built-in EEPROM of the PIC itself (PICPIO_EEPROM_SIZE bytes). Addresses are
+// 0 .. PICPIO_EEPROM_SIZE-1. Writes take ~4 ms each (blocking).
+uint8_t  EEPROM_read(uint16_t addr);
+void     EEPROM_write(uint16_t addr, uint8_t value);
+void     EEPROM_update(uint16_t addr, uint8_t value);          // writes only if changed
+uint16_t EEPROM_length(void);                                  // PICPIO_EEPROM_SIZE
+void     EEPROM_get(uint16_t addr, void *dst, uint16_t len);   // read a block/struct
+void     EEPROM_put(uint16_t addr, const void *src, uint16_t len); // write (via update)
 
 // ── Interrupt helpers ─────────────────────────────────────────────────────────
 #define interrupts()    (GIE = 1)
