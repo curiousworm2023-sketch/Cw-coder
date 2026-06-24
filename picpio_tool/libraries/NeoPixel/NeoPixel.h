@@ -1,10 +1,10 @@
 // NeoPixel.h — PICPIO C driver for WS2812 / WS2812B / WS2811 ("NeoPixel")
 // addressable RGB LED strips. Single-wire, bit-banged.
 //
-// IMPORTANT: the bit-bang timing is tuned for PIC18 running at Fosc = 64 MHz
-// (the PICPIO default, e.g. PIC18F27K40). On a different clock you may need to
-// adjust NEOPIXEL_T0H/T1H/TLO below (with a logic analyzer / by eye). PIC18
-// only — uses the LATx output latch registers.
+// IMPORTANT: NeoPixel_show() is cycle-exact PIC18 assembly tuned for Fosc =
+// 64 MHz (the PICPIO default, e.g. PIC18F27K40). On a different clock the bit
+// timing won't match the WS2812 spec — adjust the nop counts in NeoPixel.c's
+// inner loop (with a logic analyzer / by eye). PIC18 only (LATx registers).
 //
 // Usage:
 //   #define LED_PIN   D5

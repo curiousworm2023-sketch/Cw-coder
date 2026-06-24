@@ -187,8 +187,12 @@ export function transpileSketch(src: string): TranspileResult {
     //
     // An initializer's "[^,;]+" can't simply stop at the first comma --
     // function-call arguments (e.g. "float r = foo(code, REF);") contain
-    // commas too. Allow one level of parenthesized commas to pass through.
-    const VALUE = '[^,;()]*(?:\\([^()]*\\)[^,;()]*)*';
+    // commas too. Allow nested parentheses (up to 3 levels, e.g.
+    // "wheel(((i + j) & 0xFF))") so commas/operators inside pass through.
+    const P1 = '\\([^()]*\\)';
+    const P2 = '\\((?:[^()]|' + P1 + ')*\\)';
+    const P3 = '\\((?:[^()]|' + P2 + ')*\\)';
+    const VALUE = '(?:[^,;()]|' + P3 + ')*';
     s = s.replace(new RegExp(`^(\\s*)${TYPES}\\s*\\*?\\s*(\\w+\\s*(?:=\\s*${VALUE})?(?:\\s*,\\s*\\*?\\w+(?:\\s*=\\s*${VALUE})?)*)\\s*;`, 'gm'),
         (_full: string, indent: string, decls: string) => `${indent}let ${decls.replace(/,(\s*)\*/g, ',$1')};`);
 

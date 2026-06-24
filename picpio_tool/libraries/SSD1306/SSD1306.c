@@ -142,6 +142,19 @@ void SSD1306_drawPixel(SSD1306_t *dev, int16_t x, int16_t y, uint8_t color)
     }
 }
 
+void SSD1306_drawBitmap(SSD1306_t *dev, int16_t x, int16_t y, const uint8_t *bitmap,
+                        int16_t w, int16_t h, uint8_t color)
+{
+    int16_t byteWidth = (int16_t)((w + 7) / 8);
+    for (int16_t j = 0; j < h; j++) {
+        for (int16_t i = 0; i < w; i++) {
+            uint8_t b = bitmap[j * byteWidth + (i >> 3)];
+            if (b & (uint8_t)(0x80 >> (i & 7)))
+                SSD1306_drawPixel(dev, (int16_t)(x + i), (int16_t)(y + j), color);
+        }
+    }
+}
+
 void SSD1306_drawLine(SSD1306_t *dev, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color)
 {
     int16_t dx = x1 - x0, dy = y1 - y0;

@@ -50,7 +50,9 @@ export class SimulatorServer {
     }
 
     private _handle(req: http.IncomingMessage, res: http.ServerResponse): void {
-        const url = req.url ?? '/';
+        // Match on the pathname only, so a query string (e.g. "/?session=abc")
+        // still routes to "/" — browsers append one when opened via openExternal.
+        const url = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
 
         if (url === '/' && req.method === 'GET') {
             const body = this._htmlProvider();

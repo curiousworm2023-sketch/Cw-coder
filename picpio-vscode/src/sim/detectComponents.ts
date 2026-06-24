@@ -4,7 +4,7 @@
 // simulator can auto-place and auto-wire matching circuit parts.
 
 export interface AutoWire { pin: string; term: string; }
-export interface AutoPart { type: string; wires: AutoWire[]; addr?: string; iface?: 'i2c' | 'gpio'; dev?: string; }
+export interface AutoPart { type: string; wires: AutoWire[]; addr?: string; iface?: 'i2c' | 'gpio'; dev?: string; name?: string; count?: number; }
 
 // Normalize a captured address literal ("0x27" or "39") to a "0xNN" hex string.
 function formatAddr(raw: string): string {
@@ -44,7 +44,17 @@ export function detectComponents(src: string): AutoPart[] {
         if (/^\d+$/.test(t))      return pinLabel(parseInt(t, 10));
         if (t in PIN_MACROS)      return pinLabel(PIN_MACROS[t]);
         if (t in defines)         return pinLabel(defines[t]);
+        // Follow a string #define alias, e.g. "#define LED_PIN D2" -> D2.
+        const am = s.match(new RegExp('#define\\s+' + t + '\\s+(\\w+)'));
+        if (am && am[1] !== t)    return resolvePin(am[1]);
         return null;
+    };
+    // Resolve an integer token (literal or #define'd constant), e.g. LED_COUNT.
+    const resolveInt = (token: string, dflt: number): number => {
+        const t = token.trim();
+        if (/^\d+$/.test(t)) return parseInt(t, 10);
+        if (t in defines)    return defines[t];
+        return dflt;
     };
 
     const outputPins = new Set<string>();
@@ -71,6 +81,19 @@ export function detectComponents(src: string): AutoPart[] {
     }
 
     const parts: AutoPart[] = [];
+
+    // NeoPixel / WS2812 strip: NeoPixel_init(&strip, count, pin). Detected before
+    // the plain-LED pass so its data pin isn't also drawn as a single LED.
+    let neoPin: string | null = null;
+    if (s.includes('NeoPixel') || /\bNeoPixel_init\s*\(/.test(s)) {
+        const m = s.match(/NeoPixel_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
+        const count = m ? resolveInt(m[1], 16) : 16;
+        neoPin = (m && resolvePin(m[2])) || 'RC0';
+        outputPins.delete(neoPin);   // it's the strip's data line, not an LED
+        parts.push({ type: 'neopixel', dev: 'neo', count, name: 'NeoPixel x' + count,
+            wires: [{ pin: neoPin, term: 'DIN' }] });
+    }
+
     for (const pin of outputPins) parts.push({ type: 'led', wires: [{ pin, term: '' }] });
     for (const pin of inputPins)  parts.push({ type: 'button', wires: [{ pin, term: '' }] });
     for (const pin of analogPins) {
@@ -126,6 +149,23 @@ export function detectComponents(src: string): AutoPart[] {
         ]});
     }
 
+    if (/\bILI9(341|488)_init\s*\(/.test(s) || has('ILI9341') || has('ILI9488')) {
+        // SPI TFT (ILI9341 240x320 or ILI9488 480x320): <drv>_init(&tft, cs, dc, rst).
+        const m = s.match(/ILI9(341|488)_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
+        const drv = (m && m[1]) || (/\bILI9488/.test(s) ? '488' : '341');
+        const cs  = (m && resolvePin(m[2])) || 'RB2';
+        const dc  = (m && resolvePin(m[3])) || 'RB1';
+        const rst = (m && resolvePin(m[4])) || 'RB0';
+        const name = drv === '488' ? 'ILI9488 3.5" TFT' : 'ILI9341 SPI TFT';
+        parts.push({ type: 'tft', dev: 'tft', name, wires: [
+            { pin: cs,    term: 'CS'  },
+            { pin: dc,    term: 'DC'  },
+            { pin: rst,   term: 'RST' },
+            { pin: 'RC1', term: 'SDI' },   // hardware SPI MOSI
+            { pin: 'RC5', term: 'SCK' },
+        ]});
+    }
+
     if (has('LCD_HC595') || /\bLCD595_/.test(s)) {
         // HD44780 character LCD driven through a 74HC595 shift register over
         // 3 GPIO pins: LCD595_init(&dev, dataPin, clockPin, latchPin).
@@ -141,6 +181,54 @@ export function detectComponents(src: string): AutoPart[] {
         if (clk)   wires.push({ pin: clk,   term: 'CLK'   });
         if (latch) wires.push({ pin: latch, term: 'LATCH' });
         parts.push({ type: rows >= 4 ? 'lcd2004' : 'lcd1602', dev: 'hc595', iface: 'gpio', wires });
+    }
+
+    // ── 7-segment displays ──────────────────────────────────────────────────
+    // Resolve the pin tokens inside an "uint8_t name[] = {D0, D1, ...};" array.
+    const parsePinArray = (name: string): (string | null)[] => {
+        const am = s.match(new RegExp('\\b' + name + '\\s*\\[[^\\]]*\\]\\s*=\\s*\\{([^}]*)\\}'));
+        if (!am) return [];
+        return am[1].split(',').map(t => resolvePin(t.trim()));
+    };
+
+    // Raw multiplexed: SevenSeg_init(&ss, segPins, digPins, numDigits, commonAnode)
+    if (/\bSevenSeg_init\s*\(/.test(s)) {
+        const m = s.match(/SevenSeg_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,/);
+        const digits = m ? resolveInt(m[3], 4) : 4;
+        const segLabels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp'];
+        const wires: AutoWire[] = [];
+        if (m) {
+            parsePinArray(m[1]).forEach((pin, i) => {
+                if (pin && segLabels[i]) wires.push({ pin, term: segLabels[i] });   // 0xFF (dp unused) -> null, skipped
+            });
+            parsePinArray(m[2]).slice(0, digits).forEach((pin, i) => {
+                if (pin) wires.push({ pin, term: 'd' + (i + 1) });
+            });
+        }
+        parts.push({ type: 'sevenseg', dev: 'sevenseg', count: digits,
+            name: digits + '-digit 7-seg', wires });
+    }
+    // TM1637 (2-wire): TM1637_init(&d, clkPin, dioPin)
+    if (/\bTM1637_init\s*\(/.test(s)) {
+        const m = s.match(/TM1637_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
+        const clk = (m && resolvePin(m[1])) || null;
+        const dio = (m && resolvePin(m[2])) || null;
+        const wires: AutoWire[] = [];
+        if (clk) wires.push({ pin: clk, term: 'CLK' });
+        if (dio) wires.push({ pin: dio, term: 'DIO' });
+        parts.push({ type: 'sevenseg', dev: 'tm1637', count: 4, name: 'TM1637 4-digit', wires });
+    }
+    // MAX7219 (SPI): MAX7219_init(&d, csPin, numDigits)
+    if (/\bMAX7219_init\s*\(/.test(s)) {
+        const m = s.match(/MAX7219_init\s*\(\s*&?\s*\w+\s*,\s*(\w+)\s*,\s*(\w+)\s*\)/);
+        const cs = (m && resolvePin(m[1])) || 'RC0';
+        const digits = m ? resolveInt(m[2], 8) : 8;
+        parts.push({ type: 'sevenseg', dev: 'max7219', count: digits,
+            name: 'MAX7219 ' + digits + '-digit', wires: [
+                { pin: cs,    term: 'CS'  },
+                { pin: 'RC1', term: 'DIN' },
+                { pin: 'RC5', term: 'CLK' },
+            ]});
     }
 
     return parts;

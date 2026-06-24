@@ -74,4 +74,10 @@ void SSD1306_drawChar(SSD1306_t *dev, int16_t x, int16_t y, char c, uint8_t colo
 // to the next line (every 8*textSize px) when it would run off the right edge.
 void SSD1306_print(SSD1306_t *dev, const char *str);
 
+// Draw a 1-bpp bitmap (row-major, MSB-first, each row padded to a byte) of
+// size w x h at (x,y). Set bits are drawn in `color`. Pairs with the PICPIO
+// Display Designer's bitmap export.
+void SSD1306_drawBitmap(SSD1306_t *dev, int16_t x, int16_t y, const uint8_t *bitmap,
+                        int16_t w, int16_t h, uint8_t color);
+
 #endif // SSD1306_H

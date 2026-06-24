@@ -14,10 +14,12 @@ const code: string = workerData.code;
 const MAX_ITERS = 100000;
 const MAX_RUN_REAL_MS = 10 * 60 * 1000; // 10 minutes
 const LOOP_INTERVAL_MS = 120;
-// Caps a single setup()/loop() call, including any delay() inside it — must
-// comfortably exceed the total delay() time a typical sketch uses per loop()
-// now that delay() is 1:1 with real time.
-const RUN_TIMEOUT_MS = 15000;
+// Caps a single setup()/loop() call, including any delay() inside it. Because
+// delay() runs in real time, a loop() that plays a long animation sequence
+// (e.g. several NeoPixel patterns back-to-back) can legitimately take tens of
+// seconds — so this is generous. It's only a last-resort guard against a tight
+// infinite loop; Stop/Restart/close kill the worker instantly via terminate().
+const RUN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 // 1 virtual ms of delay() == this many real ms of pause (1:1 — matches
 // real hardware timing).
 const DELAY_SCALE = 1;
@@ -74,12 +76,30 @@ function analogWrite(pin: number, val: number): void {
 // panel) override the simulated sine-wave reading for that pin.
 const analogOverride: Record<string, number> = {};
 
+// Throttle/dedupe analog samples streamed to the scope: emit identical values
+// at most every 200ms (a heartbeat so the trace keeps extending), and changing
+// values at most every 15ms.
+const lastAnalogEmit: Record<string, { t: number; v: number }> = {};
+function emitAnalog(label: string, v: number): void {
+    const now = Date.now();
+    const le = lastAnalogEmit[label];
+    if (le && v === le.v && now - le.t < 200) return;
+    if (le && now - le.t < 15) return;
+    lastAnalogEmit[label] = { t: now, v };
+    emit({ t: 'analog', pin: label, value: v });
+}
+
 function analogRead(pin: number): number {
     const label = pinLabel(pin);
-    if (label in analogOverride) return analogOverride[label];
-    const seed = label.charCodeAt(label.length - 1);
-    const v = Math.floor(512 + 511 * Math.sin(millis() / 400 + seed));
-    return Math.max(0, Math.min(1023, v));
+    let v: number;
+    if (label in analogOverride) {
+        v = analogOverride[label];
+    } else {
+        const seed = label.charCodeAt(label.length - 1);
+        v = Math.max(0, Math.min(1023, Math.floor(512 + 511 * Math.sin(millis() / 400 + seed))));
+    }
+    emitAnalog(label, v);
+    return v;
 }
 
 // Really pauses this worker thread for `ms` real milliseconds, so events
@@ -336,6 +356,141 @@ function LCD_setCursor(_l: unknown, col: number, row: number): void { i2cLcd.set
 function LCD_print(_l: unknown, str: unknown): void { i2cLcd.print(str); }
 function LCD_writeChar(_l: unknown, v: unknown): void { i2cLcd.put(typeof v === 'number' ? String.fromCharCode(Number(v)) : String(v)); i2cLcd.emitL(); }
 
+// ILI9488 480x320 TFT emulation. The library's draw calls aren't transpiled,
+// so they're provided here as stubs that emit {t:'tft', op, ...} draw ops for
+// the panel to execute on a color canvas. RGB565 colors -> CSS rgb().
+function c565(c: number): string {
+    const v = Number(c) & 0xFFFF;
+    const r = Math.round(((v >> 11) & 0x1F) * 255 / 31);
+    const g = Math.round(((v >> 5) & 0x3F) * 255 / 63);
+    const b = Math.round((v & 0x1F) * 255 / 31);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+function tftEmit(op: Record<string, unknown>): void { emit(Object.assign({ t: 'tft' }, op)); }
+function rgb565(r: number, g: number, b: number): number {
+    return ((Number(r) & 0xF8) << 8) | ((Number(g) & 0xFC) << 3) | (Number(b) >> 3);
+}
+const tftText = { color: 0xFFFF, size: 1, x: 0, y: 0 };
+
+function ILI9488_init(..._a: unknown[]): void { tftEmit({ op: 'init', w: 480, h: 320 }); }
+function ILI9488_begin(_d: unknown, w: number, h: number): boolean { tftEmit({ op: 'init', w: Number(w) || 480, h: Number(h) || 320 }); return true; }
+function ILI9488_fillScreen(_d: unknown, color: number): void { tftEmit({ op: 'fill', color: c565(color) }); }
+function ILI9488_drawPixel(_d: unknown, x: number, y: number, color: number): void { tftEmit({ op: 'rect', x: +x, y: +y, w: 1, h: 1, fill: true, color: c565(color) }); }
+function ILI9488_fillRect(_d: unknown, x: number, y: number, w: number, h: number, color: number): void { tftEmit({ op: 'rect', x: +x, y: +y, w: +w, h: +h, fill: true, color: c565(color) }); }
+function ILI9488_drawRect(_d: unknown, x: number, y: number, w: number, h: number, color: number): void { tftEmit({ op: 'rect', x: +x, y: +y, w: +w, h: +h, fill: false, color: c565(color) }); }
+function ILI9488_drawLine(_d: unknown, x0: number, y0: number, x1: number, y1: number, color: number): void { tftEmit({ op: 'line', x0: +x0, y0: +y0, x1: +x1, y1: +y1, color: c565(color) }); }
+function ILI9488_drawCircle(_d: unknown, x: number, y: number, r: number, color: number): void { tftEmit({ op: 'circle', x: +x, y: +y, r: +r, fill: false, color: c565(color) }); }
+function ILI9488_fillCircle(_d: unknown, x: number, y: number, r: number, color: number): void { tftEmit({ op: 'circle', x: +x, y: +y, r: +r, fill: true, color: c565(color) }); }
+function ILI9488_setTextColor(_d: unknown, color: number): void { tftText.color = Number(color) & 0xFFFF; }
+function ILI9488_setTextSize(_d: unknown, size: number): void { tftText.size = Math.max(1, Number(size) || 1); }
+function ILI9488_setCursor(_d: unknown, x: number, y: number): void { tftText.x = +x; tftText.y = +y; }
+function ILI9488_print(_d: unknown, str: unknown): void {
+    const s = oledStringify(str);
+    tftEmit({ op: 'text', x: tftText.x, y: tftText.y, str: s, color: c565(tftText.color), size: tftText.size });
+    tftText.x += s.length * 6 * tftText.size;
+}
+function ILI9488_setRotation(_d: unknown, r: number): void { tftEmit({ op: 'rotation', r: Number(r) & 3 }); }
+
+// NeoPixel / WS2812 strip emulation: a buffer of [r,g,b]; show() emits the whole
+// strip as CSS colors for the panel to light up.
+let neoBuf: number[][] = [];
+let neoCount = 0;
+function NeoPixel_init(_s: unknown, count: number): void {
+    neoCount = Math.max(0, Math.min(1024, Math.trunc(Number(count)) || 0));
+    neoBuf = Array.from({ length: neoCount }, () => [0, 0, 0]);
+}
+function NeoPixel_begin(_s: unknown): number {
+    for (let i = 0; i < neoCount; i++) neoBuf[i] = [0, 0, 0];
+    return 1;
+}
+function NeoPixel_setPixelColor(_s: unknown, i: number, r: number, g: number, b: number): void {
+    const idx = Math.trunc(Number(i));
+    if (idx >= 0 && idx < neoCount) neoBuf[idx] = [Number(r) & 0xFF, Number(g) & 0xFF, Number(b) & 0xFF];
+}
+function NeoPixel_clear(_s: unknown): void {
+    for (let i = 0; i < neoCount; i++) neoBuf[i] = [0, 0, 0];
+}
+function NeoPixel_show(_s: unknown): void {
+    emit({ t: 'neo', pixels: neoBuf.map(c => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')') });
+}
+
+// 7-segment displays (TM1637 / MAX7219 / raw SevenSeg). All three reduce to a
+// per-digit segment buffer (bit0=a..bit6=g, bit7=dp); show() variants emit
+// {t:'seg', dev, segs, colon} for the panel to light. segs[0] is the leftmost
+// digit. SEG_FONT maps 0-9 to segment patterns.
+const SEG_FONT = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F];
+
+function makeSevenSeg(dev: string) {
+    let n = 4;
+    let segs: number[] = new Array(n).fill(0);
+    let colon = 0;
+    let last = 0;
+    const emitNow = (): void => { emit({ t: 'seg', dev, segs: segs.slice(0, n), colon }); last = Date.now(); };
+    const emitThrottled = (): void => { if (Date.now() - last >= 150) emitNow(); };
+    const setCount = (c: number): void => {
+        n = Math.max(1, Math.min(8, Math.trunc(Number(c)) || 4));
+        segs = new Array(n).fill(0);
+    };
+    const clear = (): void => { segs = new Array(n).fill(0); emitNow(); };
+    const setColon = (on: number): void => { colon = on ? 1 : 0; emitNow(); };
+    const digitLeft = (pos: number, value: number, dp: number): void => {
+        const p = Math.trunc(Number(pos));
+        const v = Math.trunc(Number(value));
+        if (p >= 0 && p < n) segs[p] = (v >= 0 && v <= 9 ? SEG_FONT[v] : 0) | (dp ? 0x80 : 0);
+        emitNow();
+    };
+    const digitRight = (pos: number, value: number, dp: number): void => digitLeft(n - 1 - Math.trunc(Number(pos)), value, dp);
+    const segByte = (pos: number, b: number): void => {
+        const p = Math.trunc(Number(pos));
+        if (p >= 0 && p < n) segs[p] = Number(b) & 0xFF;
+        emitNow();
+    };
+    const number = (num: number): void => {
+        let v = Math.trunc(Number(num)) || 0;
+        const neg = v < 0; if (neg) v = -v;
+        for (let i = 0; i < n; i++) segs[i] = 0;
+        let p = n - 1;
+        segs[p--] = SEG_FONT[v % 10]; v = Math.floor(v / 10);
+        while (v > 0 && p >= 0) { segs[p--] = SEG_FONT[v % 10]; v = Math.floor(v / 10); }
+        if (neg && p >= 0) segs[p] = 0x40;   // '-'
+        emitNow();
+    };
+    const refresh = (): void => emitThrottled();
+    return { setCount, clear, setColon, digitLeft, digitRight, segByte, number, refresh };
+}
+
+const ss7 = makeSevenSeg('sevenseg');
+const tm16 = makeSevenSeg('tm1637');
+const mx72 = makeSevenSeg('max7219');
+
+// Raw multiplexed SevenSeg (pos 0 = leftmost).
+function SevenSeg_init(_s: unknown, _seg: unknown, _dig: unknown, numDigits: number): void { ss7.setCount(numDigits); }
+function SevenSeg_setDigit(_s: unknown, pos: number, value: number, dp: number): void { ss7.digitLeft(pos, value, dp); }
+function SevenSeg_setSegments(_s: unknown, pos: number, segbits: number): void { ss7.segByte(pos, segbits); }
+function SevenSeg_setNumber(_s: unknown, number: number): void { ss7.number(number); }
+function SevenSeg_clear(_s: unknown): void { ss7.clear(); }
+function SevenSeg_refresh(_s: unknown): void { ss7.refresh(); }
+
+// TM1637 (4 digits, pos/index 0 = leftmost).
+function TM1637_init(_d: unknown, _clk?: unknown, _dio?: unknown): void { tm16.setCount(4); }
+function TM1637_setBrightness(): void { /* visual no-op */ }
+function TM1637_setColon(_d: unknown, on: number): void { tm16.setColon(on); }
+function TM1637_clear(_d: unknown): void { tm16.clear(); }
+function TM1637_showNumber(_d: unknown, number: number): void { tm16.number(number); }
+function TM1637_showDigits(_d: unknown, value: number[]): void {
+    for (let i = 0; i < 4; i++) tm16.digitLeft(i, (value && value[i] !== undefined) ? value[i] : 0xFF, 0);
+}
+function TM1637_showSegments(_d: unknown, seg: number[]): void {
+    for (let i = 0; i < 4; i++) tm16.segByte(i, (seg && seg[i] !== undefined) ? seg[i] : 0);
+}
+
+// MAX7219 (pos 0 = rightmost, like the chip's digit registers).
+function MAX7219_init(_d: unknown, _cs: unknown, numDigits: number): void { mx72.setCount(numDigits); }
+function MAX7219_setBrightness(): void { /* visual no-op */ }
+function MAX7219_clear(_d: unknown): void { mx72.clear(); }
+function MAX7219_showDigit(_d: unknown, pos: number, value: number, dp: number): void { mx72.digitRight(pos, value, dp); }
+function MAX7219_showNumber(_d: unknown, number: number): void { mx72.number(number); }
+
 function map(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
     return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
@@ -386,6 +541,29 @@ const baseGlobals: Record<string, unknown> = {
     LCD_init, LCD_begin, LCD_clear, LCD_home, LCD_setCursor, LCD_print, LCD_writeChar,
     LCD_backlight: () => { /* visual no-op */ }, LCD_noBacklight: () => { /* no-op */ },
     LCD_display: () => { /* no-op */ }, LCD_noDisplay: () => { /* no-op */ },
+    // ILI9488 3.5" TFT (RGB565 color constants + draw API).
+    ILI9488_BLACK: 0x0000, ILI9488_BLUE: 0x001F, ILI9488_RED: 0xF800, ILI9488_GREEN: 0x07E0,
+    ILI9488_CYAN: 0x07FF, ILI9488_MAGENTA: 0xF81F, ILI9488_YELLOW: 0xFFE0, ILI9488_WHITE: 0xFFFF,
+    ILI9488_init, ILI9488_begin, ILI9488_fillScreen, ILI9488_drawPixel, ILI9488_fillRect,
+    ILI9488_drawRect, ILI9488_drawLine, ILI9488_drawCircle, ILI9488_fillCircle,
+    ILI9488_setTextColor, ILI9488_setTextSize, ILI9488_setCursor, ILI9488_print,
+    ILI9488_setRotation, ILI9488_rgb565: rgb565,
+    // ILI9341 240x320 TFT — same draw model, aliased to the shared TFT emulation.
+    ILI9341_BLACK: 0x0000, ILI9341_BLUE: 0x001F, ILI9341_RED: 0xF800, ILI9341_GREEN: 0x07E0,
+    ILI9341_CYAN: 0x07FF, ILI9341_MAGENTA: 0xF81F, ILI9341_YELLOW: 0xFFE0, ILI9341_WHITE: 0xFFFF,
+    ILI9341_rgb565: rgb565,
+    ILI9341_init: ILI9488_init, ILI9341_begin: ILI9488_begin, ILI9341_fillScreen: ILI9488_fillScreen,
+    ILI9341_drawPixel: ILI9488_drawPixel, ILI9341_fillRect: ILI9488_fillRect, ILI9341_drawRect: ILI9488_drawRect,
+    ILI9341_drawLine: ILI9488_drawLine, ILI9341_drawCircle: ILI9488_drawCircle, ILI9341_fillCircle: ILI9488_fillCircle,
+    ILI9341_setTextColor: ILI9488_setTextColor, ILI9341_setTextSize: ILI9488_setTextSize,
+    ILI9341_setCursor: ILI9488_setCursor, ILI9341_print: ILI9488_print,
+    ILI9341_setRotation: ILI9488_setRotation,
+    // NeoPixel / WS2812 strip
+    NeoPixel_init, NeoPixel_begin, NeoPixel_setPixelColor, NeoPixel_clear, NeoPixel_show,
+    // 7-segment displays (raw SevenSeg / TM1637 / MAX7219)
+    SevenSeg_init, SevenSeg_setDigit, SevenSeg_setSegments, SevenSeg_setNumber, SevenSeg_clear, SevenSeg_refresh,
+    TM1637_init, TM1637_setBrightness, TM1637_setColon, TM1637_clear, TM1637_showNumber, TM1637_showDigits, TM1637_showSegments,
+    MAX7219_init, MAX7219_setBrightness, MAX7219_clear, MAX7219_showDigit, MAX7219_showNumber,
     map, constrain, random,
     min: Math.min, max: Math.max, abs: Math.abs, pow: Math.pow, sqrt: Math.sqrt,
 };

@@ -75,7 +75,9 @@ void ILI9341_init(ILI9341_t *dev, uint8_t cs, uint8_t dc, uint8_t rst) {
 bool ILI9341_begin(ILI9341_t *dev, uint16_t width, uint16_t height) {
     dev->width = width;
     dev->height = height;
-    
+    dev->baseW = width;
+    dev->baseH = height;
+
     pinMode(dev->cs, OUTPUT);
     pinMode(dev->dc, OUTPUT);
     pinMode(dev->rst, OUTPUT);
@@ -135,6 +137,18 @@ void ILI9341_drawPixel(ILI9341_t *dev, int16_t x, int16_t y, uint16_t color) {
     SPI.transfer(color >> 8);
     SPI.transfer(color & 0xFF);
     gpio_write(dev->cs, HIGH);
+}
+
+void ILI9341_drawBitmap(ILI9341_t *dev, int16_t x, int16_t y, const uint8_t *bitmap,
+                        int16_t w, int16_t h, uint16_t color) {
+    int16_t byteWidth = (int16_t)((w + 7) / 8);
+    for (int16_t j = 0; j < h; j++) {
+        for (int16_t i = 0; i < w; i++) {
+            uint8_t b = bitmap[j * byteWidth + (i >> 3)];
+            if (b & (uint8_t)(0x80 >> (i & 7)))
+                ILI9341_drawPixel(dev, (int16_t)(x + i), (int16_t)(y + j), color);
+        }
+    }
 }
 
 void ILI9341_drawLine(ILI9341_t *dev, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) {
@@ -271,7 +285,11 @@ void ILI9341_print(ILI9341_t *dev, const char *str) {
 }
 
 void ILI9341_setRotation(ILI9341_t *dev, uint8_t r) {
-    dev->rotation = r;
+    dev->rotation = r & 3;
+    // Odd rotations are landscape — swap the logical width/height so drawing
+    // bounds and fillScreen cover the whole panel.
+    if (dev->rotation & 1) { dev->width = dev->baseH; dev->height = dev->baseW; }
+    else                   { dev->width = dev->baseW; dev->height = dev->baseH; }
     uint8_t madctl;
     switch (r & 3) {
         case 0: madctl = 0x0C; break;

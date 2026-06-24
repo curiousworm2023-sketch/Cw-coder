@@ -1,0 +1,541 @@
+// PICPIO Display Designer — a Lopaka-style visual layout editor.
+// Draw text / lines / rects / circles on a virtual display, then generate the
+// matching PICPIO draw code (SSD1306 OLED, ILI9341/ILI9488 TFT, or character
+// LCD) and copy it / insert it at the cursor. Clean-room: our own editor and
+// code generator, no third-party assets.
+import * as vscode from 'vscode';
+import * as http from 'http';
+import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import { readConfig } from './iniParser';
+
+// ── Module-level browser server ─────────────────────────────────────────────
+// Opens the designer as a real browser tab from the EXTENSION HOST (so it works
+// even when a webview panel was restored across a reload and lost its message
+// handler). Self-contained server with pathname routing.
+let _browserServer: http.Server | undefined;
+let _browserPort = 0;
+
+function ensureDesignerServer(): Promise<number> {
+    if (_browserServer && _browserPort) return Promise.resolve(_browserPort);
+    return new Promise((resolve, reject) => {
+        const s = http.createServer((req, res) => {
+            const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+            if (pathname === '/' && req.method === 'GET') {
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(renderDesignerHtml(true));
+                return;
+            }
+            // Browser "Insert into main.c": POST the generated code; the
+            // extension drops it into the project's main source file.
+            if (pathname === '/insert' && req.method === 'POST') {
+                let body = '';
+                req.on('data', c => { body += c; });
+                req.on('end', async () => {
+                    let ok = false, file = '';
+                    try {
+                        const { code } = JSON.parse(body || '{}');
+                        file = await insertDesignerCode(String(code || ''));
+                        ok = !!file;
+                    } catch { /* ignore */ }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok, file }));
+                });
+                return;
+            }
+            res.writeHead(404); res.end('Not found');
+        });
+        s.on('error', reject);
+        s.listen(0, '127.0.0.1', () => {
+            const a = s.address();
+            _browserPort = typeof a === 'object' && a ? a.port : 0;
+            _browserServer = s;
+            resolve(_browserPort);
+        });
+    });
+}
+
+// Insert generated draw code into the project's main source file, at the end of
+// init() (where display setup lives). Returns the file's basename, or '' if it
+// couldn't find a target. Used by the browser designer's "Insert into main.c".
+async function insertDesignerCode(code: string): Promise<string> {
+    if (!code.trim()) return '';
+    let ed = vscode.window.activeTextEditor;
+    if (!ed || !/\.(c|cpp|h)$/i.test(ed.document.fileName)) {
+        ed = vscode.window.visibleTextEditors.find(e => /\.(c|cpp)$/i.test(e.document.fileName));
+    }
+    if (!ed) {
+        const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const srcDir = readConfig()?.src_dir ?? 'src';
+        if (root) {
+            for (const name of ['main.cpp', 'main.c']) {
+                const p = path.join(root, srcDir, name);
+                if (fs.existsSync(p)) {
+                    const doc = await vscode.workspace.openTextDocument(p);
+                    ed = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+                    break;
+                }
+            }
+        }
+    }
+    if (!ed) { vscode.window.showWarningMessage('PICPIO: open your main.c in VS Code, then Insert.'); return ''; }
+
+    const editor = ed;
+    const doc = editor.document;
+    const text = doc.getText();
+    let pos = editor.selection.active;
+    // Drop it just before the closing brace of init() if we can locate it.
+    const m = /\binit\s*\([^)]*\)\s*\{/.exec(text);
+    if (m) {
+        let depth = 0, i = m.index + m[0].length - 1;
+        for (; i < text.length; i++) {
+            if (text[i] === '{') depth++;
+            else if (text[i] === '}') { depth--; if (depth === 0) break; }
+        }
+        if (i < text.length) pos = doc.positionAt(i);
+    }
+    const indented = code.split('\n').map(l => (l ? '    ' + l : l)).join('\n');
+    await editor.edit(b => b.insert(pos, indented + '\n'));
+    vscode.window.showInformationMessage('PICPIO: display code inserted into ' + path.basename(doc.fileName));
+    return path.basename(doc.fileName);
+}
+
+/** Open the Display Designer in the system browser (command-palette safe). */
+export async function openDesignerInBrowser(): Promise<void> {
+    try {
+        const port = await ensureDesignerServer();
+        const url = `http://127.0.0.1:${port}/?session=${Date.now().toString(36)}`;
+        let opened = false;
+        try { opened = await vscode.env.openExternal(vscode.Uri.parse(url)); } catch { /* fall through */ }
+        // Hard fallback: launch the default browser via the Windows shell.
+        if (!opened) { try { cp.exec(`start "" "${url}"`); } catch { /* ignore */ } }
+        vscode.window.showInformationMessage('PICPIO Display Designer: ' + url, 'Copy URL')
+            .then(p => { if (p === 'Copy URL') vscode.env.clipboard.writeText(url); });
+    } catch (e) {
+        vscode.window.showErrorMessage('Could not open designer in browser: ' + (e instanceof Error ? e.message : String(e)));
+    }
+}
+
+export function disposeDesignerServer(): void {
+    try { _browserServer?.close(); } catch { /* ignore */ }
+    _browserServer = undefined;
+    _browserPort = 0;
+}
+
+export class DesignerPanel {
+    static current: DesignerPanel | undefined;
+    private readonly _panel: vscode.WebviewPanel;
+    private _disposables: vscode.Disposable[] = [];
+
+    static createOrShow(): DesignerPanel {
+        const col = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Beside;
+        if (DesignerPanel.current) { DesignerPanel.current._panel.reveal(col); return DesignerPanel.current; }
+        const panel = vscode.window.createWebviewPanel(
+            'picpioDesigner', 'PICPIO Display Designer', col,
+            { enableScripts: true, retainContextWhenHidden: true }
+        );
+        DesignerPanel.current = new DesignerPanel(panel);
+        return DesignerPanel.current;
+    }
+
+    private constructor(panel: vscode.WebviewPanel) {
+        this._panel = panel;
+        this._panel.webview.html = renderDesignerHtml();
+        this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
+        this._panel.webview.onDidReceiveMessage(m => this._handle(m), null, this._disposables);
+    }
+
+    private async _handle(m: { command?: string; code?: string }): Promise<void> {
+        if (m.command === 'copy' && m.code !== undefined) {
+            await vscode.env.clipboard.writeText(m.code);
+            vscode.window.showInformationMessage('PICPIO: display code copied to clipboard.');
+        }
+        if (m.command === 'insert' && m.code !== undefined) {
+            const ed = vscode.window.visibleTextEditors.find(e => e.document.languageId === 'c' || /\.(c|cpp|h)$/i.test(e.document.fileName))
+                ?? vscode.window.activeTextEditor;
+            if (!ed) { vscode.window.showWarningMessage('PICPIO: open your main.c first, then Insert.'); return; }
+            await ed.edit(b => b.insert(ed.selection.active, m.code!));
+            vscode.window.showInformationMessage('PICPIO: display code inserted.');
+        }
+        if (m.command === 'openBrowser') {
+            await openDesignerInBrowser();
+        }
+    }
+
+    private _dispose(): void {
+        DesignerPanel.current = undefined;
+        this._panel.dispose();
+        while (this._disposables.length) this._disposables.pop()?.dispose();
+    }
+}
+
+export function renderDesignerHtml(standalone = false): string {
+    // Host adapter: Copy/Insert differ between the VS Code webview (postMessage
+    // to the extension) and a plain browser page (clipboard API + file download).
+    const host = standalone
+        ? `function __copy(c){ if(navigator.clipboard) navigator.clipboard.writeText(c); toast('Copied to clipboard'); }
+           function __insert(c){ fetch('/insert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:c})}).then(r=>r.json()).then(j=>{ toast(j.ok ? ('Inserted into '+j.file) : 'Open main.c in VS Code first'); }).catch(()=>toast('Insert failed')); }
+           function __download(c){ const b=new Blob([c],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='display.txt'; a.click(); }
+           function toast(t){ let d=document.getElementById('_toast'); if(!d){d=document.createElement('div'); d.id='_toast'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#f27f0c;color:#fff;padding:8px 16px;border-radius:6px;z-index:99'; document.body.appendChild(d);} d.textContent=t; d.style.opacity=1; clearTimeout(d._t); d._t=setTimeout(()=>d.style.opacity=0,1400); }`
+        : `const vscode = acquireVsCodeApi();
+           function __copy(c){ vscode.postMessage({command:'copy', code:c}); }
+           function __insert(c){ vscode.postMessage({command:'insert', code:c}); }
+           function __browser(){ vscode.postMessage({command:'openBrowser'}); }`;
+    // The browser build needs img/blob sources for bitmap import; the webview
+    // build keeps a strict CSP.
+    const csp = standalone
+        ? `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; connect-src 'self';`
+        : `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:;`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<style>
+:root{--accent:#f27f0c;--bg:#1e1e1e;--panel:#252526;--border:#3e3e42;--text:#ccc;--sub:#888}
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;background:var(--bg);color:var(--text);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--border)}
+.bar b{color:var(--accent)}
+select,input,textarea{background:#1e1e1e;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px}
+button{background:#333;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px}
+button:hover{border-color:var(--accent)}
+button.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+.main{display:flex;gap:12px;padding:12px;align-items:flex-start}
+.stage{background:#000;padding:10px;border:1px solid var(--border);border-radius:6px}
+#cv{display:block;image-rendering:pixelated;cursor:crosshair;background:#000}
+.props{width:210px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px}
+.props h3{margin:0 0 8px;font-size:12px;color:var(--accent)}
+.row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.row label{width:54px;color:var(--sub);font-size:11px}
+.row input{flex:1;width:100%}
+.hint{color:var(--sub);font-size:11px;margin-top:8px;line-height:1.4}
+.codebar{padding:0 12px 12px}
+textarea{width:100%;height:150px;font-family:Consolas,monospace;resize:vertical}
+.toolbtn{padding:5px 9px}
+</style></head><body>
+<div class="bar">
+  <b>PICPIO Display Designer</b>
+  <select id="disp"></select>
+  <span id="dims" style="color:var(--sub)"></span>
+  <span style="flex:1"></span>
+  <span id="tools"></span>
+  <button id="preview" class="toolbtn">Preview</button>
+  ${standalone ? '' : '<button id="browser" class="toolbtn">Open in Browser</button>'}
+  <button id="del" class="toolbtn">Delete</button>
+  <button id="clear" class="toolbtn">Clear</button>
+  <input type="file" id="imgfile" accept="image/*" style="display:none">
+</div>
+<div id="ovl" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9;align-items:center;justify-content:center;flex-direction:column;gap:10px">
+  <div style="padding:14px;background:#000;border-radius:12px;box-shadow:0 0 0 6px #222"><canvas id="pvcv"></canvas></div>
+  <button id="ovlclose" class="acc">Close preview</button>
+</div>
+<div class="main">
+  <div class="stage"><canvas id="cv" width="480" height="320"></canvas></div>
+  <div class="props" id="props"><h3>Properties</h3><div id="pbody"><div class="hint">Click a tool to add an element, then click it on the canvas to edit.</div></div></div>
+</div>
+<div class="codebar">
+  <div class="row" style="margin-bottom:8px">
+    <button id="gen" class="acc">Generate code</button>
+    <button id="copy">Copy</button>
+    <button id="insert">Insert into main.c</button>
+    ${standalone ? '<button id="download">Download .txt</button>' : ''}
+  </div>
+  <textarea id="out" readonly placeholder="Generated PICPIO draw code appears here…"></textarea>
+</div>
+<script>
+${host}
+const DISPLAYS = {
+  ssd1306: { label:'SSD1306 OLED 128x64', w:128, h:64,  mono:true,  prefix:'SSD1306', dev:'oled', hasDisplay:true,  on:'#9fe7ff' },
+  ili9341: { label:'ILI9341 TFT 240x320', w:240, h:320, mono:false, prefix:'ILI9341', dev:'tft',  hasDisplay:false },
+  ili9488: { label:'ILI9488 TFT 480x320', w:480, h:320, mono:false, prefix:'ILI9488', dev:'tft',  hasDisplay:false },
+  lcd1602: { label:'LCD 16x2 (char)',     cols:16, rows:2, charLcd:true, prefix:'LCD', dev:'lcd' },
+  lcd2004: { label:'LCD 20x4 (char)',     cols:20, rows:4, charLcd:true, prefix:'LCD', dev:'lcd' },
+};
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let curKey = 'ssd1306';
+let els = [];
+let sel = null;
+let nextId = 1;
+let scale = 3, cellW = 22, cellH = 26;
+
+const dispSel = document.getElementById('disp');
+Object.keys(DISPLAYS).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=DISPLAYS[k].label; dispSel.appendChild(o); });
+
+function D(){ return DISPLAYS[curKey]; }
+function isChar(){ return !!D().charLcd; }
+function dispW(){ return isChar() ? D().cols : D().w; }
+function dispH(){ return isChar() ? D().rows : D().h; }
+
+function layout() {
+  const d = D();
+  if (isChar()) {
+    cellW = 24; cellH = 30;
+    cv.width = d.cols * cellW; cv.height = d.rows * cellH;
+  } else {
+    scale = Math.max(1, Math.floor(Math.min(560 / d.w, 360 / d.h)));
+    cv.width = d.w * scale; cv.height = d.h * scale;
+  }
+  cv.style.width = cv.width + 'px'; cv.style.height = cv.height + 'px';
+  document.getElementById('dims').textContent = isChar() ? (d.cols + '×' + d.rows + ' chars') : (d.w + '×' + d.h + ' px');
+  buildTools();
+  draw();
+}
+
+function buildTools() {
+  const prim = isChar() ? ['text'] : ['text','line','rect','fillrect','circle','fillcircle'];
+  const names = { text:'Text', line:'Line', rect:'Rect', fillrect:'Fill Rect', circle:'Circle', fillcircle:'Fill Circle' };
+  let html = prim.map(t => '<button class="toolbtn" data-add="'+t+'">+ '+names[t]+'</button>').join(' ');
+  if (!isChar()) html += ' <button class="toolbtn" id="addbmp">+ Bitmap</button>';
+  document.getElementById('tools').innerHTML = html;
+  document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addEl(b.getAttribute('data-add')));
+  const bmp = document.getElementById('addbmp');
+  if (bmp) bmp.onclick = () => document.getElementById('imgfile').click();
+}
+
+// Import an image: scale to fit the display, threshold to 1-bpp, pack MSB-first.
+function importImage(file) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const d = D();
+      const sc = Math.min(1, d.w / img.width, d.h / img.height);
+      const w = Math.max(1, Math.round(img.width * sc));
+      const h = Math.max(1, Math.round(img.height * sc));
+      const tc = document.createElement('canvas'); tc.width = w; tc.height = h;
+      const tx = tc.getContext('2d'); tx.drawImage(img, 0, 0, w, h);
+      const px = tx.getImageData(0, 0, w, h).data;
+      const bw = Math.ceil(w / 8);
+      const bytes = new Array(bw * h).fill(0);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        const o = (j * w + i) * 4;
+        const lum = 0.299 * px[o] + 0.587 * px[o+1] + 0.114 * px[o+2];
+        if (px[o+3] > 40 && lum < 128) bytes[j * bw + (i >> 3)] |= (0x80 >> (i & 7));
+      }
+      els.push({ id: nextId, type: 'bitmap', x: 0, y: 0, w, h, bytes, color: defColor(), name: 'img' + nextId });
+      sel = nextId; nextId++; draw(); showProps();
+    };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+document.getElementById('imgfile').onchange = e => { if (e.target.files[0]) importImage(e.target.files[0]); e.target.value = ''; };
+
+function defColor(){ return D().mono ? '#9fe7ff' : '#ffffff'; }
+function addEl(type) {
+  const e = { id: nextId++, type, x: isChar()?0:8, y: isChar()?0:8, w: 40, h: 20, r: 12, text: 'Text', size: 1, color: defColor() };
+  els.push(e); sel = e.id; draw(); showProps();
+}
+
+function rgb565(hex) {
+  const r=parseInt(hex.substr(1,2),16), g=parseInt(hex.substr(3,2),16), b=parseInt(hex.substr(5,2),16);
+  const v=((r&0xF8)<<8)|((g&0xFC)<<3)|(b>>3);
+  return '0x' + v.toString(16).toUpperCase().padStart(4,'0');
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+function draw() {
+  const d = D();
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if (isChar()) {
+    ctx.fillStyle = '#0a2a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.strokeStyle = '#123'; for (let c=0;c<=d.cols;c++){ctx.beginPath();ctx.moveTo(c*cellW,0);ctx.lineTo(c*cellW,cv.height);ctx.stroke();}
+    for (let r=0;r<=d.rows;r++){ctx.beginPath();ctx.moveTo(0,r*cellH);ctx.lineTo(cv.width,r*cellH);ctx.stroke();}
+  } else {
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  }
+  els.forEach(e => drawEl(e, e.id === sel));
+}
+
+function drawEl(e, selected) {
+  const d = D();
+  const s = isChar() ? 1 : scale;
+  ctx.save();
+  if (isChar()) {
+    const col = e.x, row = e.y;
+    ctx.fillStyle = '#7CFC00'; ctx.font = '16px Consolas, monospace'; ctx.textBaseline='middle';
+    ctx.fillText(String(e.text), col*cellW+3, row*cellH+cellH/2);
+  } else {
+    const col = d.mono ? d.on : e.color;
+    ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, s*0.6);
+    if (e.type==='text') {
+      ctx.font = (8*(e.size||1)*s) + 'px Consolas, monospace'; ctx.textBaseline='top';
+      ctx.fillText(String(e.text), e.x*s, e.y*s);
+    } else if (e.type==='line') { ctx.beginPath(); ctx.moveTo(e.x*s,e.y*s); ctx.lineTo((e.x+e.w)*s,(e.y+e.h)*s); ctx.stroke(); }
+    else if (e.type==='rect') { ctx.strokeRect(e.x*s,e.y*s,e.w*s,e.h*s); }
+    else if (e.type==='fillrect') { ctx.fillRect(e.x*s,e.y*s,e.w*s,e.h*s); }
+    else if (e.type==='circle') { ctx.beginPath(); ctx.arc((e.x+e.r)*s,(e.y+e.r)*s,e.r*s,0,7); ctx.stroke(); }
+    else if (e.type==='fillcircle') { ctx.beginPath(); ctx.arc((e.x+e.r)*s,(e.y+e.r)*s,e.r*s,0,7); ctx.fill(); }
+    else if (e.type==='bitmap') { blitBitmap(ctx, e, s, col); }
+  }
+  ctx.restore();
+  if (selected) {
+    const b = bbox(e);
+    ctx.strokeStyle = '#f27f0c'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.strokeRect(b.x-2, b.y-2, b.w+4, b.h+4); ctx.setLineDash([]);
+  }
+}
+
+function blitBitmap(c, e, s, color) {
+  c.fillStyle = color;
+  const bw = Math.ceil(e.w / 8);
+  for (let j = 0; j < e.h; j++) for (let i = 0; i < e.w; i++) {
+    if (e.bytes[j * bw + (i >> 3)] & (0x80 >> (i & 7))) c.fillRect((e.x + i) * s, (e.y + j) * s, s, s);
+  }
+}
+
+function bbox(e) {
+  const s = isChar() ? 1 : scale;
+  if (isChar()) return { x:e.x*cellW, y:e.y*cellH, w:Math.max(cellW, String(e.text).length*9), h:cellH };
+  if (e.type==='text') return { x:e.x*s, y:e.y*s, w:String(e.text).length*6*(e.size||1)*s, h:8*(e.size||1)*s };
+  if (e.type==='line') return { x:Math.min(e.x,e.x+e.w)*s, y:Math.min(e.y,e.y+e.h)*s, w:Math.abs(e.w)*s||2, h:Math.abs(e.h)*s||2 };
+  if (e.type==='circle'||e.type==='fillcircle') return { x:e.x*s, y:e.y*s, w:e.r*2*s, h:e.r*2*s };
+  return { x:e.x*s, y:e.y*s, w:e.w*s, h:e.h*s };
+}
+
+// ── Selection / drag ─────────────────────────────────────────────────────────
+let drag = null;
+cv.addEventListener('mousedown', ev => {
+  const rect = cv.getBoundingClientRect();
+  const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  let hit = null;
+  for (let i=els.length-1;i>=0;i--){ const b=bbox(els[i]); if(mx>=b.x-3&&mx<=b.x+b.w+3&&my>=b.y-3&&my<=b.y+b.h+3){hit=els[i];break;} }
+  sel = hit ? hit.id : null;
+  if (hit) {
+    const s = isChar()?1:scale;
+    drag = { id:hit.id, ox: mx/(isChar()?cellW:s) - hit.x, oy: my/(isChar()?cellH:s) - hit.y };
+  }
+  draw(); showProps();
+});
+window.addEventListener('mousemove', ev => {
+  if (!drag) return;
+  const e = els.find(x=>x.id===drag.id); if(!e) return;
+  const rect = cv.getBoundingClientRect();
+  const u = isChar()?cellW:scale, v = isChar()?cellH:scale;
+  let nx = (ev.clientX-rect.left)/u - drag.ox, ny = (ev.clientY-rect.top)/v - drag.oy;
+  e.x = Math.max(0, Math.round(nx)); e.y = Math.max(0, Math.round(ny));
+  if (isChar()) { e.x = Math.min(e.x, D().cols-1); e.y = Math.min(e.y, D().rows-1); }
+  draw(); syncProps();
+});
+window.addEventListener('mouseup', () => drag = null);
+
+// ── Properties form ──────────────────────────────────────────────────────────
+function field(label, key, type) {
+  return '<div class="row"><label>'+label+'</label><input data-k="'+key+'" type="'+type+'"></div>';
+}
+function showProps() {
+  const body = document.getElementById('pbody');
+  const e = els.find(x=>x.id===sel);
+  if (!e) { body.innerHTML = '<div class="hint">Click a tool to add an element, then click it on the canvas to edit. Drag to move. Delete removes the selected one.</div>'; return; }
+  let html = '';
+  if (isChar()) { html += field('Col','x','number') + field('Row','y','number') + field('Text','text','text'); }
+  else {
+    if (e.type==='text') html += field('X','x','number')+field('Y','y','number')+field('Text','text','text')+field('Size','size','number');
+    else if (e.type==='line') html += field('X','x','number')+field('Y','y','number')+field('dX','w','number')+field('dY','h','number');
+    else if (e.type==='circle'||e.type==='fillcircle') html += field('X','x','number')+field('Y','y','number')+field('Radius','r','number');
+    else if (e.type==='bitmap') html += field('X','x','number')+field('Y','y','number')+'<div class="hint">'+e.w+'×'+e.h+' px bitmap</div>';
+    else html += field('X','x','number')+field('Y','y','number')+field('W','w','number')+field('H','h','number');
+    if (!D().mono) html += '<div class="row"><label>Color</label><input data-k="color" type="color"></div>';
+  }
+  body.innerHTML = '<div style="color:var(--sub);margin-bottom:6px">'+e.type+'</div>'+html;
+  body.querySelectorAll('input').forEach(inp => {
+    const k = inp.getAttribute('k') || inp.getAttribute('data-k');
+    inp.value = e[k];
+    inp.oninput = () => { e[k] = inp.type==='number' ? Number(inp.value) : inp.value; draw(); };
+  });
+  syncProps();
+}
+function syncProps() {
+  const e = els.find(x=>x.id===sel); if(!e) return;
+  document.querySelectorAll('#pbody input').forEach(inp => {
+    const k = inp.getAttribute('data-k');
+    if (document.activeElement !== inp) inp.value = e[k];
+  });
+}
+
+document.getElementById('del').onclick = () => { els = els.filter(x=>x.id!==sel); sel=null; draw(); showProps(); };
+document.getElementById('clear').onclick = () => { els=[]; sel=null; draw(); showProps(); document.getElementById('out').value=''; };
+window.addEventListener('keydown', e => { if((e.key==='Delete'||e.key==='Backspace') && sel!=null && document.activeElement.tagName!=='INPUT'){ els=els.filter(x=>x.id!==sel); sel=null; draw(); showProps(); } });
+
+dispSel.onchange = () => { curKey = dispSel.value; els=[]; sel=null; document.getElementById('out').value=''; layout(); showProps(); };
+
+// ── Code generation ──────────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/\\\\/g,'\\\\\\\\').replace(/"/g,'\\\\"'); }
+function gen() {
+  const d = D(); const P = d.prefix; const dev = d.dev;
+  const out = [];
+  if (isChar()) {
+    els.filter(e=>e.type==='text').sort((a,b)=>a.y-b.y||a.x-b.x).forEach(e => {
+      out.push(P+'_setCursor(&'+dev+', '+(e.x|0)+', '+(e.y|0)+');');
+      out.push(P+'_print(&'+dev+', "'+esc(e.text)+'");');
+    });
+  } else {
+    const col = e => d.mono ? '1' : rgb565(e.color || '#ffffff');
+    els.forEach(e => {
+      const c = col(e);
+      if (e.type==='text') {
+        out.push(P+'_setTextColor(&'+dev+', '+c+');');
+        out.push(P+'_setTextSize(&'+dev+', '+(e.size||1)+');');
+        out.push(P+'_setCursor(&'+dev+', '+(e.x|0)+', '+(e.y|0)+');');
+        out.push(P+'_print(&'+dev+', "'+esc(e.text)+'");');
+      } else if (e.type==='line') out.push(P+'_drawLine(&'+dev+', '+(e.x|0)+', '+(e.y|0)+', '+((e.x+e.w)|0)+', '+((e.y+e.h)|0)+', '+c+');');
+      else if (e.type==='rect') out.push(P+'_drawRect(&'+dev+', '+(e.x|0)+', '+(e.y|0)+', '+(e.w|0)+', '+(e.h|0)+', '+c+');');
+      else if (e.type==='fillrect') out.push(P+'_fillRect(&'+dev+', '+(e.x|0)+', '+(e.y|0)+', '+(e.w|0)+', '+(e.h|0)+', '+c+');');
+      else if (e.type==='circle') out.push(P+'_drawCircle(&'+dev+', '+((e.x+e.r)|0)+', '+((e.y+e.r)|0)+', '+(e.r|0)+', '+c+');');
+      else if (e.type==='fillcircle') out.push(P+'_fillCircle(&'+dev+', '+((e.x+e.r)|0)+', '+((e.y+e.r)|0)+', '+(e.r|0)+', '+c+');');
+      else if (e.type==='bitmap') {
+        out.push('static const uint8_t '+e.name+'[] = {'+e.bytes.map(b=>'0x'+(b&0xFF).toString(16).padStart(2,'0')).join(',')+'};');
+        out.push(P+'_drawBitmap(&'+dev+', '+(e.x|0)+', '+(e.y|0)+', '+e.name+', '+e.w+', '+e.h+', '+c+');');
+      }
+    });
+    if (d.hasDisplay) out.push(P+'_display(&'+dev+');');
+  }
+  return out.length ? ('// --- PICPIO Display Designer ('+d.label+') ---\\n' + out.join('\\n') + '\\n') : '// (add some elements first)';
+}
+document.getElementById('gen').onclick = () => { document.getElementById('out').value = gen(); };
+document.getElementById('copy').onclick = () => { const c = gen(); document.getElementById('out').value=c; __copy(c); };
+document.getElementById('insert').onclick = () => { const c = gen(); document.getElementById('out').value=c; __insert(c); };
+const _dl = document.getElementById('download');
+if (_dl) _dl.onclick = () => { const c = gen(); document.getElementById('out').value=c; __download(c); };
+
+// ── Actual-size preview ──────────────────────────────────────────────────────
+document.getElementById('preview').onclick = () => {
+  const d = D();
+  const pv = document.getElementById('pvcv');
+  const pc = pv.getContext('2d');
+  const ps = isChar() ? 1 : (d.w <= 160 ? 3 : 1);   // upscale small OLEDs so they're visible
+  if (isChar()) { pv.width = d.cols * cellW; pv.height = d.rows * cellH; }
+  else { pv.width = d.w * ps; pv.height = d.h * ps; }
+  // Background + elements, no selection handles.
+  if (isChar()) {
+    pc.fillStyle = '#0a2a0a'; pc.fillRect(0,0,pv.width,pv.height);
+    els.filter(e=>e.type==='text').forEach(e => { pc.fillStyle='#7CFC00'; pc.font='16px Consolas,monospace'; pc.textBaseline='middle'; pc.fillText(String(e.text), e.x*cellW+3, e.y*cellH+cellH/2); });
+  } else {
+    pc.fillStyle = '#000'; pc.fillRect(0,0,pv.width,pv.height);
+    const saveScale = scale, saveCtx = ctx;
+    scale = ps; window.__pc = pc;
+    els.forEach(e => { drawElTo(pc, e, ps); });
+    scale = saveScale;
+  }
+  document.getElementById('ovl').style.display = 'flex';
+};
+// Draw one element onto an arbitrary context at scale s (reuses drawEl logic).
+function drawElTo(c, e, s) {
+  const d = D(); const col = d.mono ? d.on : (e.color||'#fff');
+  c.save(); c.fillStyle=col; c.strokeStyle=col; c.lineWidth=Math.max(1,s*0.6);
+  if (e.type==='text') { c.font=(8*(e.size||1)*s)+'px Consolas,monospace'; c.textBaseline='top'; c.fillText(String(e.text), e.x*s, e.y*s); }
+  else if (e.type==='line') { c.beginPath(); c.moveTo(e.x*s,e.y*s); c.lineTo((e.x+e.w)*s,(e.y+e.h)*s); c.stroke(); }
+  else if (e.type==='rect') c.strokeRect(e.x*s,e.y*s,e.w*s,e.h*s);
+  else if (e.type==='fillrect') c.fillRect(e.x*s,e.y*s,e.w*s,e.h*s);
+  else if (e.type==='circle') { c.beginPath(); c.arc((e.x+e.r)*s,(e.y+e.r)*s,e.r*s,0,7); c.stroke(); }
+  else if (e.type==='fillcircle') { c.beginPath(); c.arc((e.x+e.r)*s,(e.y+e.r)*s,e.r*s,0,7); c.fill(); }
+  else if (e.type==='bitmap') blitBitmap(c, e, s, col);
+  c.restore();
+}
+document.getElementById('ovlclose').onclick = () => document.getElementById('ovl').style.display = 'none';
+const _bbtn = document.getElementById('browser');
+if (_bbtn) _bbtn.onclick = () => __browser();
+
+layout(); showProps();
+</script></body></html>`;
+}

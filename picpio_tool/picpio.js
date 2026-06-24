@@ -324,6 +324,22 @@ LCD_HC595: {
           ],
           loop: [],
       },
+     ILI9488: {
+         include: '#include "ILI9488.h"',
+         globals: ['ILI9488_t tft;'],
+         setup: [
+             'SPI.begin();',
+             'ILI9488_init(&tft, D10, D9, D8); // CS, DC, RST',
+             'ILI9488_begin(&tft, 480, 320);  // 3.5" 480x320',
+             'ILI9488_fillScreen(&tft, ILI9488_BLUE);',
+             'ILI9488_setTextColor(&tft, ILI9488_WHITE);',
+             'ILI9488_setTextSize(&tft, 3);',
+             'ILI9488_setCursor(&tft, 20, 20);',
+             'ILI9488_print(&tft, "PICPIO ILI9488");',
+             'ILI9488_fillCircle(&tft, 240, 200, 60, ILI9488_YELLOW);',
+          ],
+          loop: [],
+      },
       XPT2046: {
           include: '#include "XPT2046.h"',
           globals: ['XPT2046_t touch;'],
@@ -886,6 +902,75 @@ LCD_HC595: {
              '// SD_open(&sd, &sd_file, "LOG.CSV", SD_APPEND);',
              '// SD_print(&sd_file, "1,2,3\\n");',
              '// SD_close(&sd_file);',
+         ],
+     },
+     // ─── NETWORK ────────────────────────────────────────────────────────────────
+     W5500: {
+         include: '#include "W5500.h"',
+         define: '#define W5500_CS D0  // W5500 Ethernet chip-select pin',
+         globals: [
+             'W5500_t eth;',
+             'uint8_t eth_mac[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01};',
+             'uint8_t eth_ip[4]  = {192, 168, 1, 50};',
+             'uint8_t eth_sub[4] = {255, 255, 255, 0};',
+             'uint8_t eth_gw[4]  = {192, 168, 1, 1};',
+         ],
+         setup: [
+             'SPI.begin();',
+             'if (W5500_begin(&eth, W5500_CS, eth_mac, eth_ip, eth_sub, eth_gw)) {',
+             '    // Ethernet ready (W5500 detected)',
+             '}',
+         ],
+         loop: [
+             '// TCP client example:',
+             '// uint8_t host[4] = {192, 168, 1, 10};',
+             '// if (W5500_connect(&eth, 0, host, 80)) {',
+             '//     W5500_send(&eth, 0, (const uint8_t *)"GET /\\r\\n\\r\\n", 9);',
+             '//     uint8_t buf[64];',
+             '//     uint16_t n = W5500_recv(&eth, 0, buf, sizeof buf);',
+             '//     W5500_close(&eth, 0);',
+             '// }',
+         ],
+     },
+     // ─── 7-SEGMENT DISPLAYS ──────────────────────────────────────────────────────
+     TM1637: {
+         include: '#include "TM1637.h"',
+         define: '#define TM1637_CLK D2   // RC2\n#define TM1637_DIO D3   // RC3',
+         globals: ['TM1637_t disp;'],
+         setup: [
+             'TM1637_init(&disp, TM1637_CLK, TM1637_DIO);',
+             'TM1637_setBrightness(&disp, 4);   // 0..7',
+             'TM1637_showNumber(&disp, 1234);',
+         ],
+         loop: [],
+     },
+     MAX7219: {
+         include: '#include "MAX7219.h"',
+         define: '#define MAX7219_CS D0  // CS/LOAD = RC0   (DIN->RC1, CLK->RC5)',
+         globals: ['MAX7219_t seg;'],
+         setup: [
+             'SPI.begin();',
+             'MAX7219_init(&seg, MAX7219_CS, 4);   // 4 digits',
+             'MAX7219_setBrightness(&seg, 8);      // 0..15',
+             'MAX7219_showNumber(&seg, 1234);',
+         ],
+         loop: [],
+     },
+     SevenSeg: {
+         include: '#include "SevenSeg.h"',
+         globals: [
+             'SevenSeg_t ss;',
+             '// 7-segment wiring: 8 segment pins (a,b,c,d,e,f,g,dp) then one select pin per digit.',
+             '// PIC18 native pins:  D0..D7 = RC0..RC7   |   D8..D11 = RB0..RB3',
+             'uint8_t ss_seg[8] = {D0, D1, D2, D3, D4, D5, D6, D7}; // a=RC0 b=RC1 c=RC2 d=RC3 e=RC4 f=RC5 g=RC6 dp=RC7 (0xFF if no dp)',
+             'uint8_t ss_dig[4] = {D8, D9, D10, D11};               // digit1=RB0 digit2=RB1 digit3=RB2 digit4=RB3',
+         ],
+         setup: [
+             'SevenSeg_init(&ss, ss_seg, ss_dig, 4, 0); // numDigits=4 (1..4), 0=common-cathode',
+             'SevenSeg_setNumber(&ss, 1234);',
+         ],
+         loop: [
+             'SevenSeg_refresh(&ss);   // call continuously to multiplex the digits',
          ],
      },
      Servo: {

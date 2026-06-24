@@ -96,6 +96,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<Node> {
                     new PeripheralNode('+ PWM',   'pwm',   'zap'),
                 ]));
                 children.push(new TaskNode('Simulate', '_simulate', 'pulse'));
+                children.push(new TaskNode('Display Designer', '_designer', 'symbol-color'));
             }
 
             children.push(advanced, misc);

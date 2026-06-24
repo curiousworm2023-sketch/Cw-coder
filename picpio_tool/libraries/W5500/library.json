@@ -1,0 +1,4 @@
+{
+  "requires": ["spi"],
+  "note": "WIZnet W5500 SPI Ethernet (TCP client/server + UDP, up to 8 sockets). Needs hardware SPI and a stable 3.3V supply for the module."
+}

@@ -34,6 +34,7 @@
       { "command": "picpio.insertI2C",     "title": "+ I2C",                 "category": "PICPIO", "icon": "$(sync)" },
       { "command": "picpio.insertPWM",     "title": "+ PWM",                 "category": "PICPIO", "icon": "$(zap)" },
       { "command": "picpio.simulate",      "title": "Simulate",              "category": "PICPIO", "icon": "$(pulse)" },
+      { "command": "picpio.designer",      "title": "Display Designer",      "category": "PICPIO", "icon": "$(globe)" },
       { "command": "picpio.pidTune",       "title": "Auto PID Tuning",       "category": "PICPIO", "icon": "$(settings-gear)" },
       { "command": "picpio.checkUpdate",    "title": "Check for Updates",     "category": "PICPIO", "icon": "$(cloud-download)" }
     ],
@@ -63,6 +64,7 @@
         { "command": "picpio.insertI2C",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@9" },
         { "command": "picpio.insertPWM",     "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@10" },
         { "command": "picpio.simulate",      "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@11" },
+        { "command": "picpio.designer",      "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@13" },
         { "command": "picpio.pidTune",       "when": "picpio.isActive && picpio.isPicpio", "group": "picpio@12" }
       ],
       "view/title": [
@@ -72,6 +74,15 @@
       ],
       "view/item/context": [
         { "command": "picpio.libRemove", "when": "viewItem == installedLib", "group": "inline" }
+      ],
+      "commandPalette": [
+        { "command": "picpio.insertSPI",   "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.insertUSART", "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.insertI2C",   "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.insertPWM",   "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.simulate",    "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.designer",    "when": "picpio.isActive && picpio.isPicpio" },
+        { "command": "picpio.pidTune",     "when": "picpio.isActive && picpio.isPicpio" }
       ]
     },
     "keybindings": [

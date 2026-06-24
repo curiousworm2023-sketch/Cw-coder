@@ -200,14 +200,42 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .circuit-part .part-pot{width:64px}
 .circuit-toolbar select{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 8px;font-size:12px}
 .circuit-toolbar select:hover{border-color:var(--accent)}
-.part-lcd{background:#0a3d0a;border:1px solid #1a5c1a;border-radius:2px;color:#9eff9e;font-family:'Cascadia Code',Consolas,monospace;line-height:1.4;padding:3px;white-space:pre;text-align:left;margin:4px auto 0}
-.part-lcd1602{width:120px;height:34px;font-size:9px}
-.part-lcd2004{width:150px;height:50px;font-size:9px}
-.part-oled{background:#000;border:1px solid #333;border-radius:2px;color:#fff;font-family:'Cascadia Code',Consolas,monospace;font-size:8px;line-height:1.3;padding:3px;white-space:pre;text-align:left;margin:4px auto 0;width:130px;height:64px}
+/* Realistic HD44780 character LCD: black bezel around a blue backlit panel,
+   rendered as a true fixed character-cell matrix (one .lcd-cell per column),
+   so text is snapped to its grid like real hardware. */
+.part-lcd{
+  display:grid; gap:1px; padding:5px; margin:6px auto 0; width:max-content;
+  border-radius:5px; border:3px solid #0b1830;
+  background:#16329a;   /* darker backlight shows through the 1px cell gaps */
+  box-shadow:inset 0 0 7px rgba(0,0,0,.5), 0 2px 5px rgba(0,0,0,.55);
+}
+.lcd-cell{
+  width:8px; height:13px; display:flex; align-items:center; justify-content:center;
+  font-family:'Cascadia Code',Consolas,monospace; font-size:9px; line-height:1;
+  color:#f3f8ff; background:#2f5be8; text-shadow:0 0 2px rgba(255,255,255,.55);
+}
+.part-lcd1602,.part-lcd2004{ /* size comes from the cell grid */ }
+/* OLED / SPI glass: dark panel, metal bezel, cyan glow. */
+.part-oled{
+  color:#9efbff;font-family:'Cascadia Code',Consolas,monospace;font-size:8px;line-height:1.35;
+  white-space:pre;text-align:left;margin:6px auto 0;padding:5px;width:132px;height:66px;border-radius:6px;
+  border:3px solid #15181c;
+  background:radial-gradient(130% 150% at 50% 0%, #0c1114 0%, #000 75%);
+  box-shadow:inset 0 0 10px rgba(0,180,200,.16), 0 0 7px rgba(0,255,255,.12);
+  text-shadow:0 0 3px rgba(90,255,255,.7);
+}
+/* ILI9488 colour TFT: a real 480x320 canvas scaled down inside a black bezel. */
+.part-tft{
+  display:block; width:200px; height:133px; margin:6px auto 0; border-radius:6px;
+  border:3px solid #141414; background:#000;
+  box-shadow:inset 0 0 8px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.5);
+  image-rendering:auto;
+}
 .part-terms{display:flex;justify-content:center;gap:7px;margin-top:5px;flex-wrap:wrap}
 .part-term{display:flex;flex-direction:column;align-items:center}
 .part-term .term{margin:0}
 .term-label{font-size:8px;color:var(--sub);margin-top:2px;line-height:1}
+.term-pin{display:block;color:var(--accent);font-weight:700;font-size:8px;margin-top:1px;line-height:1.2}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -217,6 +245,25 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .log-err{color:#f48771}
 .log-info{color:var(--sub)}
 .empty{color:var(--sub);font-style:italic}
+.scope-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.scope-toolbar button{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 10px;font-size:12px;cursor:pointer}
+.scope-toolbar button:hover{border-color:var(--accent)}
+.scope-toolbar select{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 8px;font-size:12px}
+.scope-toolbar .hint{color:var(--sub);font-size:11px}
+#scopeCanvas{width:100%;height:200px;background:#0b0b0b;border:1px solid var(--border);border-radius:var(--radius);display:block}
+.part-neo{display:grid;gap:2px;padding:5px;margin:6px auto 0;justify-content:center;background:#0c0c0c;border:2px solid #1a1a1a;border-radius:5px}
+.neo-led{width:8px;height:8px;border-radius:2px;background:#222;display:block}
+.neo-ctl{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
+.neo-ctl button{width:18px;height:16px;padding:0;line-height:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:3px;cursor:pointer;font-size:11px}
+.neo-ctl button:hover{border-color:var(--accent)}
+.neo-ctl span{font-size:9px;color:var(--sub);min-width:36px;text-align:center}
+.part-seg{display:flex;gap:3px;align-items:center;justify-content:center;padding:8px 10px;margin:6px auto 0;background:#1a0707;border:2px solid #2a0a0a;border-radius:6px}
+.seg-digit{width:30px;height:52px;display:block}
+.sseg{fill:#3a1212;transition:fill .04s}
+.sseg.on{fill:#ff4136;filter:drop-shadow(0 0 2px #ff4136)}
+.seg-colon{display:flex;flex-direction:column;justify-content:center;gap:14px;height:52px;padding:0 2px}
+.seg-colon i{width:5px;height:5px;border-radius:50%;background:#3a1212;display:block}
+.seg-colon.on i{background:#ff4136;box-shadow:0 0 2px #ff4136}
 </style>
 </head>
 <body>
@@ -237,6 +284,22 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
     ${ANALOG_PINS.map(analogPinCell).join('')}
   </div>
 
+  <div class="section-title">Signal Scope (DSO)</div>
+  <div class="scope-toolbar">
+    <button id="scopePauseBtn">&#10074;&#10074; Pause</button>
+    <button id="scopeClearBtn">&#9851; Clear</button>
+    <label class="hint">Window
+      <select id="scopeWindow">
+        <option value="2000">2 s</option>
+        <option value="5000" selected>5 s</option>
+        <option value="10000">10 s</option>
+        <option value="20000">20 s</option>
+      </select>
+    </label>
+    <span class="hint">Auto-traces every digital pin, PWM output and analog (ADC) read &mdash; vs time.</span>
+  </div>
+  <canvas id="scopeCanvas"></canvas>
+
   <div class="section-title">Circuit (beta)</div>
   <div class="circuit-toolbar">
     <select id="partType">
@@ -247,9 +310,12 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
       <option value="lcd2004">LCD 20x4</option>
       <option value="oled">SSD1306</option>
       <option value="spi_display">SPI Display</option>
+      <option value="tft">TFT 3.5" ILI9488</option>
+      <option value="neopixel">NeoPixel strip</option>
+      <option value="sevenseg">7-segment</option>
     </select>
     <button id="addPartBtn">+ Add</button>
-    <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to wire them. Click a wire to remove it.</span>
+    <span class="hint">Drag parts to position them. Click a pin terminal below, then a part's terminal, to connect them &mdash; the connected MCU pin is shown on the device.</span>
   </div>
   <div class="circuit-wrap" id="circuitWrap">
     <div class="circuit-parts" id="circuitParts"></div>
@@ -383,6 +449,10 @@ function reset() {
   Object.keys(lastPwm).forEach(p => delete lastPwm[p]);
   Object.values(parts).forEach(part => updatePartLed(part.id, false, false));
   document.querySelectorAll('.part-oled').forEach(el => { el.textContent = ''; });
+  document.querySelectorAll('.lcd-cell').forEach(c => { c.innerHTML = '&nbsp;'; });
+  document.querySelectorAll('.part-tft').forEach(cv => { const x = cv.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = '#000'; x.fillRect(0, 0, cv.width, cv.height); });
+  document.querySelectorAll('.neo-led').forEach(l => { l.style.background = '#222'; l.style.boxShadow = 'none'; });
+  scopeReset();
 }
 
 const DIGITAL_PINS_JS = ${JSON.stringify(DIGITAL_PINS)};
@@ -433,6 +503,9 @@ const TERMINALS = {
   lcd1602: ['SDA', 'SCL'], lcd2004: ['SDA', 'SCL'],
   oled: ['SDA', 'SCL'],
   spi_display: ['CS', 'DC', 'SDA', 'SCK', 'RST'],
+  tft: ['CS', 'DC', 'RST', 'SDI', 'SCK'],
+  neopixel: ['DIN'],
+  sevenseg: [''],
 };
 
 function termKey(partId, term) { return partId + '|' + term; }
@@ -455,6 +528,7 @@ function termCenter(el) {
 }
 
 function redrawWire(w) {
+  if (!w.lineEl) return;   // connections are shown as labels, not drawn lines
   const a = termCenter(w.mcuEl);
   const b = termCenter(w.partEl);
   w.lineEl.setAttribute('x1', a.x);
@@ -467,13 +541,48 @@ function redrawAllWires() {
   wires.forEach(redrawWire);
 }
 
+// Show/clear the connected MCU pin on the device terminal (e.g. SCL -> RC3),
+// instead of drawing a wire. Labeled terminals get a pin tag under the term
+// name; single-terminal parts (LED/Button/Pot) get it on the part label.
+function setTermConnLabel(partId, term, mcuPin) {
+  const part = parts[partId];
+  if (!part) return;
+  let lab;
+  if (term) {
+    const dot = document.getElementById(partId + '-term-' + term);
+    lab = dot && dot.parentElement.querySelector('.term-label');
+  } else {
+    lab = part.el.querySelector('.part-label');
+  }
+  if (!lab) return;
+  if (lab.dataset.base == null) lab.dataset.base = lab.textContent;
+  lab.innerHTML = lab.dataset.base + '<span class="term-pin">' + mcuPin + '</span>';
+}
+
+function clearTermConnLabel(partId, term) {
+  const part = parts[partId];
+  if (!part) return;
+  let lab;
+  if (term) {
+    const dot = document.getElementById(partId + '-term-' + term);
+    lab = dot && dot.parentElement.querySelector('.term-label');
+  } else {
+    lab = part.el.querySelector('.part-label');
+  }
+  if (lab && lab.dataset.base != null) lab.textContent = lab.dataset.base;
+}
+
 function removeWire(w) {
   wires = wires.filter(x => x !== w);
-  w.lineEl.remove();
-  w.mcuEl.classList.remove('wired');
+  if (w.lineEl) w.lineEl.remove();
   w.partEl.classList.remove('wired');
-  delete pinToPart[w.mcuPin];
   delete partToPin[termKey(w.partId, w.term)];
+  clearTermConnLabel(w.partId, w.term);
+  // An MCU pin can feed several devices (e.g. a shared I2C bus). Only clear
+  // the pin's wired state once nothing else is connected to it.
+  const others = wires.filter(x => x.mcuPin === w.mcuPin);
+  if (others.length) pinToPart[w.mcuPin] = { partId: others[0].partId, term: others[0].term };
+  else { w.mcuEl.classList.remove('wired'); delete pinToPart[w.mcuPin]; }
 }
 
 function updatePartLed(partId, on, pwm, duty) {
@@ -500,21 +609,19 @@ function syncPartFromPinState(partId, pin) {
 }
 
 function connect(mcuPin, mcuEl, partId, term, partEl) {
-  const existingMcu = wires.find(x => x.mcuPin === mcuPin);
-  if (existingMcu) removeWire(existingMcu);
+  // A device terminal connects to exactly one pin, but a pin may drive several
+  // device terminals (shared bus like I2C SDA/SCL) — so only drop a prior wire
+  // on this same terminal, not every wire sharing the pin.
   const existingPart = wires.find(x => x.partId === partId && x.term === term);
   if (existingPart) removeWire(existingPart);
 
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  wireLayer.appendChild(line);
-  const w = { id: 'w' + (++wireCounter), mcuPin, partId, term, mcuEl, partEl, lineEl: line };
-  line.addEventListener('click', () => removeWire(w));
+  const w = { id: 'w' + (++wireCounter), mcuPin, partId, term, mcuEl, partEl, lineEl: null };
   wires.push(w);
   mcuEl.classList.add('wired');
   partEl.classList.add('wired');
   pinToPart[mcuPin] = { partId, term };
   partToPin[termKey(partId, term)] = mcuPin;
-  redrawWire(w);
+  setTermConnLabel(partId, term, mcuPin);
   syncPartFromPinState(partId, mcuPin);
 }
 
@@ -562,6 +669,106 @@ function selectPart(id) {
   if (id && parts[id]) parts[id].el.classList.add('selected');
 }
 
+// Size a TFT canvas: drawing buffer = panel pixels, and the on-screen box keeps
+// its *longest* side at a fixed length so rotating portrait<->landscape turns
+// the module (keeps its physical size) instead of shrinking it.
+function sizeTftCanvas(cv, w, h) {
+  cv.width = w; cv.height = h;
+  const LONG = 210;
+  if (w >= h) { cv.style.width = LONG + 'px'; cv.style.height = Math.round(LONG * h / w) + 'px'; }
+  else        { cv.style.height = LONG + 'px'; cv.style.width  = Math.round(LONG * w / h) + 'px'; }
+}
+
+// Rotate the drawing coordinate system on the fixed glass (gw x gh) so the
+// CONTENT turns with setRotation() while the module's on-screen shape stays
+// the same. Returns the logical [width, height] for that rotation.
+function applyTftRotation(cx, r, gw, gh) {
+  r = r & 3;
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  if (r === 1)      { cx.translate(gw, 0);  cx.rotate(Math.PI / 2);  return [gh, gw]; }
+  else if (r === 2) { cx.translate(gw, gh); cx.rotate(Math.PI);      return [gw, gh]; }
+  else if (r === 3) { cx.translate(0, gh);  cx.rotate(-Math.PI / 2); return [gh, gw]; }
+  return [gw, gh];
+}
+
+// Execute one ILI9341/ILI9488 TFT draw op on a part canvas. The canvas buffer
+// is the fixed physical glass (begin() dims); setRotation() rotates the drawing
+// transform, not the box.
+function drawTft(cx, m) {
+  const cv = cx.canvas;
+  switch (m.op) {
+    case 'init':
+      cv.dataset.gw = m.w; cv.dataset.gh = m.h; cv.dataset.lw = m.w; cv.dataset.lh = m.h;
+      sizeTftCanvas(cv, m.w, m.h);             // fixed glass buffer + on-screen box
+      cx.setTransform(1, 0, 0, 1, 0, 0);
+      cx.fillStyle = '#000';
+      cx.fillRect(0, 0, m.w, m.h);
+      break;
+    case 'rotation': {
+      // Rotate the content on the same fixed glass — shape unchanged.
+      const gw = Number(cv.dataset.gw) || cv.width;
+      const gh = Number(cv.dataset.gh) || cv.height;
+      const [lw, lh] = applyTftRotation(cx, m.r, gw, gh);
+      cv.dataset.lw = lw; cv.dataset.lh = lh;
+      break;
+    }
+    case 'fill':
+      cx.fillStyle = m.color;
+      cx.fillRect(0, 0, Number(cv.dataset.lw) || cv.width, Number(cv.dataset.lh) || cv.height);
+      break;
+    case 'rect':
+      if (m.fill) { cx.fillStyle = m.color; cx.fillRect(m.x, m.y, m.w, m.h); }
+      else { cx.strokeStyle = m.color; cx.lineWidth = 1; cx.strokeRect(m.x + 0.5, m.y + 0.5, m.w - 1, m.h - 1); }
+      break;
+    case 'line':
+      cx.strokeStyle = m.color; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(m.x0 + 0.5, m.y0 + 0.5); cx.lineTo(m.x1 + 0.5, m.y1 + 0.5); cx.stroke();
+      break;
+    case 'circle':
+      cx.beginPath(); cx.arc(m.x, m.y, m.r, 0, 2 * Math.PI);
+      if (m.fill) { cx.fillStyle = m.color; cx.fill(); } else { cx.strokeStyle = m.color; cx.lineWidth = 1; cx.stroke(); }
+      break;
+    case 'text':
+      cx.fillStyle = m.color; cx.textBaseline = 'top';
+      cx.font = (8 * (m.size || 1)) + 'px Consolas, monospace';
+      cx.fillText(m.str, m.x, m.y);
+      break;
+  }
+}
+
+// Render an LCD as a fixed cols x rows matrix of character cells, so each
+// glyph snaps to its own dot-matrix window like real HD44780 hardware.
+function renderLcd(el, lines, cols, rows) {
+  if (!el) return;
+  el.style.gridTemplateColumns = 'repeat(' + cols + ', 8px)';
+  el.style.gridAutoRows = '13px';
+  let html = '';
+  for (let r = 0; r < rows; r++) {
+    const line = (lines && lines[r] != null) ? String(lines[r]) : '';
+    for (let c = 0; c < cols; c++) {
+      const ch = (line[c] != null) ? line[c] : ' ';
+      const t = ch === ' ' ? '&nbsp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch;
+      html += '<span class="lcd-cell">' + t + '</span>';
+    }
+  }
+  el.innerHTML = html;
+}
+
+// One 7-segment digit as an SVG (segments a..g + dp), each polygon tagged
+// data-s so the 'seg' message can light them from a segment byte.
+function sevenSegDigitSVG() {
+  return '<svg class="seg-digit" viewBox="0 0 46 80">'
+    + '<polygon class="sseg" data-s="a" points="8,2 38,2 32,8 14,8"/>'
+    + '<polygon class="sseg" data-s="b" points="40,4 40,36 34,30 34,10"/>'
+    + '<polygon class="sseg" data-s="c" points="40,44 40,76 34,70 34,50"/>'
+    + '<polygon class="sseg" data-s="d" points="8,78 38,78 32,72 14,72"/>'
+    + '<polygon class="sseg" data-s="e" points="6,44 6,76 12,70 12,50"/>'
+    + '<polygon class="sseg" data-s="f" points="6,4 6,36 12,30 12,10"/>'
+    + '<polygon class="sseg" data-s="g" points="8,40 14,37 32,37 38,40 32,43 14,43"/>'
+    + '<circle class="sseg" data-s="dp" cx="43" cy="76" r="2.6"/>'
+    + '</svg>';
+}
+
 function addPart(type, addr, opts) {
   const id = 'part' + (++partCounter);
   const el = document.createElement('div');
@@ -574,10 +781,33 @@ function addPart(type, addr, opts) {
   if (type === 'led')    { inner = '<div class="part-led" id="' + id + '-led"></div>'; label = 'LED'; }
   if (type === 'button') { inner = '<div class="part-btn" id="' + id + '-btn"></div>'; label = 'Push Button'; }
   if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
-  if (type === 'lcd1602') { inner = '<div class="part-lcd part-lcd1602" id="' + id + '-lcd">' + '&nbsp;'.repeat(16) + '\\n' + '&nbsp;'.repeat(16) + '</div>'; label = 'LCD 16x2'; }
-  if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd">' + Array(4).fill('&nbsp;'.repeat(20)).join('\\n') + '</div>'; label = 'LCD 20x4'; }
+  if (type === 'lcd1602') { inner = '<div class="part-lcd part-lcd1602" id="' + id + '-lcd"></div>'; label = 'LCD 16x2'; }
+  if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd"></div>'; label = 'LCD 20x4'; }
   if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SSD1306'; }
   if (type === 'spi_display') { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SPI Display'; }
+  if (type === 'tft')     { inner = '<canvas class="part-tft" id="' + id + '-tft" width="480" height="320"></canvas>'; label = 'TFT 3.5" ILI9488'; }
+  if (type === 'neopixel') {
+    const cnt = (opts && opts.count) || 16;
+    let leds = '';
+    for (let k = 0; k < cnt; k++) leds += '<i class="neo-led"></i>';
+    inner = '<div class="part-neo" id="' + id + '-neo">' + leds + '</div>'
+          + '<div class="neo-ctl"><button data-d="-1" title="Fewer columns">&minus;</button>'
+          + '<span id="' + id + '-neodim"></span>'
+          + '<button data-d="1" title="More columns">+</button></div>';
+    label = 'NeoPixel x' + cnt;
+  }
+  if (type === 'sevenseg') {
+    const cnt = (opts && opts.count) || 4;
+    let digs = '';
+    for (let k = 0; k < cnt; k++) {
+      digs += sevenSegDigitSVG();
+      // Clock-style colon only on TM1637 modules (which have a physical colon);
+      // raw SevenSeg / MAX7219 displays don't.
+      if ((opts && opts.dev === 'tm1637') && k === 1 && cnt === 4) digs += '<div class="seg-colon"><i></i><i></i></div>';
+    }
+    inner = '<div class="part-seg" id="' + id + '-seg">' + digs + '</div>';
+    label = (opts && opts.label) || (cnt + '-digit 7-seg');
+  }
   if (opts && opts.label) label = opts.label;
 
   // Auto-detected parts can supply their own terminals (e.g. an HC595 LCD's
@@ -589,7 +819,7 @@ function addPart(type, addr, opts) {
         '<div class="part-term"><div class="term" id="' + id + '-term-' + t + '"></div><div class="term-label">' + t + '</div></div>'
       ).join('') + '</div>';
 
-  const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'oled' || type === 'spi_display';
+  const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'oled' || type === 'spi_display' || type === 'tft' || type === 'neopixel' || type === 'sevenseg';
   // I2C address badge: shown for I2C displays, but suppressed when the part is
   // explicitly on another bus (opts.i2c === false), e.g. an HC595-driven LCD.
   const showI2C = (opts && opts.i2c !== undefined)
@@ -600,6 +830,29 @@ function addPart(type, addr, opts) {
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
     '<div class="part-label">' + label + '</div>' + i2cHtml + termsHtml;
   circuitParts.appendChild(el);
+  if (type === 'lcd1602') renderLcd(document.getElementById(id + '-lcd'), [], 16, 2);
+  if (type === 'lcd2004') renderLcd(document.getElementById(id + '-lcd'), [], 20, 4);
+  if (type === 'tft') { const cv = document.getElementById(id + '-tft'); const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, cv.width, cv.height); }
+  if (type === 'neopixel') {
+    const cnt = (opts && opts.count) || 16;
+    let cols = cnt <= 16 ? cnt : Math.ceil(Math.sqrt(cnt));   // strip if small, else square-ish matrix
+    const neoEl = document.getElementById(id + '-neo');
+    const dimEl = document.getElementById(id + '-neodim');
+    const updateDim = () => {
+      neoEl.style.gridTemplateColumns = 'repeat(' + cols + ', 8px)';
+      dimEl.textContent = cols + '×' + Math.ceil(cnt / cols);
+    };
+    updateDim();
+    el.querySelectorAll('.neo-ctl button').forEach(btn => {
+      btn.addEventListener('mousedown', e => e.stopPropagation());   // don't drag the part
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        cols = Math.max(1, Math.min(cnt, cols + Number(btn.dataset.d)));
+        updateDim();
+        redrawAllWires();
+      });
+    });
+  }
   parts[id] = { id, type, el, dev: (opts && opts.dev) || null, rotation: 0, zoom: 1 };
 
   el.title = 'Click to select, then press Space to rotate' + (zoomable ? '. Scroll to zoom.' : '');
@@ -694,6 +947,8 @@ function applyAutoCircuit(autoParts) {
   autoParts.forEach(ap => {
     const opts = {};
     if (ap.dev) opts.dev = ap.dev;
+    if (ap.name) opts.label = ap.name;
+    if (ap.count) opts.count = ap.count;
     const termList = (ap.wires || []).map(w => w.term).filter(Boolean);
     if (termList.length) opts.terms = termList;
     if (ap.iface === 'gpio') {
@@ -732,6 +987,153 @@ window.addEventListener('keydown', e => {
   applyPartTransform(selectedPart);
 });
 
+// ---- Signal Scope (DSO) ---------------------------------------------------
+// Buffers timestamped samples per signal and draws scrolling waveforms:
+// digital pins as square waves, PWM as a 0-100% level, analog (ADC) as a
+// 0-1023 trace. Samples are time-stamped on arrival (the worker runs delay()
+// in real time, so arrival time tracks sketch time).
+const scopeCanvas = document.getElementById('scopeCanvas');
+const scopeCtx = scopeCanvas.getContext('2d');
+const SCOPE_COLORS = ['#4ec9b0','#dcdcaa','#569cd6','#c586c0','#f48771','#9cdcfe','#b5cea8','#ce9178'];
+let scopeSignals = {};   // name -> { kind, samples:[{t,v}], color }
+let scopeOrder = [];     // signal names, first-seen order
+let scopeWindowMs = 5000;
+let scopeRunning = true;
+let scopeStart = performance.now();
+let scopeFrozenNow = null;
+
+function scopeNow() {
+  return scopeRunning ? (performance.now() - scopeStart) : (scopeFrozenNow !== null ? scopeFrozenNow : performance.now() - scopeStart);
+}
+
+function scopeReset() {
+  scopeSignals = {};
+  scopeOrder = [];
+  scopeStart = performance.now();
+  scopeFrozenNow = null;
+  scopeRunning = true;
+  const b = document.getElementById('scopePauseBtn');
+  if (b) b.innerHTML = '&#10074;&#10074; Pause';
+}
+
+function scopeAdd(name, kind, v) {
+  if (!scopeRunning) return;
+  let sig = scopeSignals[name];
+  if (!sig) {
+    sig = scopeSignals[name] = { kind, samples: [], color: SCOPE_COLORS[scopeOrder.length % SCOPE_COLORS.length] };
+    scopeOrder.push(name);
+  }
+  sig.kind = kind;
+  const t = performance.now() - scopeStart;
+  const last = sig.samples[sig.samples.length - 1];
+  if (last && last.v === v && kind !== 'analog') return;   // dedupe flat digital/pwm
+  sig.samples.push({ t: t, v: v });
+  const cut = t - scopeWindowMs - 1000;
+  while (sig.samples.length > 2 && sig.samples[1].t < cut) sig.samples.shift();
+}
+
+function scopeNorm(sig, v) {
+  if (sig.kind === 'digital') return v ? 1 : 0;
+  if (sig.kind === 'pwm') return Math.max(0, Math.min(1, v / 255));
+  return Math.max(0, Math.min(1, v / 1023));   // analog 0-1023
+}
+
+function scopeDraw() {
+  const dpr = window.devicePixelRatio || 1;
+  const lanes = Math.max(1, scopeOrder.length);
+  const cssW = scopeCanvas.clientWidth || 600;
+  const cssH = Math.max(140, Math.min(48 * lanes, 360));
+  if (scopeCanvas.style.height !== cssH + 'px') scopeCanvas.style.height = cssH + 'px';
+  const pxW = Math.round(cssW * dpr), pxH = Math.round(cssH * dpr);
+  if (scopeCanvas.width !== pxW || scopeCanvas.height !== pxH) { scopeCanvas.width = pxW; scopeCanvas.height = pxH; }
+  scopeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  scopeCtx.clearRect(0, 0, cssW, cssH);
+
+  const labelW = 52;
+  const plotW = cssW - labelW - 6;
+  const now = scopeNow();
+  const t0 = now - scopeWindowMs;
+  const xOf = t => labelW + ((t - t0) / scopeWindowMs) * plotW;
+
+  scopeCtx.font = '9px Consolas, monospace';
+
+  // vertical time gridlines + labels, every 1s
+  scopeCtx.strokeStyle = '#1b1b1b';
+  scopeCtx.fillStyle = '#555';
+  scopeCtx.lineWidth = 1;
+  const step = scopeWindowMs <= 5000 ? 1000 : 2000;
+  const firstTick = Math.ceil(t0 / step) * step;
+  for (let tk = firstTick; tk <= now; tk += step) {
+    const x = xOf(tk);
+    scopeCtx.beginPath(); scopeCtx.moveTo(x, 0); scopeCtx.lineTo(x, cssH); scopeCtx.stroke();
+    scopeCtx.fillText('-' + ((now - tk) / 1000).toFixed(0) + 's', x + 2, cssH - 3);
+  }
+
+  if (!scopeOrder.length) {
+    scopeCtx.fillStyle = '#666';
+    scopeCtx.fillText('No signals yet — run a sketch that toggles pins, drives PWM, or reads an ADC.', labelW, cssH / 2);
+    return;
+  }
+
+  const laneH = cssH / scopeOrder.length;
+  scopeOrder.forEach((name, i) => {
+    const sig = scopeSignals[name];
+    const top = i * laneH;
+    const pad = 7;
+    const yLo = top + laneH - pad;
+    const yHi = top + pad;
+    const yOf = nv => yLo - nv * (yLo - yHi);
+
+    // lane separator
+    scopeCtx.strokeStyle = '#222';
+    scopeCtx.beginPath(); scopeCtx.moveTo(labelW, top + laneH); scopeCtx.lineTo(cssW, top + laneH); scopeCtx.stroke();
+
+    // labels
+    scopeCtx.fillStyle = sig.color;
+    scopeCtx.fillText(name, 4, top + laneH / 2 - 1);
+    scopeCtx.fillStyle = '#777';
+    scopeCtx.fillText(sig.kind, 4, top + laneH / 2 + 10);
+
+    // trace (sample-and-hold)
+    scopeCtx.strokeStyle = sig.color;
+    scopeCtx.lineWidth = 1.5;
+    scopeCtx.beginPath();
+    let prevY = null;
+    const ss = sig.samples;
+    for (let k = 0; k < ss.length; k++) {
+      let x = xOf(ss[k].t);
+      if (x < labelW) x = labelW;
+      const y = yOf(scopeNorm(sig, ss[k].v));
+      if (prevY === null) { scopeCtx.moveTo(x, y); }
+      else { scopeCtx.lineTo(x, prevY); scopeCtx.lineTo(x, y); }
+      prevY = y;
+    }
+    if (prevY !== null) scopeCtx.lineTo(Math.min(xOf(now), cssW), prevY);
+    scopeCtx.stroke();
+  });
+}
+
+function scopeLoop() { scopeDraw(); requestAnimationFrame(scopeLoop); }
+requestAnimationFrame(scopeLoop);
+
+document.getElementById('scopePauseBtn').addEventListener('click', () => {
+  const b = document.getElementById('scopePauseBtn');
+  if (scopeRunning) {
+    scopeFrozenNow = performance.now() - scopeStart;
+    scopeRunning = false;
+    b.innerHTML = '&#9654; Resume';
+  } else {
+    scopeStart = performance.now() - scopeFrozenNow;   // continue without a time jump
+    scopeFrozenNow = null;
+    scopeRunning = true;
+    b.innerHTML = '&#10074;&#10074; Pause';
+  }
+});
+document.getElementById('scopeClearBtn').addEventListener('click', scopeReset);
+document.getElementById('scopeWindow').addEventListener('change', e => {
+  scopeWindowMs = Number(e.target.value) || 5000;
+});
+
 function handleSimMessage(m) {
   switch (m.t) {
     case '_reset':
@@ -766,6 +1168,7 @@ function handleSimMessage(m) {
       lastDigital[m.pin] = m.value;
       delete lastPwm[m.pin];
       if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin].partId, !!m.value, false);
+      scopeAdd(m.pin, 'digital', m.value ? 1 : 0);
       break;
     case 'pwm':
       setMode(m.pin, 'PWM ' + Math.round(m.duty / 255 * 100) + '%');
@@ -773,6 +1176,10 @@ function handleSimMessage(m) {
       appendProto('PWM  ' + m.pin + '  duty=' + m.duty + ' (' + Math.round(m.duty/255*100) + '%)', 'log-pwm');
       lastPwm[m.pin] = m.duty;
       if (pinToPart[m.pin]) updatePartLed(pinToPart[m.pin].partId, m.duty > 0, true, m.duty);
+      scopeAdd(m.pin, 'pwm', m.duty);
+      break;
+    case 'analog':
+      scopeAdd(m.pin, 'analog', m.value);
       break;
     case 'serial':
       if (serialBuf === '') serialEl.innerHTML = '';
@@ -810,9 +1217,51 @@ function handleSimMessage(m) {
         .map(pid => document.getElementById(pid + '-lcd'));
       const targets = matched.filter(Boolean);
       const els = targets.length ? targets : Array.from(document.querySelectorAll('.part-lcd'));
-      els.forEach(el => { el.textContent = m.lines.join('\\n'); });
+      els.forEach(el => renderLcd(el, m.lines, m.cols || 16, m.rows || 2));
       break;
     }
+    case 'tft': {
+      const matched = Object.keys(parts)
+        .filter(pid => parts[pid].dev === 'tft')
+        .map(pid => document.getElementById(pid + '-tft'));
+      const targets = matched.filter(Boolean);
+      const els = targets.length ? targets : Array.from(document.querySelectorAll('.part-tft'));
+      els.forEach(cv => drawTft(cv.getContext('2d'), m));
+      break;
+    }
+    case 'seg': {
+      // Route to 7-seg parts matching this device ('sevenseg'/'tm1637'/'max7219').
+      const segMatched = Object.keys(parts)
+        .filter(pid => parts[pid].dev && parts[pid].dev === m.dev)
+        .map(pid => document.getElementById(pid + '-seg'));
+      const segTargets = segMatched.filter(Boolean);
+      const segEls = segTargets.length ? segTargets : Array.from(document.querySelectorAll('.part-seg'));
+      segEls.forEach(cont => {
+        const digits = cont.querySelectorAll('.seg-digit');
+        for (let k = 0; k < digits.length; k++) {
+          const b = (m.segs && m.segs[k]) || 0;
+          digits[k].querySelectorAll('.sseg').forEach(poly => {
+            const sname = poly.getAttribute('data-s');
+            const on = (sname === 'dp') ? (b & 0x80) : (b & (1 << 'abcdefg'.indexOf(sname)));
+            if (on) poly.classList.add('on'); else poly.classList.remove('on');
+          });
+        }
+        const col = cont.querySelector('.seg-colon');
+        if (col) { if (m.colon) col.classList.add('on'); else col.classList.remove('on'); }
+      });
+      break;
+    }
+    case 'neo':
+      document.querySelectorAll('.part-neo').forEach(cont => {
+        const leds = cont.children;
+        for (let i = 0; i < leds.length; i++) {
+          const c = m.pixels[i] || 'rgb(0,0,0)';
+          const off = c === 'rgb(0,0,0)';
+          leds[i].style.background = off ? '#222' : c;
+          leds[i].style.boxShadow = off ? 'none' : '0 0 5px ' + c;
+        }
+      });
+      break;
     case 'error':
       appendProto('ERROR (' + m.phase + '): ' + m.message, 'log-err');
       setStatus('error', m.phase);

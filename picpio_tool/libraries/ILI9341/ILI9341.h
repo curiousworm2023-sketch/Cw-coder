@@ -26,6 +26,11 @@
 #define ILI9341_YELLOW      0xFFE0
 #define ILI9341_WHITE       0xFFFF
 
+// Build an RGB565 color from 8-bit r,g,b components.
+static inline uint16_t ILI9341_rgb565(uint8_t r, uint8_t g, uint8_t b) {
+    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+}
+
 // ILI9341 commands (for LVGL port)
 #define ILI9341_SWRESET   0x01
 #define ILI9341_SLPOUT    0x11
@@ -38,7 +43,8 @@
 
 typedef struct {
     uint8_t  cs, dc, rst;
-    uint16_t width, height;
+    uint16_t width, height;     // current (orientation-adjusted) dimensions
+    uint16_t baseW, baseH;      // dimensions passed to begin() (rotation 0)
     uint8_t  rotation;
     int16_t  cursorX, cursorY;
     uint16_t textSize;
@@ -74,5 +80,10 @@ void ILI9341_setRotation(ILI9341_t *dev, uint8_t r);
 void ILI9341_cmd(ILI9341_t *dev, uint8_t cmd);
 void ILI9341_data(ILI9341_t *dev, uint8_t data);
 void ILI9341_addrSet(ILI9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+
+// Draw a 1-bpp bitmap (row-major, MSB-first, rows byte-padded) of size w x h
+// at (x,y); set bits drawn in `color`. Pairs with the Display Designer export.
+void ILI9341_drawBitmap(ILI9341_t *dev, int16_t x, int16_t y, const uint8_t *bitmap,
+                        int16_t w, int16_t h, uint16_t color);
 
 #endif // ILI9341_H

@@ -14,6 +14,7 @@ import { insertPeripheralSnippet, SNIPPETS } from './peripheralInsert';
 import { readConfig, isPicpioFramework } from './iniParser';
 import { runSimulation, disposeSimulator } from './simulator';
 import { PidTunePanel } from './pidTunePanel';
+import { openDesignerInBrowser } from './designerPanel';
 import { registerPinCompletion } from './pinCompletion';
 import { dfpFamilyFor, halVariantFor } from './newProject';
 
@@ -189,6 +190,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reg('picpio.insertI2C',     () => insertPeripheralWithPins('i2c'));
     reg('picpio.insertPWM',     () => insertPeripheralSnippet('pwm'));
     reg('picpio.simulate',      () => runSimulation(context));
+    reg('picpio.designer',      () => openDesignerInBrowser());
     reg('picpio.pidTune',       () => PidTunePanel.createOrShow(context));
     reg('picpio.refresh',       () => refreshAll());
 
@@ -214,6 +216,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (cmd === '_libs')    { HomePanel.createOrShow(context); return; }
         if (cmd === '_cli')     { vscode.commands.executeCommand('picpio.openCli'); return; }
         if (cmd === '_simulate'){ runSimulation(context); return; }
+        if (cmd === '_designer'){ openDesignerInBrowser(); return; }
         picpio(cmd);
         setTimeout(refreshAll, 1500);
     });

@@ -1,0 +1,4 @@
+{
+  "requires": ["spi"],
+  "note": "MAX7219/MAX7221 7-segment driver (1-8 digits) over hardware SPI. CS on any GPIO; uses the chip's BCD decoder."
+}
