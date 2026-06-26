@@ -1,0 +1,3 @@
+{
+  "note": "Bit-banged SPI master on plain GPIO (no hardware MSSP). Instance-based, all 4 modes, MSB/LSB first, optional half-clock delay. Works on every PIC family via the portable gpio_ API; a few hundred kHz up to ~1 MHz."
+}

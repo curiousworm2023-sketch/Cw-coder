@@ -1,0 +1,3 @@
+{
+  "note": "Bit-banged I2C master (7-bit) on plain GPIO (no hardware MSSP). True open-drain via input/output switching, clock stretching, ~100 kHz. REQUIRES external pull-ups on SDA/SCL (or pass useInternalPullups=1). Instance-based; works on every PIC family."
+}

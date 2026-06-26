@@ -300,6 +300,63 @@ LCD_HC595: {
          ],
          loop: [],
      },
+     HC595: {
+         include: '#include "HC595.h"',
+         globals: [
+             'HC595_t exp;',
+             '// 74HC595 output expander: 3 pins -> 8 outputs (chain chips for more).',
+             '// Wire: DS=data, SHCP=clock, STCP=latch (the three pins passed below).',
+         ],
+         setup: [
+             'HC595_init(&exp, D5, D6, D7, 1);   // data, clock, latch, numChips',
+             'HC595_writePin(&exp, 0, HIGH);     // turn on output Q0',
+         ],
+         loop: [],
+     },
+     // ─── SOFTWARE (BIT-BANGED) BUSES — pure GPIO, no hardware MSSP/EUSART ────────
+     SoftSPI: {
+         include: '#include "SoftSPI.h"',
+         globals: ['SoftSPI_t spi;  // bit-bang SPI master'],
+         setup: [
+             '// pins: SCK, MOSI, MISO, CS | mode 0-3 | msbFirst 1/0 | halfDelayUs (0=fast)',
+             'softspi_init(&spi, D5, D6, D7, D4, 0, 1, 0);',
+             'softspi_begin(&spi);',
+             'softspi_select(&spi);',
+             'uint8_t in = softspi_transfer(&spi, 0xA5);',
+             'softspi_deselect(&spi);',
+         ],
+         loop: [],
+     },
+     SoftI2C: {
+         include: '#include "SoftI2C.h"',
+         globals: ['SoftI2C_t i2c;  // bit-bang I2C master (needs external pull-ups!)'],
+         setup: [
+             '// pins: SDA, SCL | halfUs (0=~100kHz) | useInternalPullups 0/1',
+             'softi2c_init(&i2c, D4, D3, 0, 0);',
+             'softi2c_begin(&i2c);',
+             'uint8_t reg = 0x00;',
+             'softi2c_write(&i2c, 0x68, &reg, 1);   // point device 0x68 at register 0',
+             'uint8_t val;',
+             'softi2c_read(&i2c, 0x68, &val, 1);    // read 1 byte back',
+         ],
+         loop: [],
+     },
+     SoftUART: {
+         include: '#include "SoftUART.h"',
+         globals: ['SoftUART_t ser;  // bit-bang UART 8N1'],
+         setup: [
+             '// pins: TX, RX | baud (9600-38400 reliable)',
+             'softuart_init(&ser, D6, D7, 9600);',
+             'softuart_begin(&ser);',
+             'softuart_println(&ser, "SoftUART up");',
+         ],
+         loop: [
+             'if (softuart_available(&ser)) {',
+             '    int c = softuart_read(&ser);',
+             '    if (c >= 0) softuart_write(&ser, (uint8_t)c);   // echo',
+             '}',
+         ],
+     },
      // ─── DISPLAYS ───────────────────────────────────────────────────────────────
      SH110X: {
          include: '#include "SH110X.h"',
@@ -961,9 +1018,9 @@ LCD_HC595: {
          globals: [
              'SevenSeg_t ss;',
              '// 7-segment wiring: 8 segment pins (a,b,c,d,e,f,g,dp) then one select pin per digit.',
-             '// PIC18 native pins:  D0..D7 = RC0..RC7   |   D8..D11 = RB0..RB3',
-             'uint8_t ss_seg[8] = {D0, D1, D2, D3, D4, D5, D6, D7}; // a=RC0 b=RC1 c=RC2 d=RC3 e=RC4 f=RC5 g=RC6 dp=RC7 (0xFF if no dp)',
-             'uint8_t ss_dig[4] = {D8, D9, D10, D11};               // digit1=RB0 digit2=RB1 digit3=RB2 digit4=RB3',
+             '// Change the pins below to match your wiring (see this chip\'s Pin Map in REFERENCE.md).',
+             'uint8_t ss_seg[8] = {D0, D1, D2, D3, D4, D5, D6, D7}; // segments a,b,c,d,e,f,g,dp (use 0xFF for dp if unused)',
+             'uint8_t ss_dig[4] = {D8, D9, D10, D11};               // digit-select pins, one per digit',
          ],
          setup: [
              'SevenSeg_init(&ss, ss_seg, ss_dig, 4, 0); // numDigits=4 (1..4), 0=common-cathode',
@@ -2184,6 +2241,14 @@ function scaffoldMainUsage(dirEntry, count) {
         }
     }
 
+    // Rewrite Dn pin tokens to this MCU's native names (RC2, RB0, …) so the
+    // scaffolded code matches the chip's datasheet pin labels.
+    const nat = makeNativeTranslator(cfg.mcu);
+    globals     = globals.map(nat);
+    setup       = setup.map(nat);
+    loop        = loop.map(nat);
+    defineLines = defineLines.map(nat);
+
     content = insertIntoFunctionBody(content, ['run', 'loop'],   [marker, ...loop]);
     content = insertIntoFunctionBody(content, ['init', 'setup'], [marker, ...setup]);
     content = insertBeforeSetup(content, [marker, ...globals]);
@@ -2418,6 +2483,7 @@ function libAdd(name, count, force) {
             console.log(`[PICPIO] Installed library '${dirEntry}' (${files.length} files)`);
             updateIniLibs(dirEntry);
             scaffoldMainUsage(dirEntry, count);
+            writeLibraryReference(dirEntry, src);    // per-library <Name>_reference.md
             refreshVscodeConfig();               // re-index so IntelliSense sees the new header
             found = true;
             break;
@@ -2448,6 +2514,7 @@ function libRemove(name) {
     // would be left in main.* with no way to clean it via the tool.
     unscaffoldMainUsage(actual);                 // strip its code from main.* first
     if (hadFolder) fs.rmSync(libDir, { recursive: true, force: true });
+    try { fs.unlinkSync(path.join(process.cwd(), `${actual}_reference.md`)); } catch {} // drop its per-lib reference
     removeIniLib(actual);                        // drop it from picpio.ini [libraries]
     refreshVscodeConfig();                       // re-index so IntelliSense drops the removed header
 
@@ -2519,6 +2586,25 @@ function deviceMacrosFor(mcu) {
     if (/^PIC1[68]/i.test(mcu)) set.add('_' + mcu.replace(/^PIC/i, ''));  // XC8: _16F877A, _18F47K40
     set.add('__' + mcu + '__');                                          // XC16: __dsPIC30F2010__
     return set;
+}
+
+// Build a function that rewrites Dn/An pin tokens (D5, A0, …) into that MCU's
+// native port-pin name (RC5, RA0, …) using its HAL pin map. Used so all visible
+// example code — scaffolded sketches and generated references — shows the
+// chip's real pin names while the stored snippets stay portable Dn. Falls back
+// to identity if the HAL can't be parsed or a pin has no native name.
+function makeNativeTranslator(mcu) {
+    try {
+        const halDir = resolveHalDir(mcu);
+        if (!halDir) return (s) => s;
+        const h = parseHalHeader(halDir, mcu);
+        return (s) => String(s).replace(/\b([DA])(\d+)\b/g, (m, p, n) => {
+            const v = h.resolve(p + n);
+            return (v != null && h.nativeByVal[v]) ? h.nativeByVal[v] : m;
+        });
+    } catch (_) {
+        return (s) => s;
+    }
 }
 
 function resolveHalDir(mcu) {
@@ -2633,7 +2719,140 @@ function parseHalHeader(halDir, mcu) {
         analogReadNote:  grabProto('int\\s+analogRead\\(uint8_t pin\\)'),
         analogWriteNote: grabProto('void\\s+analogWrite\\(uint8_t pin, uint8_t duty\\)'),
         hasADC: aPins.length > 0,
+        hasInterrupt: /\battachInterrupt\s*\(/.test(text),
+        hasTone: /\bvoid\s+tone\s*\(/.test(text),
+        hasEEPROM: /\bEEPROM_read\s*\(/.test(text),
     };
+}
+
+// Parse a library header for its public functions and emit a standalone
+// per-library reference (e.g. HC595_reference.md). Function prototypes are read
+// straight from the .h: the `//` comment block above a prototype (or a trailing
+// `//` on the same line) becomes its description. Members inside typedef structs
+// and function-pointer fields are skipped, so only the real C API is listed.
+function buildLibraryReferenceMd(libName, headerText, snippet, nat) {
+    const L = [];
+    const p = (...s) => L.push(...s);
+    const tr = nat || ((s) => s);   // Dn -> native pin-name translator
+
+    // Render the library's install snippet as a complete, ready-to-run sketch so
+    // the reference shows real usage — the same code `picpio lib add` scaffolds.
+    const renderExample = () => {
+        if (!snippet || !snippet.include) return null;
+        const defines = (snippet.define ? [snippet.define] : []).map(tr);
+        const globals = (snippet.globals || []).map(tr);
+        const setup   = (snippet.setup   || []).map(tr);
+        const loop    = (snippet.loop    || []).map(tr);
+        const out = ['#include <Picpio.h>'];
+        for (const d of defines) out.push(d);
+        out.push(snippet.include, '');
+        for (const g of globals) out.push(g);
+        if (globals.length) out.push('');
+        out.push('void init() {');
+        for (const s of setup) out.push('    ' + s);
+        out.push('}', '', 'void run() {');
+        for (const s of loop) out.push('    ' + s);
+        out.push('}');
+        return out.join('\n');
+    };
+
+    // File-level description: the first multi-line `//` block near the top.
+    let fileDesc = '';
+    {
+        const lines = headerText.split(/\r?\n/);
+        const block = [];
+        for (const ln of lines) {
+            const m = ln.match(/^\s*\/\/\s?(.*)$/);
+            if (m) { block.push(m[1].replace(/[─-]{3,}.*$/, '').trim()); }
+            else if (block.length >= 2) break;        // keep the first real block
+            else if (block.length) block.length = 0;  // a 1-line stray; keep looking
+        }
+        fileDesc = block.join(' ').replace(/\s+/g, ' ').trim();
+    }
+
+    p(`# ${libName} — Library Reference`, '');
+    p(`> Auto-generated from \`${libName}.h\` when the library was installed. Lists the functions this library makes available.`, '');
+    if (fileDesc) p(fileDesc, '');
+
+    const example = renderExample();
+    if (example) {
+        p('## Usage Example', '');
+        p(`A complete sketch — this is the same starter code \`picpio lib add ${libName}\` drops into \`main.c\`:`, '');
+        p('```c', example, '```', '');
+    }
+
+    // Walk the header, tracking brace depth so struct members are skipped.
+    const lines = headerText.split(/\r?\n/);
+    let depth = 0;
+    let pending = [];                                  // preceding // comment lines
+    const protoRe = /^\s*(?:extern\s+)?((?:const\s+|unsigned\s+|signed\s+|struct\s+)?[A-Za-z_]\w*(?:\s*\*+)?)\s+([A-Za-z_]\w*)\s*\(([^;{]*)\)\s*;/;
+    const fns = [];
+    for (let raw of lines) {
+        const line = raw.replace(/\t/g, ' ');
+        const commentOnly = line.match(/^\s*\/\/\s?(.*)$/);
+        if (commentOnly && depth === 0) {
+            const t = commentOnly[1];
+            if (/^[─=-]{3,}/.test(t.trim())) { continue; }   // skip rule-only lines
+            pending.push(t.trim());
+            continue;
+        }
+
+        // Try to match a top-level prototype BEFORE counting this line's braces.
+        let matched = false;
+        if (depth === 0) {
+            const m = line.match(protoRe);
+            if (m && !/^\s*typedef\b/.test(line) && !/\(\s*\*/.test(line) &&
+                !/^\s*#/.test(line) && m[2] !== 'if' && m[2] !== 'while' && m[2] !== 'for') {
+                const ret  = m[1].replace(/\s+/g, ' ').trim();
+                const fn   = m[2];
+                const args = m[3].replace(/\s+/g, ' ').trim();
+                const trail = (line.match(/;\s*\/\/\s?(.*)$/) || [])[1];
+                let desc = pending.filter(Boolean).join(' ').trim();
+                if (!desc && trail) desc = trail.trim();
+                fns.push({ sig: `${ret} ${fn}(${args || 'void'})`, fn, desc });
+                matched = true;
+            }
+        }
+
+        // Update brace depth (after the prototype test, so a `typedef struct {`
+        // opener correctly starts skipping its members on the next line).
+        for (const ch of line) { if (ch === '{') depth++; else if (ch === '}') depth = Math.max(0, depth - 1); }
+        if (!matched) pending = [];
+    }
+
+    if (fns.length) {
+        p('## Functions', '');
+        for (const f of fns) {
+            p('```c', f.sig + ';', '```');
+            if (f.desc) p(f.desc.replace(/\s+/g, ' ').trim(), '');
+            else p('');
+        }
+    } else {
+        p('_No public C functions were detected in this header (it may be a macro-only or struct-only library)._', '');
+    }
+
+    p('---', `_Generated by PICPIO from the installed copy of ${libName}. Re-created each time the library is added._`);
+    return L.join('\n');
+}
+
+// Write <LibName>_reference.md into the project root from the library's header.
+// Picks <DirName>.h if present, otherwise the first .h in the folder.
+function writeLibraryReference(dirEntry, libSrcDir) {
+    try {
+        const files = fs.readdirSync(libSrcDir).filter(f => /\.h$/i.test(f));
+        if (!files.length) return;
+        const header = files.find(f => f.toLowerCase() === dirEntry.toLowerCase() + '.h') || files[0];
+        const text = fs.readFileSync(path.join(libSrcDir, header), 'utf8');
+        const snippet = LIB_SNIPPETS[dirEntry]
+            || LIB_SNIPPETS[Object.keys(LIB_SNIPPETS).find(k => k.toLowerCase() === dirEntry.toLowerCase())];
+        const cfg = readIni(path.join(process.cwd(), 'picpio.ini'));
+        const nat = makeNativeTranslator(cfg && cfg.mcu);
+        const outName = `${dirEntry}_reference.md`;
+        fs.writeFileSync(path.join(process.cwd(), outName), buildLibraryReferenceMd(dirEntry, text, snippet, nat));
+        console.log(`[PICPIO] Wrote ${outName}`);
+    } catch (e) {
+        // Non-fatal: the library still installed fine without its reference doc.
+    }
 }
 
 // Small standalone file (sits next to REFERENCE.md/README in the project root,
@@ -2677,12 +2896,16 @@ function buildReferenceMd(meta) {
     }
 
     const h = parseHalHeader(halDir, mcu);
+    const nat = makeNativeTranslator(mcu);   // Dn -> native pin name for examples
+
+    // A representative native pin name for examples (the built-in LED's pin).
+    const ledNative = (h.ledVal != null && h.nativeByVal[h.ledVal]) || nat('D13');
 
     // ── Pin map ──
     p('## Pin Map', '');
-    p('Any of these names are interchangeable in `gpio_mode` / `gpio_write` / `gpio_read`:',
-      `the pin number (\`D5\`), the native port pin (\`RC2\`), or — for analog-capable pins —`,
-      `the analog name (\`A0\`). This chip exposes **${h.dPins.length} digital pins** and **${h.aPins.length} analog channels**.`, '');
+    p('PICPIO uses the chip\'s **native port-pin names** (`RC2`, `RB0`, `RA0`, …) — the same labels',
+      'as the datasheet. The `Dn` pin number and (for analog pins) the `A0` name also work and are',
+      `interchangeable in \`gpio_mode\` / \`gpio_write\` / \`gpio_read\`. This chip exposes **${h.dPins.length} digital pins** and **${h.aPins.length} analog channels**.`, '');
     p('| Pin # | Native pin | Analog | Notes |', '|---|---|---|---|');
     // One row per distinct pin value: prefer the D-name; include analog-only pins
     // (e.g. A0..A5 with no D alias on 28-pin parts) so the ADC channels are listed too.
@@ -2760,18 +2983,18 @@ function buildReferenceMd(meta) {
 
     p('### Digital I/O', '');
     p('```c',
-      'gpio_mode(D5, GPIO_OUT);      // GPIO_OUT | GPIO_IN | GPIO_PULLUP',
-      'gpio_write(D5, GPIO_HIGH);    // GPIO_HIGH | GPIO_LOW',
-      'int s = gpio_read(D6);        // 0 or 1',
+      nat('gpio_mode(D5, GPIO_OUT);')  + '      // GPIO_OUT | GPIO_IN | GPIO_PULLUP',
+      nat('gpio_write(D5, GPIO_HIGH);') + '    // GPIO_HIGH | GPIO_LOW',
+      nat('int s = gpio_read(D6);')     + '        // 0 or 1',
       '```',
-      '> Use the `Dn` pin numbers (the Pin Map shows which physical pin each is). The native',
-      '> `RC2`-style names are opt-in — `#define PICPIO_PIN_ALIASES` before the include to use',
-      '> them (off by default because they shadow the chip\'s register-bit symbols).', '');
+      '> Pins use the chip\'s native names (`' + ledNative + '`-style), shown in the Pin Map above. The',
+      '> `Dn` pin numbers work too (`gpio_write(D5, …)` ≡ `gpio_write(' + nat('D5') + ', …)`). For raw',
+      '> register-bit writes like `' + ledNative + ' = 1;`, add `#define PICPIO_NO_PIN_ALIASES` before the include.', '');
 
     if (h.hasADC) {
         p('### Analog Input (ADC)', '');
         p('```c',
-          'int v = adc_read(A0);         // 10-bit, 0..1023',
+          nat('int v = adc_read(A0);') + '         // 10-bit, 0..1023',
           '```', '');
     }
     p('### PWM Output', '');
@@ -2787,6 +3010,49 @@ function buildReferenceMd(meta) {
       'uint32_t t  = sys_millis();   // ms since boot',
       'uint32_t us = sys_micros();   // us since boot',
       '```', '');
+
+    if (h.hasInterrupt) {
+        p('### Pin-Change Interrupts', '');
+        p('Run a function the instant a pin changes, without polling it in `run()`. Uses the',
+          'chip\'s interrupt-on-change (IOC) hardware — available on PORTA/B/C pins.', '');
+        p('```c',
+          'void onButton(void) {         // keep it SHORT — this runs inside the ISR',
+          nat('    gpio_write(D5, GPIO_HIGH);'),
+          '}',
+          '',
+          'void init() {',
+          nat('    gpio_mode(D8, GPIO_PULLUP);'),
+          nat('    attachInterrupt(D8, onButton, FALLING);') + '  // FALLING | RISING | CHANGE',
+          '}',
+          '```',
+          '> `detachInterrupt(pin)` stops it. `noInterrupts()` / `interrupts()` (aliases',
+          '> `sys_irq_off()` / `sys_irq_on()`) globally disable/enable all interrupts —',
+          '> useful around timing-critical bit-banged code.', '');
+    }
+
+    if (h.hasTone) {
+        p('### Tone (square-wave output)', '');
+        p('```c',
+          nat('tone(D9, 440, 500);')   + '     // ' + nat('D9') + ' square wave, 440 Hz for 500 ms (0 = until noTone)',
+          nat('noTone(D9);')           + '             // stop early',
+          '```', '');
+    }
+
+    if (h.hasEEPROM) {
+        p('### On-Chip EEPROM (non-volatile)', '');
+        p('Storage built into the PIC that survives power-off. Each byte write takes ~4 ms',
+          '(blocking).', '');
+        p('```c',
+          'EEPROM_write(0, 42);          // store a byte at address 0',
+          'uint8_t v = EEPROM_read(0);   // read it back',
+          'EEPROM_update(0, 42);         // write only if the value changed (saves wear)',
+          'uint16_t n = EEPROM_length(); // total size in bytes',
+          '',
+          'int32_t cfg = 1234;           // store/recall any struct or variable:',
+          'EEPROM_put(4, &cfg, sizeof cfg);',
+          'EEPROM_get(4, &cfg, sizeof cfg);',
+          '```', '');
+    }
 
     const serialUsage = (obj) => {
         p('```c',
@@ -2818,22 +3084,25 @@ function buildReferenceMd(meta) {
     };
     if (h.wire.present)  { p('### I2C-1 (`i2c1`)' + (h.wire.note ? ' — ' + h.wire.note : ''), ''); wireUsage('i2c1'); }
     if (h.wire2.present) { p('### I2C-2 (`i2c2`)' + (h.wire2.note ? ' — ' + h.wire2.note : ''), ''); wireUsage('i2c2'); }
-    if (h.spi.present) {
-        p('### SPI-1 (`spi1`)' + (h.spi.note ? ' — ' + h.spi.note : ''), '');
+    const spiUsage = (obj) => {
         p('```c',
-          'spi1.begin();',
-          'spi1.setBitOrder(SPI_MSB);    // SPI_MSB | SPI_LSB',
-          'spi1.setDataMode(SPI_MODE0);  // SPI_MODE0..3',
-          'spi1.setClockDivider(SPI_CLOCK_DIV4);',
-          'uint8_t in = spi1.transfer(0xA5);',
+          `${obj}.begin();`,
+          `${obj}.setBitOrder(SPI_MSB);    // SPI_MSB | SPI_LSB`,
+          `${obj}.setDataMode(SPI_MODE0);  // SPI_MODE0..3`,
+          `${obj}.setClockDivider(SPI_CLOCK_DIV4);`,
+          `uint8_t in = ${obj}.transfer(0xA5);`,
           '```', '');
-    }
+    };
+    if (h.spi.present)  { p('### SPI-1 (`spi1`)' + (h.spi.note ? ' — ' + h.spi.note : ''), ''); spiUsage('spi1'); }
+    if (h.spi2.present) { p('### SPI-2 (`spi2`)' + (h.spi2.note ? ' — ' + h.spi2.note : ''), ''); spiUsage('spi2'); }
 
     p('### Names & helpers', '');
     p('Constants: `GPIO_IN` `GPIO_OUT` `GPIO_PULLUP` `GPIO_HIGH` `GPIO_LOW` `BUILTIN_LED`,',
       '`SPI_MSB` `SPI_LSB` `SPI_MODE0..3` `SPI_CLOCK_DIV*`. Bit/byte helpers: `bit_read` `bit_set`',
       '`bit_clr` `bit_write` `byte_lo` `byte_hi`. The Arduino equivalents (`HIGH`, `bitRead`, `min`,',
       '`max`, …) are kept as aliases for compatibility.', '');
+    p('Math / conversion macros: `map(x,inLo,inHi,outLo,outHi)` `constrain(x,lo,hi)` `min` `max`',
+      '`abs` `sq(x)` `round(x)` and the constants `PI` `TWO_PI` `HALF_PI` `DEG_TO_RAD` `RAD_TO_DEG`.', '');
 
     p('---', `_Generated by PICPIO. Pin/peripheral data parsed from \`${halVariantFor(mcu)}/Picpio.h\`._`);
     return L.join('\n');

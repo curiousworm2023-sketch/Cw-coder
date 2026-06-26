@@ -1,0 +1,3 @@
+{
+  "note": "Bit-banged UART (8N1) on plain GPIO (no hardware EUSART). Instance-based, polled TX/RX with mid-bit sampling. Reliable ~9600-38400 baud. Works on every PIC family via the portable gpio_ API."
+}

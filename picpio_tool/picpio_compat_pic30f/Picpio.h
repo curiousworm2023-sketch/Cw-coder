@@ -2,6 +2,16 @@
 #define PICPIO_H
 
 #include <xc.h>
+
+// -- Native pin names (RC2, RB0, RA0, ...) are ON by default -----------------
+// PICPIO uses the chip's real port-pin names everywhere. They alias the Dn pin
+// numbers, so gpio_write(RC2, HIGH) and gpio_write(D2, HIGH) are identical.
+// If you need raw register-bit writes like `RC2 = 1;`, define
+// PICPIO_NO_PIN_ALIASES before including this header to turn the names off.
+#if !defined(PICPIO_PIN_ALIASES) && !defined(PICPIO_NO_PIN_ALIASES)
+#  define PICPIO_PIN_ALIASES
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>

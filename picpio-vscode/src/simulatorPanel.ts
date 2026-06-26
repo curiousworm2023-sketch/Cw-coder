@@ -187,13 +187,40 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
 .term{width:10px;height:10px;border-radius:50%;background:#555;border:1px solid var(--border);cursor:pointer;margin:0 auto 2px}
 .term.selected{background:var(--accent);box-shadow:0 0 6px var(--accent)}
 .term.wired{background:#4ec9b0}
-.circuit-part{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:6px;text-align:center;cursor:move;-webkit-user-select:none;user-select:none;min-width:56px}
+/* By default a part shows ONLY its screen (like a real device on a bench / in
+   Proteus): no card chrome, no label, no address, no pin tags. Clicking the
+   part selects it and reveals the metadata (.part-meta) — address, type and the
+   connected pins. */
+.circuit-part{position:absolute;background:transparent;border:1px solid transparent;border-radius:var(--radius);padding:6px;text-align:center;cursor:move;-webkit-user-select:none;user-select:none;min-width:56px}
+.circuit-part:hover{border-color:var(--border)}
+.circuit-part.selected{border-color:var(--accent);background:var(--card);box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .circuit-part .term{margin-top:6px}
-.circuit-part .remove{position:absolute;top:1px;right:4px;color:var(--sub);cursor:pointer;font-size:12px;line-height:1}
+.circuit-part .remove{position:absolute;top:2px;right:5px;color:var(--sub);cursor:pointer;font-size:13px;line-height:1;display:none;z-index:2}
+.circuit-part:hover .remove,.circuit-part.selected .remove{display:block}
 .circuit-part .remove:hover{color:#f48771}
-.circuit-part.selected{outline:2px solid var(--accent)}
-.circuit-part .part-i2c{font-size:9px;color:var(--sub);margin-top:2px}
-.circuit-part .part-label{font-size:10px;margin-top:4px;color:var(--sub)}
+/* ── Metadata: hidden until the part is clicked, then revealed as a clean spec
+   TABLE — device name in the caption, an address row, one row per pin. ── */
+.circuit-part .part-meta{display:none}
+.circuit-part.selected .part-meta{
+  display:block;margin-top:8px;min-width:128px;
+  animation:metaReveal .14s ease-out;
+}
+@keyframes metaReveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.meta-tbl{
+  border-collapse:collapse;width:100%;font-size:9px;
+  background:rgba(0,0,0,.22);
+}
+.meta-tbl caption{
+  caption-side:top;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.3px;
+  padding:4px 6px;background:rgba(255,255,255,.05);
+  border:1px solid var(--border);border-bottom:none;
+}
+.meta-tbl td{border:1px solid var(--border);padding:3px 7px;line-height:1.25;white-space:nowrap}
+.meta-tbl .meta-k{
+  color:var(--sub);text-transform:uppercase;letter-spacing:.4px;font-size:8px;
+  text-align:center;background:rgba(255,255,255,.025);
+}
+.meta-tbl .meta-v{color:var(--text);font-weight:600;text-align:center}
 .part-led{width:18px;height:18px;border-radius:50%;background:#333;border:1px solid var(--border);margin:0 auto;transition:opacity .15s,box-shadow .15s,background .1s}
 .part-btn{width:32px;height:32px;border-radius:6px;background:#444;border:2px solid var(--border);margin:0 auto;cursor:pointer}
 .part-btn.pressed{background:#3794ff;border-color:#5dabff}
@@ -215,6 +242,25 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
   color:#f3f8ff; background:#2f5be8; text-shadow:0 0 2px rgba(255,255,255,.55);
 }
 .part-lcd1602,.part-lcd2004{ /* size comes from the cell grid */ }
+/* Classic green character LCD: a green PCB module with a black bezel around a
+   yellow-green backlit glass and dark characters — the familiar 1602 look. */
+.lcd-module{display:inline-block;margin:6px auto 0;padding:8px 10px 9px;border-radius:4px}
+.lcd-module.green{
+  background:linear-gradient(#21451a,#15300f);          /* green PCB board */
+  border:1px solid #0a1505;
+  box-shadow:0 2px 6px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.lcd-module .part-lcd{margin:0}
+.part-lcd.green{
+  border:4px solid #0b0e07;                              /* black bezel */
+  background:#5d7d10;                                     /* dark grid in the gaps */
+  box-shadow:inset 0 0 7px rgba(0,0,0,.45), 0 0 5px rgba(150,200,40,.18);
+}
+.part-lcd.green .lcd-cell{
+  color:#11220a;                                          /* dark characters */
+  background:#a6cf17;                                     /* yellow-green backlight */
+  text-shadow:0 0 1px rgba(0,0,0,.22);
+}
 /* OLED / SPI glass: dark panel, metal bezel, cyan glow. */
 .part-oled{
   color:#9efbff;font-family:'Cascadia Code',Consolas,monospace;font-size:8px;line-height:1.35;
@@ -231,11 +277,11 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
   box-shadow:inset 0 0 8px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.5);
   image-rendering:auto;
 }
-.part-terms{display:flex;justify-content:center;gap:7px;margin-top:5px;flex-wrap:wrap}
-.part-term{display:flex;flex-direction:column;align-items:center}
-.part-term .term{margin:0}
-.term-label{font-size:8px;color:var(--sub);margin-top:2px;line-height:1}
-.term-pin{display:block;color:var(--accent);font-weight:700;font-size:8px;margin-top:1px;line-height:1.2}
+/* Connection dot sits inline in the table's value cell, left of the pin name. */
+.meta-v .term{display:inline-block;vertical-align:middle;width:9px;height:9px;margin:0 5px 0 0}
+.meta-v .term-label{font-size:9px}
+.term-pin{color:var(--accent);font-weight:700}
+.meta-v:has(.term-label:empty) .term{margin-right:0}
 .log-box{background:#161616;border:1px solid var(--border);border-radius:var(--radius);padding:10px;height:160px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .log-line{margin:0 0 2px}
 .log-tx{color:#4ec9b0}
@@ -306,8 +352,10 @@ button.primary:hover{background:#ff9933;color:#1e1e1e}
       <option value="led">LED</option>
       <option value="button">Push Button</option>
       <option value="pot">Potentiometer</option>
-      <option value="lcd1602">LCD 16x2</option>
-      <option value="lcd2004">LCD 20x4</option>
+      <option value="lcd1602">LCD 16x2 (blue)</option>
+      <option value="lcd1602g">LCD 16x2 (green)</option>
+      <option value="lcd2004">LCD 20x4 (blue)</option>
+      <option value="lcd2004g">LCD 20x4 (green)</option>
       <option value="oled">SSD1306</option>
       <option value="spi_display">SPI Display</option>
       <option value="tft">TFT 3.5" ILI9488</option>
@@ -501,6 +549,7 @@ const wireLayer    = document.getElementById('wireLayer');
 const TERMINALS = {
   led: [''], button: [''], pot: [''],
   lcd1602: ['SDA', 'SCL'], lcd2004: ['SDA', 'SCL'],
+  lcd1602g: ['SDA', 'SCL'], lcd2004g: ['SDA', 'SCL'],
   oled: ['SDA', 'SCL'],
   spi_display: ['CS', 'DC', 'SDA', 'SCK', 'RST'],
   tft: ['CS', 'DC', 'RST', 'SDI', 'SCK'],
@@ -552,7 +601,7 @@ function setTermConnLabel(partId, term, mcuPin) {
     const dot = document.getElementById(partId + '-term-' + term);
     lab = dot && dot.parentElement.querySelector('.term-label');
   } else {
-    lab = part.el.querySelector('.part-label');
+    lab = part.el.querySelector('.single-pin');
   }
   if (!lab) return;
   if (lab.dataset.base == null) lab.dataset.base = lab.textContent;
@@ -567,7 +616,7 @@ function clearTermConnLabel(partId, term) {
     const dot = document.getElementById(partId + '-term-' + term);
     lab = dot && dot.parentElement.querySelector('.term-label');
   } else {
-    lab = part.el.querySelector('.part-label');
+    lab = part.el.querySelector('.single-pin');
   }
   if (lab && lab.dataset.base != null) lab.textContent = lab.dataset.base;
 }
@@ -649,7 +698,7 @@ function onTerminalClick(kind, el, data) {
   if (el) el.addEventListener('click', () => onTerminalClick('mcu', el, p));
 });
 
-const I2C_ADDR_DEFAULT = { lcd1602: '0x27', lcd2004: '0x27', oled: '0x3C' };
+const I2C_ADDR_DEFAULT = { lcd1602: '0x27', lcd2004: '0x27', lcd1602g: '0x27', lcd2004g: '0x27', oled: '0x3C' };
 
 function applyPartTransform(id) {
   const p = parts[id];
@@ -783,6 +832,8 @@ function addPart(type, addr, opts) {
   if (type === 'pot')    { inner = '<input type="range" class="part-pot" id="' + id + '-range" min="0" max="1023" value="512">'; label = 'Pot'; }
   if (type === 'lcd1602') { inner = '<div class="part-lcd part-lcd1602" id="' + id + '-lcd"></div>'; label = 'LCD 16x2'; }
   if (type === 'lcd2004') { inner = '<div class="part-lcd part-lcd2004" id="' + id + '-lcd"></div>'; label = 'LCD 20x4'; }
+  if (type === 'lcd1602g') { inner = '<div class="lcd-module green"><div class="part-lcd part-lcd1602 green" id="' + id + '-lcd"></div></div>'; label = 'LCD 16x2'; }
+  if (type === 'lcd2004g') { inner = '<div class="lcd-module green"><div class="part-lcd part-lcd2004 green" id="' + id + '-lcd"></div></div>'; label = 'LCD 20x4'; }
   if (type === 'oled')    { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SSD1306'; }
   if (type === 'spi_display') { inner = '<div class="part-oled" id="' + id + '-oled"></div>'; label = 'SPI Display'; }
   if (type === 'tft')     { inner = '<canvas class="part-tft" id="' + id + '-tft" width="480" height="320"></canvas>'; label = 'TFT 3.5" ILI9488'; }
@@ -813,25 +864,37 @@ function addPart(type, addr, opts) {
   // Auto-detected parts can supply their own terminals (e.g. an HC595 LCD's
   // DATA/CLK/LATCH GPIO lines instead of the default I2C SDA/SCL).
   const terms = (opts && opts.terms && opts.terms.length) ? opts.terms : (TERMINALS[type] || ['']);
-  const termsHtml = (terms.length === 1 && terms[0] === '')
-    ? '<div class="term" id="' + id + '-term"></div>'
-    : '<div class="part-terms">' + terms.map(t =>
-        '<div class="part-term"><div class="term" id="' + id + '-term-' + t + '"></div><div class="term-label">' + t + '</div></div>'
-      ).join('') + '</div>';
 
-  const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'oled' || type === 'spi_display' || type === 'tft' || type === 'neopixel' || type === 'sevenseg';
-  // I2C address badge: shown for I2C displays, but suppressed when the part is
+  const zoomable = type === 'lcd1602' || type === 'lcd2004' || type === 'lcd1602g' || type === 'lcd2004g' || type === 'oled' || type === 'spi_display' || type === 'tft' || type === 'neopixel' || type === 'sevenseg';
+  // I2C address: shown for I2C displays, but suppressed when the part is
   // explicitly on another bus (opts.i2c === false), e.g. an HC595-driven LCD.
   const showI2C = (opts && opts.i2c !== undefined)
     ? opts.i2c
-    : (type === 'lcd1602' || type === 'lcd2004' || type === 'oled');
+    : (type === 'lcd1602' || type === 'lcd2004' || type === 'lcd1602g' || type === 'lcd2004g' || type === 'oled');
   const i2cAddr = showI2C ? (addr || I2C_ADDR_DEFAULT[type]) : null;
-  const i2cHtml = i2cAddr ? '<div class="part-i2c">I2C ' + i2cAddr + '</div>' : '';
+
+  // Metadata rendered as a compact spec TABLE: device name in the caption, an
+  // address row, then one row per pin (function name | connection dot + the
+  // connected MCU pin). The .term dots stay clickable for manual wiring and the
+  // .term-label spans receive the connected pin via setTermConnLabel().
+  let metaRows = '';
+  if (i2cAddr) metaRows += '<tr><td class="meta-k">I&sup2;C addr</td><td class="meta-v">' + i2cAddr + '</td></tr>';
+  if (terms.length === 1 && terms[0] === '') {
+    metaRows += '<tr><td class="meta-k">Pin</td><td class="meta-v">' +
+      '<span class="term" id="' + id + '-term"></span><span class="term-label single-pin"></span></td></tr>';
+  } else {
+    metaRows += terms.map(t =>
+      '<tr><td class="meta-k">' + t + '</td><td class="meta-v">' +
+      '<span class="term" id="' + id + '-term-' + t + '"></span><span class="term-label"></span></td></tr>'
+    ).join('');
+  }
+  const metaHtml = '<table class="meta-tbl"><caption>' + label + '</caption><tbody>' + metaRows + '</tbody></table>';
+
   el.innerHTML = '<span class="remove" title="Remove">&times;</span>' + inner +
-    '<div class="part-label">' + label + '</div>' + i2cHtml + termsHtml;
+    '<div class="part-meta">' + metaHtml + '</div>';
   circuitParts.appendChild(el);
-  if (type === 'lcd1602') renderLcd(document.getElementById(id + '-lcd'), [], 16, 2);
-  if (type === 'lcd2004') renderLcd(document.getElementById(id + '-lcd'), [], 20, 4);
+  if (type === 'lcd1602' || type === 'lcd1602g') renderLcd(document.getElementById(id + '-lcd'), [], 16, 2);
+  if (type === 'lcd2004' || type === 'lcd2004g') renderLcd(document.getElementById(id + '-lcd'), [], 20, 4);
   if (type === 'tft') { const cv = document.getElementById(id + '-tft'); const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, cv.width, cv.height); }
   if (type === 'neopixel') {
     const cnt = (opts && opts.count) || 16;
@@ -855,8 +918,10 @@ function addPart(type, addr, opts) {
   }
   parts[id] = { id, type, el, dev: (opts && opts.dev) || null, rotation: 0, zoom: 1 };
 
-  el.title = 'Click to select, then press Space to rotate' + (zoomable ? '. Scroll to zoom.' : '');
-  el.addEventListener('click', () => selectPart(id));
+  el.title = 'Click to show address & pins (click again to hide). Space rotates' + (zoomable ? ', scroll zooms.' : '.');
+  // Toggle: first click reveals the address/type/pin metadata; clicking again
+  // (or selecting another part) hides it so only the screen shows.
+  el.addEventListener('click', () => selectPart(selectedPart === id ? null : id));
 
   if (zoomable) {
     el.addEventListener('wheel', e => {
@@ -873,6 +938,11 @@ function addPart(type, addr, opts) {
     const termEl = el.querySelector('#' + termId);
     termEl.addEventListener('click', e => { e.stopPropagation(); onTerminalClick('part', termEl, { partId: id, term: t }); });
   });
+
+  // Clicking inside the info table shouldn't toggle the panel shut — only the
+  // screen area does. (Pin dots already stopPropagation for wiring.)
+  const metaEl = el.querySelector('.part-meta');
+  if (metaEl) metaEl.addEventListener('click', e => e.stopPropagation());
 
   el.querySelector('.remove').addEventListener('click', e => {
     e.stopPropagation();
@@ -956,7 +1026,12 @@ function applyAutoCircuit(autoParts) {
       if (ap.type === 'lcd1602') opts.label = 'LCD 16x2 (HC595)';
       if (ap.type === 'lcd2004') opts.label = 'LCD 20x4 (HC595)';
     }
-    const id = addPart(ap.type, ap.addr, opts);
+    // Auto-detected character LCDs render as the realistic green module by
+    // default (the classic 1602 look); the blue variants stay in the dropdown.
+    let ptype = ap.type;
+    if (ptype === 'lcd1602') ptype = 'lcd1602g';
+    if (ptype === 'lcd2004') ptype = 'lcd2004g';
+    const id = addPart(ptype, ap.addr, opts);
     (ap.wires || []).forEach(w => {
       const mcuEl = document.getElementById('term-' + w.pin);
       const partEl = document.getElementById(id + '-term' + (w.term ? '-' + w.term : ''));
